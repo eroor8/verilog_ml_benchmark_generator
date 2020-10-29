@@ -1,0 +1,63 @@
+block_name: "ml_block_weights"
+ports:
+    -   name: clk_portain
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: clk_portaout
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: portare
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: clr1
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: clr0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: ena0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: ena1
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: ena2
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: ena3
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: portaaddrstall
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: portabyteenamasks
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: portawe
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: portaaddr
+        width: 13
+        direction: "in"
+        type: "C"
+    -   name: portadatain
+        width: 128
+        direction: "in"
+        type: "C"
+    -   name: portadataout
+        width: 128
+        direction: "out"
+        type: "W"
+    

@@ -88,18 +88,18 @@ def generate_activation_functions(module_name, func_type, count, input_width, ou
     t = module_classes.Activation_Wrapper(count, func_type, input_width, output_width, registered)
     return elab_and_write(t, write_to_file, module_name)
     
-def generate_block_wrapper(module_name, mlb_count, mlb_spec, write_to_file):
+def generate_block_wrapper(module_name, hw_count, hw_spec, write_to_file):
     """Funct to generate MLBs."""
     print("Generating modules")
     # Generate the outer module containing many MLBs
-    t = module_classes.HWB_Wrapper(mlb_spec, mlb_count)
+    t = module_classes.HWB_Wrapper(hw_spec, hw_count)
     return elab_and_write(t, write_to_file, module_name)
 
 def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, projection, write_to_file):
     """Funct to generate MLBs."""
     print("Generating modules")
     # Generate the outer module containing many MLBs
-    t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, projection)
+    t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
     return elab_and_write(t, write_to_file, module_name)
 
 def elab_and_write(t, write_to_file, module_name):
@@ -117,3 +117,6 @@ def elab_and_write(t, write_to_file, module_name):
         with open(module_name+".v", 'w') as file:
             file.write(outtxt)
     return t
+
+
+    

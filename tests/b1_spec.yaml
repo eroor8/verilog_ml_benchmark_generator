@@ -51,13 +51,13 @@ ports:
     -   name: portaaddr
         width: 8
         direction: "in"
-        type: "C"
+        type: "ADDRESS"
     -   name: portadatain
         width: 24
         direction: "in"
-        type: "C"
+        type: "DATAIN"
     -   name: portadataout
         width: 24
         direction: "out"
-        type: "W"
+        type: "DATAOUT"
     

@@ -1,4 +1,10 @@
 block_name: "ml_block"
+MAC_info:
+    num_units: 12
+    data_widths:
+        W: 8
+        I: 8
+        O: 32
 ports:
     -   name: a_en
         width: 1

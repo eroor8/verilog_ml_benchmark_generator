@@ -13,12 +13,15 @@ import generate_modules
 
 # Global variables
 # Schemas to validate input yamls
+datatype_mlb = ["I","O","W","C","CLK","RESET"]
+datatype_buffer = ["ADDRESS", "DATAIN", "DATAOUT"]
+datatype_any = datatype_mlb+datatype_buffer
 port_schema = {"type" : "object",
                "properties" : {
                    "name" : {"type" : "string", "minLength":1},
                    "width" : {"type" : "number", "minimum":1},
                    "direction" : {"type" : "string", "enum":["in", "out"]},
-                   "type" : {"type":"string", "enum":["I","O","W","C","CLK","RESET"]}
+                   "type" : {"type":"string", "enum":datatype_any}
                 },
 }
 hw_spec_schema = {
@@ -83,7 +86,7 @@ def generate_full_datapath(module_name, mlb_definition, act_buffer_definition,
     """Generate an activation function module - Currently only RELU is supported"""
     mlb_yaml = yaml.safe_load(mlb_definition)
     try: 
-        validate(instance=parsed_yaml, schema=hw_spec_schema)
+        validate(instance=mlb_yaml, schema=hw_spec_schema)
     except:
         print("Error during validation of MLB definition YAML file:\n", sys.exc_info()[0])
         raise
@@ -93,18 +96,18 @@ def generate_full_datapath(module_name, mlb_definition, act_buffer_definition,
     except:
         print("Error during validation of weight buffer definition YAML file:\n", sys.exc_info()[0])
         raise
-    ab_yaml = yaml.safe_load(activation_buffer_definition)
+    ab_yaml = yaml.safe_load(act_buffer_definition)
     try: 
         validate(instance=ab_yaml, schema=hw_spec_schema)
     except:
         print("Error during validation of activation buffer definition YAML file:\n", sys.exc_info()[0])
         raise
-    proj_yaml = yaml.safe_load(activation_buffer_definition)
-    try: 
-        validate(instance=proj_yaml, schema=projection_schema)
-    except:
-        print("Error during validation of activation buffer definition YAML file:\n", sys.exc_info()[0])
-        raise
+    proj_yaml = yaml.safe_load(projection_definition)
+    #try: 
+    #    validate(instance=proj_yaml, schema=projection_schema)
+    #except:
+    #    print("Error during validation of activation buffer definition YAML file:\n", sys.exc_info()[0])
+    #raise
     generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml, ab_yaml, proj_yaml, True)
     return 0
 

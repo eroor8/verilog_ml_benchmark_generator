@@ -13,6 +13,7 @@ import generate_modules
 
 # Global variables
 # Schemas to validate input yamls
+supported_activations=["RELU"]
 datatype_mlb = ["I","O","W","C","CLK","RESET"]
 datatype_buffer = ["ADDRESS", "DATAIN", "DATAOUT"]
 datatype_any = datatype_mlb+datatype_buffer
@@ -23,6 +24,12 @@ port_schema = {"type" : "object",
                    "direction" : {"type" : "string", "enum":["in", "out"]},
                    "type" : {"type":"string", "enum":datatype_any}
                 },
+}
+proj_schema = {
+    "type" : "object",
+    "properties" : {
+        "URW" : {"value": {"type":"int", "minimum":1}}
+    },
 }
 hw_spec_schema = {
     "type" : "object",
@@ -47,7 +54,8 @@ def main(output_prefix):
         click.echo('Generating file ' + output_prefix + '_dut.v!')
     else:
         click.echo('Generating file dut.v')
-    utils.print_hello_util()
+    #utils.print_hello_util()
+    print("RETURNING 0")
     return 0
 
 
@@ -103,11 +111,11 @@ def generate_full_datapath(module_name, mlb_definition, act_buffer_definition,
         print("Error during validation of activation buffer definition YAML file:\n", sys.exc_info()[0])
         raise
     proj_yaml = yaml.safe_load(projection_definition)
-    #try: 
-    #    validate(instance=proj_yaml, schema=projection_schema)
-    #except:
-    #    print("Error during validation of activation buffer definition YAML file:\n", sys.exc_info()[0])
-    #raise
+    try: 
+        validate(instance=proj_yaml["inner_projection"], schema=proj_schema)
+    except:
+        print("Error during validation of projection definition YAML file:\n", sys.exc_info()[0])
+        raise
     generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml, ab_yaml, proj_yaml, True)
     return 0
 

@@ -20,6 +20,14 @@ verilog\_ml\_benchmark\_generator.generate\_modules module
    :undoc-members:
    :show-inheritance:
 
+verilog\_ml\_benchmark\_generator.module\_classes module
+--------------------------------------------------------
+
+.. automodule:: verilog_ml_benchmark_generator.module_classes
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 verilog\_ml\_benchmark\_generator.utils module
 ----------------------------------------------
 

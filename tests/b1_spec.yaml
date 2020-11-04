@@ -53,11 +53,11 @@ ports:
         direction: "in"
         type: "ADDRESS"
     -   name: portadatain
-        width: 24
+        width: 32
         direction: "in"
         type: "DATAIN"
     -   name: portadataout
-        width: 24
+        width: 32
         direction: "out"
         type: "DATAOUT"
     

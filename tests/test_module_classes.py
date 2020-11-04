@@ -33,63 +33,7 @@ def test_RELU():
             testinst.activation_function_in @= pair[0]
             testinst.sim_tick()
             assert testinst.activation_function_out == pair[1]
-
-            
-def test_Register():
-    """Test Component class Register"""
-    testinst = module_classes.MAC_Register(8)
-    testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.sim_reset()
-    assert testinst.output_data == 0
-    testinst.input_data @= 5
-    testinst.sim_tick()
-    assert testinst.output_data == 5
     
-def test_ShiftRegister():
-    """Test Component class RELU"""
-    
-    testinst = module_classes.ShiftRegister(8,8,0)
-    testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.sim_reset()
-    assert testinst.output_data == 0
-    testinst.input_data @= 5
-    testinst.sim_tick()
-    assert testinst.output_data == 5
-    assert testinst.sum == 0
-    
-    testinst = module_classes.ShiftRegister(8,8,5)
-    testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.sim_reset()
-    assert testinst.output_data == 0
-    testinst.input_data @= 1
-    testinst.sim_tick()
-    testinst.input_data @= 2
-    assert testinst.output_data == 0
-    assert testinst.sum == 1
-    testinst.sim_tick()
-    testinst.input_data @= 3
-    assert testinst.output_data == 0
-    assert testinst.sum == 3
-    testinst.sim_tick()
-    testinst.input_data @= 4
-    assert testinst.output_data == 0
-    assert testinst.sum == 6
-    testinst.sim_tick()
-    testinst.input_data @= 5
-    assert testinst.output_data == 0
-    assert testinst.sum == 10
-    testinst.sim_tick()
-    testinst.input_data @= 6
-    assert testinst.output_data == 1
-    assert testinst.sum == 15
-    testinst.sim_tick()
-    testinst.input_data @= 3
-    assert testinst.output_data == 2
-    assert testinst.sum == 20
-            
 def test_ActivationWrapper():
     """Test Component class RELU"""
     test_vecs = [
@@ -138,16 +82,8 @@ def test_HWB():
                   {"name":"F", "width":5, "direction": "out", "type":"OTHER"},
                   ]
     }
-    testinst = module_classes.HWB(spec)
+    testinst = module_classes.HWB_Sim(spec)
     testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.A @= 8
-    testinst.C @= 9
-    testinst.E @= 10
-    testinst.sim_tick()
-    assert testinst.B == 0
-    assert testinst.D == 0
-    assert testinst.F == 0
     
     spec = {
         "block_name": "test_block",
@@ -165,65 +101,8 @@ def test_HWB():
     proj_spec = {'URN':{'value':1},'URW':{'value':1},
                   'UB':{'value':1},'UE':{'value':1},
                   'UG':{'value':1}}
-    testinst = module_classes.HWB(spec, proj_spec)
+    testinst = module_classes.HWB_Sim(spec, proj_spec)
     testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.A @= 8
-    testinst.C @= 9
-    testinst.E @= 10
-    testinst.sim_tick()
-    assert testinst.B == 0
-    assert testinst.D == 9
-    assert testinst.F == 10
-    assert testinst.G == 10
-
-    # Longer chains
-    proj_spec = {'URN':{'value':2},'URW':{'value':3},
-                  'UB':{'value':4},'UE':{'value':2},
-                  'UG':{'value':1}}
-    testinst = module_classes.HWB(spec, proj_spec)
-    testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.A @= 8
-    testinst.C @= 9
-    testinst.E @= 10
-    testinst.sim_tick()
-    testinst.sim_tick()
-    assert testinst.D == 0
-    assert testinst.F == 0
-    assert testinst.G == 0
-    testinst.sim_tick()
-    assert testinst.D == 9
-    assert testinst.F == 10
-    assert testinst.G == 10
-
-    # Preloaded
-    proj_spec = {'URN':{'value':1},'URW':{'value':1},
-                  'UB':{'value':1},'UE':{'value':1},
-                  'UG':{'value':1}, 'PRELOAD':[{'dtype':'W', 'bus_count':1},
-                                               {'dtype':'I', 'bus_count':2}]}
-    testinst = module_classes.HWB(spec, proj_spec)
-    testinst.elaborate()
-    testinst.apply(DefaultPassGroup())
-    testinst.A @= 8
-    testinst.C @= 9
-    testinst.E @= 10
-    testinst.sim_tick()
-    assert testinst.D == 0
-    assert testinst.F == 0
-    assert testinst.G == 0
-    testinst.sim_tick()
-    assert testinst.D == 0
-    assert testinst.F == 10
-    assert testinst.G == 10
-    testinst.sim_tick()
-    assert testinst.D == 0
-    assert testinst.F == 10
-    assert testinst.G == 10
-    testinst.sim_tick()
-    assert testinst.D == 9
-    assert testinst.F == 10
-    assert testinst.G == 10
         
 def test_HWB_Wrapper():
     """Test Component class HWB Wrapper"""
@@ -405,4 +284,77 @@ def test_OutputPSInterconnect():
 
 def test_Datapath():
     """Test Component class Datapath"""
-    assert 0 == 0
+    projection = {"name": "test",
+                  "activation_function": "RELU",
+                  "stream_info": {"W": 8,
+                                  "I": 8,
+                                  "O": 32},
+                  "outer_projection": {'URN':{'value':2},'URW':{'value':1},
+                                       'UB':{'value':2},'UE':{'value':4},
+                                       'UG':{'value':1}},
+                  "inner_projection": {'URN':{'value':2},'URW':{'value':2},
+                                       'UB':{'value':2},'UE':{'value':1},
+                                       'UG':{'value':1}}
+                  }
+    wb_spec = {
+        "block_name": "ml_block_weights",
+        "ports": [
+            {"name":"portaaddr", "width":13, "direction": "in", "type":"ADDRESS"},
+            {"name":"portadatain", "width":128, "direction": "in", "type":"DATAIN"},
+            {"name":"portadataout", "width":128, "direction": "out", "type":"DATAOUT"},
+            {"name":"portawe", "width":1, "direction": "out", "type":"C"},
+         ]
+    }
+    ib_spec = {
+        "block_name": "ml_block_inputs",
+        "ports": [
+            {"name":"portaaddr", "width":8, "direction": "in", "type":"ADDRESS"},
+            {"name":"portadatain", "width":32, "direction": "in", "type":"DATAIN"},
+            {"name":"portadataout", "width":32, "direction": "out", "type":"DATAOUT"},
+            {"name":"portawe", "width":1, "direction": "in", "type":"C"},
+        ]
+    }
+    ob_spec = {
+        "block_name": "ml_block_outputs",
+        "ports": [
+            {"name":"portaaddr", "width":8, "direction": "in", "type":"ADDRESS"},
+            {"name":"portadatain", "width":16, "direction": "in", "type":"DATAIN"},
+            {"name":"portadataout", "width":16, "direction": "out", "type":"DATAOUT"},
+            {"name":"portawe", "width":1, "direction": "out", "type":"C"},
+        ]
+    }
+    mlb_spec = {
+        "block_name": "ml_block",
+        "simulation_model": "MLB",
+        "MAC_info": { "num_units": 12, "data_widths": {"W":8, "I":8, "O": 32} },
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"a_out", "width":32, "direction": "out", "type":"W"},
+            {"name":"b_in", "width":32, "direction": "in", "type":"I"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_in", "width":128, "direction": "in", "type":"O"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    
+    testinst = module_classes.Datapath(
+        mlb_spec=mlb_spec,
+        wb_spec=wb_spec,
+        ib_spec=ib_spec,
+        ob_spec=ob_spec,
+        proj_spec=projection)
+    
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    
+    testinst.sim_reset()
+    #for i in range(len(testvec["outs"][0])):
+    #    in_bus = getattr(testinst, "inputs_from_mlb_"+str(i))
+    #    in_bus @= testvec["outs"][0][i]
+    #testinst.sim_tick()
+    #for i in range(len(testvec["outs"][1])):
+    #    out_bus = getattr(testinst, "outputs_to_afs_"+str(i))
+    #    assert out_bus == Bits3(testvec["outs"][1][i])
+    #for i in range(len(testvec["outs"][2])):
+    #    out_bus = getattr(testinst, "outputs_to_mlb_"+str(i))
+    #    assert out_bus == testvec["outs"][2][i]

@@ -1,25 +1,29 @@
+name: "test_proj"
 outer_projection:
     URW: 
-        value: 1
+        value: 2
     URN: 
-        value: 1
+        value: 2
     UE: 
-        value: 1
+        value: 2
     UB: 
-        value: 1
+        value: 2
     UG: 
-        value: 1
+        value: 2
 inner_projection:
     URW: 
-        value: 1
+        value: 6
     URN: 
         value: 1
     UE: 
-        value: 1
+        value: 2
     UB: 
         value: 1
     UG: 
         value: 1
+    PRELOAD:
+    -   dtype: 'W'
+        bus_count: 2
 temporal_projection:
     URW: 
         value: 1
@@ -33,9 +37,6 @@ temporal_projection:
         value: 1
 activation_function: 'RELU'
 stream_info:
-    W:
-        width: 8
-    I:
-        width: 8
-    O:
-        width: 32
+    W: 8
+    I: 8
+    O: 32

@@ -1,4 +1,5 @@
 block_name: "ml_block"
+simulation_model: "MLB"
 MAC_info:
     num_units: 12
     data_widths:
@@ -61,7 +62,7 @@ ports:
     -   name: a_out
         width: 32
         direction: "out"
-        type: "I"
+        type: "W"
     -   name: res_cas_out
         width: 128
         direction: "out"
@@ -78,4 +79,3 @@ ports:
         width: 1
         direction: "in"
         type: "RESET"
-    

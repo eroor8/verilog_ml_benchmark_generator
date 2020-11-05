@@ -13,8 +13,8 @@ from jsonschema import validate
 
 # Schemas to validate input yamls
 supported_activations=["RELU"]
-datatype_mlb = ["I","O","W","C","CLK","RESET"]
-datatype_buffer = ["ADDRESS", "DATAIN", "DATAOUT"]
+datatype_mlb = ["I","O","W","C","CLK","RESET", "I_EN", "W_EN", "ACC_EN", "WEN"]
+datatype_buffer = ["ADDRESS", "DATA"]
 datatype_any = datatype_mlb+datatype_buffer
 port_schema = {
     "type" : "object",
@@ -135,8 +135,9 @@ def remove_sim_block_defs(line_list, sim_blocks):
     while lineidx < len(line_list):
         # Remove definitions of hard blocks
         for sim_block in sim_blocks: 
-            found_hardmod = re.search(r"module " + sim_block, line_list[lineidx])
-            if found_hardmod:
+            found_hardmod = re.search(r"module .*" + sim_block, line_list[lineidx])
+            found_hardmod2 = re.search(r"Full name.*" + sim_block, line_list[lineidx])
+            if found_hardmod or found_hardmod2:
                 skipCopy = True
         if skipCopy:
             if (re.search(r"endmodule", line_list[lineidx])):
@@ -268,13 +269,13 @@ def odinify(filename_in):
     # Rename ML blocks to correct name
     line_list = filedata.splitlines() 
     line_list = move_ios_into_module_body(line_list) 
-    line_list = remove_sim_block_defs(line_list, ["HWB_Sim__spec_"]) 
+    line_list = remove_sim_block_defs(line_list, ["sim_True"]) 
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
     line_list = remove_parameter_references(line_list)         
     filedata =  '\n'.join(line_list)
     
     # replace HW block component names with actual names
-    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__inner_proj_\S*)(\s+)(.*)", r"\2\4\5", filedata)
+    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__proj_\S*)(\s+)(.*)", r"\2\4\5", filedata)
     return filedata
 
 def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \

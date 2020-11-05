@@ -300,8 +300,8 @@ def test_Datapath():
         "block_name": "ml_block_weights",
         "ports": [
             {"name":"portaaddr", "width":13, "direction": "in", "type":"ADDRESS"},
-            {"name":"portadatain", "width":128, "direction": "in", "type":"DATAIN"},
-            {"name":"portadataout", "width":128, "direction": "out", "type":"DATAOUT"},
+            {"name":"portadatain", "width":128, "direction": "in", "type":"DATA"},
+            {"name":"portadataout", "width":128, "direction": "out", "type":"DATA"},
             {"name":"portawe", "width":1, "direction": "out", "type":"C"},
          ]
     }
@@ -309,8 +309,8 @@ def test_Datapath():
         "block_name": "ml_block_inputs",
         "ports": [
             {"name":"portaaddr", "width":8, "direction": "in", "type":"ADDRESS"},
-            {"name":"portadatain", "width":32, "direction": "in", "type":"DATAIN"},
-            {"name":"portadataout", "width":32, "direction": "out", "type":"DATAOUT"},
+            {"name":"portadatain", "width":32, "direction": "in", "type":"DATA"},
+            {"name":"portadataout", "width":32, "direction": "out", "type":"DATA"},
             {"name":"portawe", "width":1, "direction": "in", "type":"C"},
         ]
     }
@@ -318,14 +318,13 @@ def test_Datapath():
         "block_name": "ml_block_outputs",
         "ports": [
             {"name":"portaaddr", "width":8, "direction": "in", "type":"ADDRESS"},
-            {"name":"portadatain", "width":16, "direction": "in", "type":"DATAIN"},
-            {"name":"portadataout", "width":16, "direction": "out", "type":"DATAOUT"},
+            {"name":"portadatain", "width":16, "direction": "in", "type":"DATA"},
+            {"name":"portadataout", "width":16, "direction": "out", "type":"DATA"},
             {"name":"portawe", "width":1, "direction": "out", "type":"C"},
         ]
     }
     mlb_spec = {
         "block_name": "ml_block",
-        "simulation_model": "MLB",
         "MAC_info": { "num_units": 12, "data_widths": {"W":8, "I":8, "O": 32} },
         "ports": [
             {"name":"a_in", "width":32, "direction": "in", "type":"W"},

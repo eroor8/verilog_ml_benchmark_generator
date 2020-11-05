@@ -1,4 +1,5 @@
 block_name: "ml_block_weights"
+simulation_model: "Buffer"
 ports:
     -   name: clk_portain
         width: 1
@@ -47,17 +48,17 @@ ports:
     -   name: portawe
         width: 1
         direction: "in"
-        type: "C"
+        type: "WEN"
     -   name: portaaddr
-        width: 13
+        width: 2
         direction: "in"
         type: "ADDRESS"
     -   name: portadatain
         width: 128
         direction: "in"
-        type: "DATAIN"
+        type: "DATA"
     -   name: portadataout
         width: 128
         direction: "out"
-        type: "DATAOUT"
+        type: "DATA"
     

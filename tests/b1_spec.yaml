@@ -55,9 +55,9 @@ ports:
     -   name: portadatain
         width: 32
         direction: "in"
-        type: "DATAIN"
+        type: "DATA"
     -   name: portadataout
         width: 32
         direction: "out"
-        type: "DATAOUT"
+        type: "DATA"
     

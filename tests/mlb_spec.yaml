@@ -10,11 +10,11 @@ ports:
     -   name: a_en
         width: 1
         direction: "in"
-        type: "C"
+        type: "W_EN"
     -   name: b_en
         width: 1
         direction: "in"
-        type: "C"
+        type: "I_EN"
     -   name: hp_en
         width: 1
         direction: "in"
@@ -22,7 +22,7 @@ ports:
     -   name: acc_en
         width: 1
         direction: "in"
-        type: "C"
+        type: "ACC_EN"
     -   name: config_en
         width: 1
         direction: "in"

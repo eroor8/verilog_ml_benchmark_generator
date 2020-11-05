@@ -118,30 +118,105 @@ class HWB_Sim(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, inner_proj={}):
+    def construct(s, spec={}, proj={}, sim=True):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
                       functionality
          :type spec: dict
-         :param inner_proj: Dictionary describing projection of computations
+         :param proj: Dictionary describing projection of computations
                             onto ML block
-         :type inner_proj: dict
+         :type proj: dict
         """
-        # If this is an ML block, add behavioural info
+        ports_by_type = {}
+        special_outs=[]
         if "simulation_model" in spec:
-            assert len(inner_proj) > 0
-
+           special_outs=["DATA"] #, "W","I","O"]
+        
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
                 if (port["direction"] == "in"):
-                    utils.AddInPort(s, port["width"], port["name"])
+                    newport = utils.AddInPort(s, port["width"], port["name"])
                 else:
                     if port["name"] not in s.__dict__.keys():
-                        newout = utils.AddOutPort(s, port["width"],
+                        newport = utils.AddOutPort(s, port["width"],
                                                   port["name"])
-                        newout //= newout._dsl.Type(0)
+                        if port["name"] not in special_outs:
+                            newport //= newport._dsl.Type(0)
+                typename = port["type"] + "_" + port["direction"]
+                if typename in ports_by_type:
+                    ports_by_type[typename] += [[port, newport]]
+                else:
+                    ports_by_type[typename] = [[port, newport]]
         s._dsl.args = [spec.get('block_name', "unnamed")]
+        
+        # If this is an ML block, add behavioural info
+        if "simulation_model" in spec:
+            if spec["simulation_model"] == "Buffer":
+                assert "ADDRESS_in" in ports_by_type
+                assert "WEN_in" in ports_by_type
+                assert "DATA_in" in ports_by_type
+                assert "DATA_out" in ports_by_type
+                assert len(ports_by_type["ADDRESS_in"]) == 1  # Todo
+                assert len(ports_by_type["ADDRESS_in"]) == \
+                       len(ports_by_type["DATA_out"])
+                assert len(ports_by_type["ADDRESS_in"]) == \
+                       len(ports_by_type["WEN_in"])
+                assert len(ports_by_type["ADDRESS_in"]) == \
+                       len(ports_by_type["DATA_in"])
+                for buffer_inst in range(len(ports_by_type["ADDRESS_in"])):
+                    assert ports_by_type["DATA_out"][buffer_inst][0]["width"] == \
+                           ports_by_type["DATA_in"][buffer_inst][0]["width"]
+                    assert ports_by_type["WEN_in"][buffer_inst][0]["width"] == 1
+                    datalen = ports_by_type["DATA_in"][buffer_inst][0]["width"]
+                    addrlen = ports_by_type["ADDRESS_in"][buffer_inst][0]["width"]
+                    size = 2**addrlen
+                    sim_model = Buffer(datalen, size, sim=sim)
+                    setattr(s,"sim_model_inst" + str(buffer_inst), sim_model)
+                    connect(ports_by_type["DATA_in"][buffer_inst][1],
+                            sim_model.datain)
+                    connect(ports_by_type["DATA_out"][buffer_inst][1],
+                            sim_model.dataout)
+                    connect(ports_by_type["ADDRESS_in"][buffer_inst][1],
+                            sim_model.address)
+                    connect(ports_by_type["WEN_in"][buffer_inst][1],
+                            sim_model.wen)
+            elif spec["simulation_model"] == "MLB" or \
+                 spec["simulation_model"] == "ML_Block":
+                assert len(proj) > 0
+                for req_port in ["W_in", "W_out", "I_in", "I_out",
+                                 "O_in", "O_out"]:
+                    assert req_port in ports_by_type, \
+                        "To run simulation, you need port of type " + req_port
+                for req_port in ["W_EN_in", "I_EN_in", "ACC_EN_in"]:
+                    assert req_port in ports_by_type, \
+                        "To run simulation, you need port of type " + req_port
+                    assert len(ports_by_type[req_port]) == 1
+                s.sim_model = MLB(proj, sim=sim)
+                
+                MAC_datatypes = ['W', 'I', 'O']
+                inner_proj = proj['inner_projection']
+                inner_bus_counts = {
+                    dtype: utils.get_proj_stream_count(inner_proj, dtype)
+                    for dtype in MAC_datatypes}
+                inner_bus_widths = {dtype: inner_bus_counts[dtype] *
+                    proj['stream_info'][dtype] for dtype in MAC_datatypes}
+                connect(ports_by_type["W_in"][0][1][0:inner_bus_widths['W']],
+                        s.sim_model.W_IN)
+                connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
+               # connect(ports_by_type["W_out"][0][1], sim_model.dataout)
+                connect(ports_by_type["I_in"][0][1][0:inner_bus_widths['I']],
+                        s.sim_model.I_IN)
+                connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
+                #connect(ports_by_type["I_out"][0][1], sim_model.address)
+                connect(ports_by_type["O_in"][0][1][0:inner_bus_widths['O']],
+                        s.sim_model.O_IN)
+                connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
+                #connect(ports_by_type["O_out"][0][1], sim_model.wen)
+                    
+            
+            
+        
 
 
 class HWB_Wrapper(Component):
@@ -170,7 +245,7 @@ class HWB_Wrapper(Component):
                 utils.AddInPort(s, port['width'], port["name"])
 
         for i in range(count):
-            curr_inst = HWB_Sim(spec, projection)
+            curr_inst = HWB_Sim(spec, projection, sim=True)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
             for port in spec['ports']:
@@ -201,7 +276,7 @@ class MergeBusses(Component):
          :type output_<i>: Component class
     """
     def construct(s, in_width=1, num_ins=1, out_width=1, num_outs=1,
-                  ins_per_out=0):
+                  ins_per_out=0, sim=False):
         """ Constructor for MergeBusses
 
          :param in_width: Bit-width of input ports
@@ -244,19 +319,20 @@ class MergeBusses(Component):
                 output_bus[ins_per_out * in_width:out_width] //= 0
 
         utils.tie_off_clk_reset(s)
-
-
+    
 class WeightInterconnect(Component):
     """" This module connects the weight ports between the inner instances and
          the buffers.
 
+         Two options:
          1) Connect weight buffers to MLBs
             Assume that entire input bus of each MLB should connect to the
             same buffer to simplify things. One buffer can connect to many
-            MLBs though if the output is wide enough.
+            MLBs though if the output is wide enough. 
+         2) "PRELOAD": Given N inputs, split all MLBs into N groups
+            and chain together their weights 
 
          TODO: Allow for directly connecting weights between instances
-         TODO: Allow for preloading all weights from a single buffer
 
          :param inputs_from_buffer_<i>: Input port from weight buffer for i
                                         from 0 to ``num_buffers``
@@ -267,8 +343,8 @@ class WeightInterconnect(Component):
          :param outputs_to_mlb_<i>: Output port to MLB
          :type outputs_to_mlb_<i>: Component class
     """
-    def construct(s, buffer_width=1, mlb_width=1, mlb_width_used=1,
-                  num_buffers=1, num_mlbs=1, projection={}):
+    def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
+                  num_buffers=1, num_mlbs=1, projection={}, sim=False):
         """ Constructor for WeightInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -287,49 +363,85 @@ class WeightInterconnect(Component):
          :type projection: dict
         """
         # Validate inputs
+        if mlb_width < 0:
+            mlb_width = mlb_width_used
         streams_per_buffer = math.floor(buffer_width/mlb_width_used)
         assert mlb_width_used <= mlb_width
         assert streams_per_buffer > 0, "Insufficiently wide input buffer"
         assert num_mlbs >= utils.get_var_product(
             projection, ['UG', 'UE', 'UB', 'URN', 'URW']), \
             "Insufficient number of MLBs"
-        assert num_buffers >= math.ceil(
+        
+        preload = False
+        preload_bus_count = 0
+        if "PRELOAD" in projection:
+            for pload_type in projection["PRELOAD"]:
+                if pload_type["dtype"] == 'W':
+                    preload = True
+                    preload_bus_count = pload_type["bus_count"]
+                    
+        assert preload or num_buffers >= math.ceil(
             utils.get_var_product(
                 projection, ['UG', 'UE', 'URN', 'URW']) / streams_per_buffer),\
             "Insufficient number of weight buffers"
-
+        
         # Add inputs from buffers
         utils.add_n_inputs(s, num_buffers, buffer_width, "inputs_from_buffer_")
 
-        for ug in range(projection['UG']['value']):
-            for ue in range(projection['UE']['value']):
-                for ub in range(projection['UB']['value']):
-                    for urn in range(projection['URN']['value']):
-                        for urw in range(projection['URW']['value']):
-                            # Get instance number of the MLB
-                            out_idx = utils.get_overall_idx(
-                                projection, {'URW': urw, 'URN': urn, 'UB': ub,
-                                             'UE': ue, 'UG': ug})
-
-                            # Create ports to and from the MLB
-                            newout = utils.AddOutPort(s, mlb_width,
-                                                      "outputs_to_mlb_" +
-                                                      str(out_idx))
-                            utils.AddInPort(s, mlb_width, "inputs_from_mlb_" +
-                                            str(out_idx))
-
-                            # Connect all MLB weight inputs to buffers
-                            stream_idx = utils.get_overall_idx(
-                                projection, {'URW': urw, 'URN': urn, 'UE': ue,
-                                             'UG': ug})
-                            input_bus_idx = math.floor(stream_idx /
-                                                       streams_per_buffer)
-                            input_bus = getattr(s, "inputs_from_buffer_" +
-                                                str(input_bus_idx))
-                            section_idx = stream_idx % streams_per_buffer
-                            input_bus_start = section_idx * mlb_width_used
-                            input_bus_end = (section_idx + 1) * mlb_width_used
-                            connect(newout[0:mlb_width_used],
+        if preload:
+            assert mlb_width_used * preload_bus_count <= \
+                num_buffers * buffer_width
+            # It doesn't matter in which order they are connected if things
+            # are preloaded - just connect them in chains.
+            chain_len = math.ceil(num_mlbs / num_buffers)
+            for chain in range(num_buffers):
+                start_idx = chain*chain_len
+                end_idx = min(num_mlbs-1, start_idx + chain_len - 1)
+                newout = utils.chain_ports(s, start_idx,
+                            end_idx, "inputs_from_mlb_{}",
+                            "outputs_to_mlb_{}", mlb_width)
+                # Then connect each chain input
+                input_bus_idx = math.floor(chain / streams_per_buffer)
+                input_bus = getattr(s, "inputs_from_buffer_" +
+                                    str(input_bus_idx))
+                section_idx = chain % streams_per_buffer
+                input_bus_start = section_idx * mlb_width_used
+                input_bus_end = (section_idx + 1) *  mlb_width_used
+                connect(newout[0:mlb_width_used],
+                        input_bus[input_bus_start:input_bus_end])
+                
+        else: 
+            for ug in range(projection['UG']['value']):
+                for ue in range(projection['UE']['value']):
+                    for ub in range(projection['UB']['value']):
+                        for urn in range(projection['URN']['value']):
+                            for urw in range(projection['URW']['value']):
+                                # Get instance number of the MLB
+                                out_idx = utils.get_overall_idx(
+                                    projection, {'URW': urw, 'URN': urn,
+                                                 'UB': ub, 'UE': ue, 'UG': ug})
+            
+                                # Create ports to and from the MLB
+                                newout = utils.AddOutPort(s, mlb_width,
+                                                          "outputs_to_mlb_" +
+                                                          str(out_idx))
+                                utils.AddInPort(s, mlb_width,
+                                                "inputs_from_mlb_" +
+                                                str(out_idx))
+            
+                                # Connect all MLB weight inputs to buffers
+                                stream_idx = utils.get_overall_idx(
+                                    projection, {'URW': urw, 'URN': urn,
+                                                 'UE': ue, 'UG': ug})
+                                input_bus_idx = math.floor(stream_idx /
+                                                           streams_per_buffer)
+                                input_bus = getattr(s, "inputs_from_buffer_" +
+                                                    str(input_bus_idx))
+                                section_idx = stream_idx % streams_per_buffer
+                                input_bus_start = section_idx * mlb_width_used
+                                input_bus_end = (section_idx + 1) * \
+                                                mlb_width_used
+                                connect(newout[0:mlb_width_used],
                                     input_bus[input_bus_start:input_bus_end])
 
         # Tie disconnected MLBs to 0
@@ -367,8 +479,8 @@ class InputInterconnect(Component):
          :param outputs_to_mlb_<i>: Output port to MLB
          :type outputs_to_mlb_<i>: Component class
     """
-    def construct(s, buffer_width=1, mlb_width=1, mlb_width_used=1,
-                  num_buffers=1, num_mlbs=1, projection={}):
+    def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
+                  num_buffers=1, num_mlbs=1, projection={}, sim=False):
         """ Constructor for InputInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -386,6 +498,8 @@ class InputInterconnect(Component):
          :param projection: Projection specification
          :type projection: dict
         """
+        if mlb_width < 0:
+            mlb_width = mlb_width_used
         streams_per_buffer = math.floor(buffer_width/mlb_width_used)
         assert mlb_width_used <= mlb_width
         assert streams_per_buffer > 0, "Insufficiently wide input buffer"
@@ -405,43 +519,30 @@ class InputInterconnect(Component):
             for ue in range(projection['UE']['value']):
                 for ub in range(projection['UB']['value']):
                     for urn in range(projection['URN']['value']):
-                        for urw in range(projection['URW']['value']):
-                            mlb_idx = utils.get_overall_idx(
-                                projection, {'URW': urw, 'URN': urn, 'UB': ub,
-                                             'UE': ue, 'UG': ug})
-                            newout = utils.AddOutPort(s, mlb_width,
-                                                      "outputs_to_mlb_" +
-                                                      str(mlb_idx))
-                            utils.AddInPort(s, mlb_width,
-                                            "inputs_from_mlb_" +
-                                            str(mlb_idx))
-
-                            # Connect adjacent inputs
-                            if (urw > 0):
-                                mlb_idx_prev = utils.get_overall_idx(
-                                    projection, {'URW': urw - 1, 'URN': urn,
-                                                 'UB': ub, 'UE': ue, 'UG': ug})
-                                prev_input = getattr(s, "inputs_from_mlb_" +
-                                                     str(mlb_idx_prev))
-                                connect(newout[0:mlb_width_used],
-                                        prev_input[0:mlb_width_used])
-                            else:
-                                # Figure out which input to connect it to
-                                stream_idx = utils.get_overall_idx(projection,
-                                                                   {'URN': urn,
-                                                                    'UB': ub,
-                                                                    'UG': ug})
-                                input_bus_idx = math.floor(stream_idx /
-                                                           streams_per_buffer)
-                                input_bus = getattr(s, "inputs_from_buffer_" +
-                                                    str(input_bus_idx))
-                                section_idx = stream_idx % streams_per_buffer
-                                input_bus_start = section_idx * mlb_width_used
-                                input_bus_end = (section_idx + 1) * \
-                                    mlb_width_used
-                                connect(newout[0:mlb_width_used],
-                                        input_bus[input_bus_start:
-                                                  input_bus_end])
+                        chain_idx = utils.get_overall_idx(projection,
+                            {'URN': urn, 'UB': ub, 'UG': ug, 'UE': ue})
+                        start_idx = chain_idx * projection['URW']['value']
+                        end_idx = start_idx + projection['URW']['value'] - 1
+                        newout = utils.chain_ports(s, start_idx,
+                            end_idx, "inputs_from_mlb_{}",
+                            "outputs_to_mlb_{}", mlb_width)
+                        
+                        # Connect the chain's input
+                        stream_idx = utils.get_overall_idx(projection,
+                                                           {'URN': urn,
+                                                            'UB': ub,
+                                                            'UG': ug})
+                        input_bus_idx = math.floor(stream_idx /
+                                                   streams_per_buffer)
+                        input_bus = getattr(s, "inputs_from_buffer_" +
+                                            str(input_bus_idx))
+                        section_idx = stream_idx % streams_per_buffer
+                        input_bus_start = section_idx * mlb_width_used
+                        input_bus_end = (section_idx + 1) * \
+                            mlb_width_used
+                        connect(newout[0:mlb_width_used],
+                                input_bus[input_bus_start:
+                                          input_bus_end])
 
         # Tie disconnected MLBs to 0
         for i in range(num_mlbs):
@@ -478,8 +579,8 @@ class OutputPSInterconnect(Component):
          :param outputs_to_mlb_<i>: Output port to MLB
          :type outputs_to_mlb_<i>: Component class
     """
-    def construct(s, af_width=1, mlb_width=1, mlb_width_used=1, num_afs=1,
-                  num_mlbs=1, projection={}):
+    def construct(s, af_width=1, mlb_width=-1, mlb_width_used=1, num_afs=1,
+                  num_mlbs=1, projection={}, sim=False):
         """ Constructor for OutputInterconnect
 
          :param af_width: Bit-width of activation function input
@@ -497,6 +598,8 @@ class OutputPSInterconnect(Component):
          :param projection: Projection specification
          :type projection: dict
         """
+        if mlb_width < 0:
+            mlb_width = mlb_width_used
         acts_per_stream = math.floor(mlb_width_used / af_width)
         assert mlb_width_used <= mlb_width
         assert mlb_width_used % af_width == 0, \
@@ -518,58 +621,26 @@ class OutputPSInterconnect(Component):
         for ug in range(projection['UG']['value']):
             for ue in range(projection['UE']['value']):
                 for ub in range(projection['UB']['value']):
-                    for urn in range(projection['URN']['value']):
-                        for urw in range(projection['URW']['value']):
-                            mlb_idx = utils.get_overall_idx(projection,
-                                                            {'URW': urw,
-                                                             'URN': urn,
-                                                             'UB': ub,
-                                                             'UE': ue,
-                                                             'UG': ug})
-                            newout = utils.AddOutPort(s, mlb_width,
-                                                      "outputs_to_mlb_" +
-                                                      str(mlb_idx))
-                            newin = utils.AddInPort(s, mlb_width,
-                                                    "inputs_from_mlb_" +
-                                                    str(mlb_idx))
-
-                            # Connect only the last output of the chain out
-                            if ((urw == projection['URW']['value'] - 1) and
-                                    (urn == projection['URN']['value'] - 1)):
-                                # Figure out which output to connect it to
-                                stream_idx = utils.get_overall_idx(projection,
-                                                                   {'UB': ub,
-                                                                    'UE': ue,
-                                                                    'UG': ug})
-                                output_bus_idx = stream_idx * acts_per_stream
-                                for out_part in range(acts_per_stream):
-                                    output_bus = getattr(s, "outputs_to_afs_" +
-                                                         str(output_bus_idx +
-                                                             out_part))
-                                    output_bus_start = out_part * af_width
-                                    output_bus_end = (out_part + 1) * af_width
-                                    connect(output_bus,
-                                            newin[output_bus_start:
+                    chain_idx = utils.get_overall_idx(projection,
+                            {'UB': ub, 'UG': ug, 'UE': ue})
+                    chain_len = projection['URW']['value'] * \
+                                projection['URN']['value']
+                    start_idx = chain_idx * chain_len
+                    end_idx = start_idx + chain_len - 1
+                    newout = utils.chain_ports(s, start_idx, end_idx,
+                                         "inputs_from_mlb_{}",
+                                         "outputs_to_mlb_{}", mlb_width)
+                    newout[0:mlb_width_used] //= 0
+                    newin = utils.AddInPort(s, mlb_width,
+                                            "inputs_from_mlb_" + str(end_idx))
+                    output_bus_idx = chain_idx * acts_per_stream
+                    for out_part in range(acts_per_stream):
+                        output_bus = getattr(s, "outputs_to_afs_" +
+                                             str(output_bus_idx + out_part))
+                        output_bus_start = out_part * af_width
+                        output_bus_end = (out_part + 1) * af_width
+                        connect(output_bus, newin[output_bus_start:
                                                   output_bus_end])
-                            if (urw > 0) or (urn > 0):
-                                # Connect the other blocks in the chain
-                                if (urw > 0):
-                                    mlb_idx_prev = utils.get_overall_idx(
-                                        projection,
-                                        {'URW': urw - 1, 'URN': urn, 'UB': ub,
-                                         'UE': ue, 'UG': ug})
-                                else:
-                                    mlb_idx_prev = utils.get_overall_idx(
-                                        projection,
-                                        {'URW': projection['URW']['value'] - 1,
-                                         'URN': urn - 1, 'UB': ub, 'UE': ue,
-                                         'UG': ug})
-                                prev_input = getattr(s, "inputs_from_mlb_" +
-                                                     str(mlb_idx_prev))
-                                connect(newout[0:mlb_width_used],
-                                        prev_input[0:mlb_width_used])
-                            else:
-                                newout[0:mlb_width_used] //= 0
 
         # Tie disconnected MLBs to 0
         for i in range(num_mlbs):
@@ -692,7 +763,7 @@ class Datapath(Component):
 
         # Instantiate MLBs, buffers
         s.mlb_modules = HWB_Wrapper(mlb_spec, MLB_count,
-                                    projection=inner_proj)
+                                    projection=proj_spec)
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
                                        buffer_counts['W'])
         s.input_act_modules = HWB_Wrapper(buffer_specs['I'],
@@ -710,7 +781,7 @@ class Datapath(Component):
         # Instantiate interconnects
         s.weight_interconnect = WeightInterconnect(
             buffer_width=utils.get_sum_datatype_width(buffer_specs['W'],
-                                                      'DATAOUT'),
+                                                      'DATA', ["in"]),
             mlb_width=utils.get_sum_datatype_width(mlb_spec, 'W', ["in"]),
             mlb_width_used=inner_bus_widths['W'],
             num_buffers=buffer_counts['W'],
@@ -718,7 +789,7 @@ class Datapath(Component):
             projection=outer_proj)
         s.input_interconnect = InputInterconnect(
             buffer_width=utils.get_sum_datatype_width(buffer_specs['I'],
-                                                      'DATAOUT'),
+                                                      'DATA', ["in"]),
             mlb_width=utils.get_sum_datatype_width(mlb_spec, 'I', ["in"]),
             mlb_width_used=inner_bus_widths['I'],
             num_buffers=buffer_counts['I'],
@@ -735,7 +806,7 @@ class Datapath(Component):
                                             num_ins=total_bus_counts['O'],
                                             out_width=utils.
                                             get_sum_datatype_width(
-                                                buffer_specs['O'], 'DATAIN'),
+                                                buffer_specs['O'], 'DATA', ["in"]),
                                             num_outs=buffer_counts['O'])
 
         # Connect weight interconnect
@@ -749,7 +820,7 @@ class Datapath(Component):
             connected_ins += utils.connect_ports_by_name(
                 s.weight_interconnect, "outputs_to_mlb", s.mlb_modules,
                 portname["name"])
-        for portname in utils.get_ports_of_type(buffer_specs['W'], 'DATAOUT',
+        for portname in utils.get_ports_of_type(buffer_specs['W'], 'DATA',
                                                 ["out"]):
             connected_ins += utils.connect_ports_by_name(s.weight_modules,
                                                          portname["name"],
@@ -767,7 +838,7 @@ class Datapath(Component):
                                                          "outputs_to_mlb",
                                                          s.mlb_modules,
                                                          portname["name"])
-        for portname in utils.get_ports_of_type(buffer_specs['I'], 'DATAOUT',
+        for portname in utils.get_ports_of_type(buffer_specs['I'], 'DATA',
                                                 ["out"]):
             connected_ins += utils.connect_ports_by_name(s.input_act_modules,
                                                          portname["name"],
@@ -790,7 +861,7 @@ class Datapath(Component):
         connected_ins += utils.connect_ports_by_name(
             s.activation_function_modules, "activation_function_out",
             s.output_interconnect, "input")
-        for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATAIN',
+        for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["in"]):
             connected_ins += utils.connect_ports_by_name(
                 s.output_interconnect, "output", s.output_act_modules,
@@ -798,7 +869,7 @@ class Datapath(Component):
 
         # Connect output buffers to top
         for port in s.output_act_modules.get_output_value_ports():
-            for dout in utils.get_ports_of_type(buffer_specs['O'], 'DATAOUT',
+            for dout in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["out"]):
                 if dout["name"] in port._dsl.my_name:
                     utils.connect_out_to_top(s, port, port._dsl.my_name)

@@ -160,11 +160,12 @@ def get_num_buffers_reqd(buffer_spec, stream_count, stream_width):
     :rtype: int
     """
     streams_per_buffer = math.floor(get_sum_datatype_width(
-        buffer_spec, 'DATAOUT') / stream_width)
-    assert get_sum_datatype_width(buffer_spec, 'DATAOUT') > 0, \
+        buffer_spec, 'DATA', ["in"]) / stream_width)
+    
+    assert get_sum_datatype_width(buffer_spec, 'DATA', ["in"]) > 0, \
         "Buffer DATAOUT port width of zero"
     assert streams_per_buffer > 0, "Streams per buffer=" + \
-        str(get_sum_datatype_width(buffer_spec, 'DATAOUT')) + "/" + \
+        str(get_sum_datatype_width(buffer_spec, 'DATA', ["in"])) + "/" + \
         str(stream_width)
     return math.ceil(stream_count/streams_per_buffer)
 
@@ -316,6 +317,17 @@ def tie_off_clk_reset(s):
     tie_off_port(s, s.clk)
     tie_off_port(s, s.reset)
 
+def chain_ports(s, start_idx, end_idx, in_name, out_name, width=8):
+    """" Chain ports together by name
+         eg. in_1 -> out2, in2 -> out3 and so on. """
+    for idx in range(start_idx, end_idx):
+        p1name = in_name.format(str(idx))
+        p2name = out_name.format(str(idx+1))
+        p1 = AddInPort(s, width, p1name)
+        p2 = AddOutPort(s, width, p2name)
+        connect(p1, p2)
+    p2name = out_name.format(str(start_idx))
+    return AddOutPort(s, width, p2name)
 
 def print_table(title, table, col_width=0):
     """ Print a table nicely on the command line.
@@ -406,23 +418,77 @@ def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
     connected_ins = []
     for port in inst1.get_output_value_ports():
         port1name = port._dsl.my_name
-        foundname1 = re.search(name1+r"_(\d+)$", port1name)
+        foundname1 = re.search("^" + name1+r"_(\d+)$", port1name)
         if foundname1:
             match_dict[str(int(foundname1.group(1))*factor1)] = port
-    assert len(match_dict) > 0, "Should have found outputs with name " + \
+
+    commonport = None
+    if len(match_dict) == 0:
+        for port in inst1.get_output_value_ports():
+            port1name = port._dsl.my_name
+            foundname1 = re.search("^" + name1+"$", port1name)
+            if foundname1:
+                commonport = port
+    
+    assert (len(match_dict) > 0) or commonport, \
+        "Should have found outputs with name " + \
         name1 + " in " + str(inst1.get_output_value_ports())
 
     for port in inst2.get_input_value_ports():
         port2name = port._dsl.my_name
-        foundname2 = re.search(name2+r"_(\d+)$", port2name)
+        foundname2 = re.search("^" + name2+r"_(\d+)$", port2name)
         if foundname2:
-            assert str(int(foundname2.group(1))*factor2) in match_dict, \
+            assert (str(int(foundname2.group(1))*factor2) in match_dict) \
+                or commonport, \
                 "Should have found output with name " + name1 + "_" + \
                 str(int(foundname2.group(1))*factor2) + " in " + \
                 str(match_dict)
-            connect(match_dict[str(int(foundname2.group(1))*factor2)], port)
+            name_to_get = str(int(foundname2.group(1))*factor2)
+            connectport = match_dict.get(name_to_get, commonport)
+            connect(connectport, port)
             connected_ins += [port]
-            del match_dict[str(int(foundname2.group(1))*factor2)]
-    assert len(match_dict) == 0, "Match_dict: " + str(match_dict) + \
-        " should match input of name " + name2
+            if (str(int(foundname2.group(1))*factor2) in match_dict):
+                del match_dict[str(int(foundname2.group(1))*factor2)]
+    assert len(match_dict) == 0, "Missing matches for ports " + \
+        str(match_dict) + " in list " + str(inst2.get_input_value_ports())
     return connected_ins
+
+def connect_inst_ports_by_name(parent, namep, inst, namei, \
+                               factor1=1, factor2=1):
+    """ Connect ports named ``namei``_<#*``factor1``> on ``inst``
+        to ports named ``name2``_<#*``factor2``> on the top level.
+
+    :param inst: Module instance with output ports to be connected
+    :type inst: Component class
+    :param parent: Parent module
+    :type parent: Component class
+    :param namei: Prefix of names of output ports of ``inst``
+    :type namei: string
+    :param namep: Prefix of names of input ports of ``parent``
+    :type namep: string
+    :param factor1: Factor used to match port indexes
+                    (p1[i*factor1] <==> p2[i*factor2])
+    :type factor1: string
+    :param factor2: Factor used to match port indexes
+                    (p1[i*factor1] <==> p2[i*factor2])
+    :type factor2: string
+    """
+    instports = list(inst.get_output_value_ports()) + \
+                 list(inst.get_input_value_ports())
+    foundport = 0
+    for port in instports:
+        port1name = port._dsl.my_name
+        foundname1 = re.search("^" + namei+r"_(\d+)$", port1name)
+        if foundname1:
+            foundport = True
+            parentport = None
+            if namep + "_" + foundname1.group(1) in parent.__dict__.keys():
+                parentport = getattr(parent, namep + "_" + \
+                                     foundname1.group(1) )
+            elif namep in parent.__dict__.keys():
+                parentport = getattr(parent, namep)
+            assert(parentport)
+            connect(parentport, port)
+    assert foundport, "Port " + namei + " not found in " + str(instports)
+    
+

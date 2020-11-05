@@ -165,8 +165,8 @@ def test_get_num_buffers_reqd():
     pA = {"name": "testA", "width":3, "direction":"in", "type":"A"}
     pB = {"name": "testD", "width":6, "direction":"in", "type":"B"}
     pC = {"name": "testF", "width":8, "direction":"out", "type":"C"}
-    pD = {"name": "dout0", "width":16, "direction":"in", "type":"DATAOUT"}
-    pE = {"name": "dout1", "width":8, "direction":"in", "type":"DATAOUT"}
+    pD = {"name": "dout0", "width":16, "direction":"in", "type":"DATA"}
+    pE = {"name": "dout1", "width":8, "direction":"in", "type":"DATA"}
     example_hw = {
         "ports": [pA, pB, pC, pD, pE]
     }
@@ -271,6 +271,8 @@ def test_add_n_inputs_outputs():
     class test_function(Component):
         def construct(s, n=1):
             # Shorten the module name to the provided name.
+            s.IN0 = InPort(3)
+            s.OUT5 = OutPort(3)
             utils.add_n_inputs(s, n, 3, "IN", 0)
             utils.add_n_outputs(s, n, 3, "OUT", 5)
             for i in range(n):
@@ -316,6 +318,8 @@ def test_connect_ports_by_name():
             # Shorten the module name to the provided name.
             utils.add_n_inputs(s, n, 3, "IN_", 0)
             utils.add_n_outputs(s, n, 3, "OUT_", 0)
+            s.YOUT = OutPort(3)
+            s.YOUT //= s.IN_0
             for i in range(n):
                 ip = getattr(s, "IN_"+str(i))
                 op = getattr(s, "OUT_"+str(i))
@@ -328,9 +332,16 @@ def test_connect_ports_by_name():
             s.IN_2 = InPort(3)
             s.IN_4 = InPort(3)
             utils.add_n_outputs(s, n, 3, "OUT_", 0)
+            s.YIN_0 = InPort(3)
+            s.YIN_2 = InPort(3)
+            s.YIN_4 = InPort(3)
+            utils.add_n_outputs(s, n, 3, "YOUT_", 0)
             for i in range(n):
                 ip = getattr(s, "IN_"+str(i*2))
                 op = getattr(s, "OUT_"+str(i))
+                op //= ip
+                ip = getattr(s, "YIN_"+str(i*2))
+                op = getattr(s, "YOUT_"+str(i))
                 op //= ip
 
     class TestWrapper(Component):
@@ -338,14 +349,16 @@ def test_connect_ports_by_name():
             s.f1 = test_function1(3)
             s.f2 = test_function2(3)
             utils.connect_in_to_top(s,s.f1.IN_0, "IN0_outer")
-            utils.connect_in_to_top(s,s.f1.IN_0, "IN0_outer")
             utils.connect_in_to_top(s,s.f1.IN_1, "IN1_outer")
             utils.connect_in_to_top(s,s.f1.IN_2, "IN2_outer")
-            utils.connect_out_to_top(s,s.f2.OUT_0, "OUT0_outer")
             utils.connect_out_to_top(s,s.f2.OUT_0, "OUT0_outer")
             utils.connect_out_to_top(s,s.f2.OUT_1, "OUT1_outer")
             utils.connect_out_to_top(s,s.f2.OUT_2, "OUT2_outer")
             utils.connect_ports_by_name(s.f1,"OUT",s.f2,"IN", i_f, o_f)
+            utils.connect_out_to_top(s,s.f2.YOUT_0, "YOUT0_outer")
+            utils.connect_out_to_top(s,s.f2.YOUT_1, "YOUT1_outer")
+            utils.connect_out_to_top(s,s.f2.YOUT_2, "YOUT2_outer")
+            utils.connect_ports_by_name(s.f1,"YOUT",s.f2,"YIN", i_f, o_f)
     
     testinst = TestWrapper(1,1)
     with pytest.raises(AssertionError):
@@ -363,4 +376,39 @@ def test_connect_ports_by_name():
     testinst.OUT0_outer @= 1 
     testinst.OUT1_outer @= 2 
     testinst.OUT2_outer @= 3 
+
+def test_connect_inst_ports_by_name():
+    """Test util function connect_ports_by_name"""
+    
+    class test_function1(Component):
+        def construct(s, n=1):
+            # Shorten the module name to the provided name.
+            utils.add_n_inputs(s, n, 3, "IN_", 0)
+            utils.add_n_outputs(s, n, 3, "OUT_", 0)
+            s.YOUT = OutPort(3)
+            s.YOUT //= s.IN_0
+            for i in range(n):
+                ip = getattr(s, "IN_"+str(i))
+                op = getattr(s, "OUT_"+str(i))
+                op //= ip
+
+    class TestWrapper(Component):
+        def construct(s):
+            s.f1 = test_function1(3)
+            utils.connect_in_to_top(s,s.f1.IN_0, "IN0_outer")
+            utils.connect_in_to_top(s,s.f1.IN_1, "IN1_outer")
+            utils.connect_in_to_top(s,s.f1.IN_2, "IN2_outer")
+            utils.add_n_outputs(s, 3, 3, "OUT_outer_", 0)
+            utils.connect_inst_ports_by_name(s, "OUT_outer", s.f1, "OUT")
+
+    testinst = TestWrapper()
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.IN0_outer @= 1 
+    testinst.IN1_outer @= 2 
+    testinst.IN2_outer @= 3 
+    testinst.sim_tick()
+    testinst.OUT_outer_0 @= 1 
+    testinst.OUT_outer_1 @= 2 
+    testinst.OUT_outer_2 @= 3 
 

@@ -326,8 +326,9 @@ def chain_ports(s, start_idx, end_idx, in_name, out_name, width=8):
         p1 = AddInPort(s, width, p1name)
         p2 = AddOutPort(s, width, p2name)
         connect(p1, p2)
-    p2name = out_name.format(str(start_idx))
-    return AddOutPort(s, width, p2name)
+    p1name = out_name.format(str(start_idx))
+    p2name = in_name.format(str(end_idx))
+    return AddOutPort(s, width, p1name), AddInPort(s, width, p2name)
 
 def print_table(title, table, col_width=0):
     """ Print a table nicely on the command line.
@@ -476,6 +477,7 @@ def connect_inst_ports_by_name(parent, namep, inst, namei, \
     instports = list(inst.get_output_value_ports()) + \
                  list(inst.get_input_value_ports())
     foundport = 0
+    connected_ins = []
     for port in instports:
         port1name = port._dsl.my_name
         foundname1 = re.search("^" + namei+r"_(\d+)$", port1name)
@@ -489,6 +491,7 @@ def connect_inst_ports_by_name(parent, namep, inst, namei, \
                 parentport = getattr(parent, namep)
             assert(parentport)
             connect(parentport, port)
+            connected_ins += [port]
     assert foundport, "Port " + namei + " not found in " + str(instports)
-    
+    return connected_ins
 

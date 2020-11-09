@@ -131,7 +131,7 @@ class HWB_Sim(Component):
         ports_by_type = {}
         special_outs=[]
         if "simulation_model" in spec:
-           special_outs=["DATA"] #, "W","I","O"]
+           special_outs=["DATA", "W", "I", "O"]
         
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
@@ -141,7 +141,7 @@ class HWB_Sim(Component):
                     if port["name"] not in s.__dict__.keys():
                         newport = utils.AddOutPort(s, port["width"],
                                                   port["name"])
-                        if port["name"] not in special_outs:
+                        if port["type"] not in special_outs:
                             newport //= newport._dsl.Type(0)
                 typename = port["type"] + "_" + port["direction"]
                 if typename in ports_by_type:
@@ -151,12 +151,15 @@ class HWB_Sim(Component):
         s._dsl.args = [spec.get('block_name', "unnamed")]
         
         # If this is an ML block, add behavioural info
-        if "simulation_model" in spec:
+        if "simulation_model" not in spec:
+            print("Warning: HW block " + spec.get("block_name","unnamed") + \
+                  "has no sim model - all outputs tied off")
+        else:
             if spec["simulation_model"] == "Buffer":
-                assert "ADDRESS_in" in ports_by_type
-                assert "WEN_in" in ports_by_type
-                assert "DATA_in" in ports_by_type
-                assert "DATA_out" in ports_by_type
+                for req in ["ADDRESS_in", "WEN_in", "DATA_in", "DATA_out"]:
+                    assert req in ports_by_type, \
+                        "To run simulation, you need port of type " + \
+                        req +" in definition of " + spec["block_name"] 
                 assert len(ports_by_type["ADDRESS_in"]) == 1  # Todo
                 assert len(ports_by_type["ADDRESS_in"]) == \
                        len(ports_by_type["DATA_out"])
@@ -190,7 +193,7 @@ class HWB_Sim(Component):
                         "To run simulation, you need port of type " + req_port
                 for req_port in ["W_EN_in", "I_EN_in", "ACC_EN_in"]:
                     assert req_port in ports_by_type, \
-                        "To run simulation, you need port of type " + req_port
+                        "To run simulation, you need port of type " + req_port +" in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
                 s.sim_model = MLB(proj, sim=sim)
                 
@@ -204,15 +207,18 @@ class HWB_Sim(Component):
                 connect(ports_by_type["W_in"][0][1][0:inner_bus_widths['W']],
                         s.sim_model.W_IN)
                 connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
-               # connect(ports_by_type["W_out"][0][1], sim_model.dataout)
+                connect(ports_by_type["W_out"][0][1][0:inner_bus_widths['W']],
+                        s.sim_model.W_OUT)
                 connect(ports_by_type["I_in"][0][1][0:inner_bus_widths['I']],
                         s.sim_model.I_IN)
                 connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
-                #connect(ports_by_type["I_out"][0][1], sim_model.address)
+                connect(ports_by_type["I_out"][0][1][0:inner_bus_widths['I']],
+                        s.sim_model.I_OUT)
                 connect(ports_by_type["O_in"][0][1][0:inner_bus_widths['O']],
                         s.sim_model.O_IN)
                 connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
-                #connect(ports_by_type["O_out"][0][1], sim_model.wen)
+                print(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']])
+                connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']], s.sim_model.O_OUT)
                     
             
             
@@ -239,20 +245,17 @@ class HWB_Wrapper(Component):
          :type count: string
         """
         # Add ports shared between instances to the top level
-        for port in spec['ports']:
-            if ((port['direction'] == "in") and ((port['type'] == 'C') or
-                                                 (port['type'] == 'ADDRESS'))):
-                utils.AddInPort(s, port['width'], port["name"])
-
         for i in range(count):
             curr_inst = HWB_Sim(spec, projection, sim=True)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
             for port in spec['ports']:
-                if ((port['type'] == 'C' or port['type'] == 'ADDRESS')
+                if ((port['type'] == 'C' or port['type'] == 'ADDRESS' or
+                     port['type'] == 'W_EN' or port['type'] == 'I_EN' or
+                     port['type'] == 'ACC_EN')
                         and port["direction"] == "in"):
                     instport = getattr(curr_inst, port["name"])
-                    instport //= getattr(s, port["name"])
+                    instport //= utils.AddInPort(s,  port['width'], port["name"])
                 elif port['type'] not in ('CLK', 'RESET'):
                     if (port['direction'] == "in"):
                         utils.connect_in_to_top(s, getattr(curr_inst,
@@ -342,6 +345,8 @@ class WeightInterconnect(Component):
          :type inputs_from_mlb_<i>: Component class
          :param outputs_to_mlb_<i>: Output port to MLB
          :type outputs_to_mlb_<i>: Component class
+         :param outputs_to_next_<i>: Outputs of chains of weights
+         :type outputs_to_next_<i>: Outputs of chains of weights
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
                   num_buffers=1, num_mlbs=1, projection={}, sim=False):
@@ -397,7 +402,7 @@ class WeightInterconnect(Component):
             for chain in range(num_buffers):
                 start_idx = chain*chain_len
                 end_idx = min(num_mlbs-1, start_idx + chain_len - 1)
-                newout = utils.chain_ports(s, start_idx,
+                newout, newin = utils.chain_ports(s, start_idx,
                             end_idx, "inputs_from_mlb_{}",
                             "outputs_to_mlb_{}", mlb_width)
                 # Then connect each chain input
@@ -409,6 +414,12 @@ class WeightInterconnect(Component):
                 input_bus_end = (section_idx + 1) *  mlb_width_used
                 connect(newout[0:mlb_width_used],
                         input_bus[input_bus_start:input_bus_end])
+                
+                # Then connect each chain output
+                output_bus = utils.AddOutPort(s, buffer_width,
+                                              "outputs_to_buffer_" + str(input_bus_idx))
+                connect(newin[0:mlb_width_used],
+                        output_bus[input_bus_start:input_bus_end])
                 
         else: 
             for ug in range(projection['UG']['value']):
@@ -523,7 +534,7 @@ class InputInterconnect(Component):
                             {'URN': urn, 'UB': ub, 'UG': ug, 'UE': ue})
                         start_idx = chain_idx * projection['URW']['value']
                         end_idx = start_idx + projection['URW']['value'] - 1
-                        newout = utils.chain_ports(s, start_idx,
+                        newout, newin = utils.chain_ports(s, start_idx,
                             end_idx, "inputs_from_mlb_{}",
                             "outputs_to_mlb_{}", mlb_width)
                         
@@ -543,6 +554,13 @@ class InputInterconnect(Component):
                         connect(newout[0:mlb_width_used],
                                 input_bus[input_bus_start:
                                           input_bus_end])
+
+                        # And one of the outputs
+                        if (ue == 0):
+                            output_bus = utils.AddOutPort(s, buffer_width,
+                                                          "outputs_to_buffer_" + str(input_bus_idx))
+                            connect(newin[0:mlb_width_used],
+                                    output_bus[input_bus_start:input_bus_end])
 
         # Tie disconnected MLBs to 0
         for i in range(num_mlbs):
@@ -580,7 +598,8 @@ class OutputPSInterconnect(Component):
          :type outputs_to_mlb_<i>: Component class
     """
     def construct(s, af_width=1, mlb_width=-1, mlb_width_used=1, num_afs=1,
-                  num_mlbs=1, projection={}, sim=False):
+                  num_mlbs=1, projection={}, sim=False, input_buf_width=0,
+                  num_input_bufs=0):
         """ Constructor for OutputInterconnect
 
          :param af_width: Bit-width of activation function input
@@ -616,6 +635,8 @@ class OutputPSInterconnect(Component):
 
         # Add outputs to activation functions
         utils.add_n_outputs(s, num_afs, af_width, "outputs_to_afs_")
+        if (num_input_bufs > 0):
+            utils.add_n_inputs(s, num_input_bufs, input_buf_width, "ps_inputs_from_buffer_")
 
         # Add input and output ports from each MLB
         for ug in range(projection['UG']['value']):
@@ -627,13 +648,29 @@ class OutputPSInterconnect(Component):
                                 projection['URN']['value']
                     start_idx = chain_idx * chain_len
                     end_idx = start_idx + chain_len - 1
-                    newout = utils.chain_ports(s, start_idx, end_idx,
+                    newout, newin = utils.chain_ports(s, start_idx, end_idx,
                                          "inputs_from_mlb_{}",
                                          "outputs_to_mlb_{}", mlb_width)
-                    newout[0:mlb_width_used] //= 0
-                    newin = utils.AddInPort(s, mlb_width,
-                                            "inputs_from_mlb_" + str(end_idx))
+                    if (num_input_bufs == 0):
+                        newout[0:mlb_width_used] //= 0
                     output_bus_idx = chain_idx * acts_per_stream
+                    
+                    # Connect input stream.
+                    if (num_input_bufs > 0):
+                        assert input_buf_width >= mlb_width_used
+                        streams_per_buffer = math.floor(input_buf_width /
+                                                        mlb_width_used)
+                        input_bus_idx = math.floor(chain_idx /
+                                                   streams_per_buffer)
+                        section_idx = chain_idx % streams_per_buffer
+                        input_bus_start = section_idx * mlb_width_used
+                        input_bus_end = (section_idx + 1) * mlb_width_used
+                        input_bus = getattr(s, "ps_inputs_from_buffer_" +
+                                            str(input_bus_idx))
+                        connect(input_bus[input_bus_start:input_bus_end],
+                                newout[0:mlb_width_used]
+                                )
+                        
                     for out_part in range(acts_per_stream):
                         output_bus = getattr(s, "outputs_to_afs_" +
                                              str(output_bus_idx + out_part))
@@ -817,6 +854,7 @@ class Datapath(Component):
                                                          s.weight_interconnect,
                                                          "inputs_from_mlb")
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["in"]):
+            print(portname)
             connected_ins += utils.connect_ports_by_name(
                 s.weight_interconnect, "outputs_to_mlb", s.mlb_modules,
                 portname["name"])
@@ -873,6 +911,17 @@ class Datapath(Component):
                                                 ["out"]):
                 if dout["name"] in port._dsl.my_name:
                     utils.connect_out_to_top(s, port, port._dsl.my_name)
+
+        # Connect input and weight datain to a common port
+        utils.AddInPort(s,utils.get_sum_datatype_width(buffer_specs['I'], 'DATA', ["in"]),
+                  "input_datain")
+        for port in utils.get_ports_of_type(buffer_specs['I'], 'DATA', ["in"]):
+            connected_ins += utils.connect_inst_ports_by_name(s, "input_datain", s.input_act_modules, port["name"])
+        utils.AddInPort(s,utils.get_sum_datatype_width(buffer_specs['W'], 'DATA', ["in"]),
+                  "weight_datain")
+        for port in utils.get_ports_of_type(buffer_specs['W'], 'DATA', ["in"]):
+            connected_ins += utils.connect_inst_ports_by_name(s, "weight_datain", s.weight_modules, port["name"])
+    
         # Connect all inputs not otherwise connected to top
         for inst in [s.activation_function_modules, s.mlb_modules,
                      s.mlb_modules, s.output_act_modules, s.input_act_modules,
@@ -882,9 +931,11 @@ class Datapath(Component):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
-                                            port._dsl.my_name+"_top")
+                                            port._dsl.my_name + "_top")
+                    print(inst._dsl.my_name + "_" +
+                                            port._dsl.my_name + "_top")
 
-        # print(s.__dict__)
+        print(s.__dict__)
         # TODAY
         # Get the full simulation working for toy
         #    (that means doing the MLB sim model)

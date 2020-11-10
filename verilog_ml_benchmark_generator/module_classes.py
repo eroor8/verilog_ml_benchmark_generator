@@ -14,6 +14,7 @@ import math
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
+import module_helper_classes
 from module_helper_classes import *
 
 
@@ -174,7 +175,8 @@ class HWB_Sim(Component):
                     datalen = ports_by_type["DATA_in"][buffer_inst][0]["width"]
                     addrlen = ports_by_type["ADDRESS_in"][buffer_inst][0]["width"]
                     size = 2**addrlen
-                    sim_model = Buffer(datalen, size, sim=sim)
+                    sim_model = module_helper_classes.Buffer(datalen,
+                                                             size, sim=sim)
                     setattr(s,"sim_model_inst" + str(buffer_inst), sim_model)
                     connect(ports_by_type["DATA_in"][buffer_inst][1],
                             sim_model.datain)
@@ -195,7 +197,7 @@ class HWB_Sim(Component):
                     assert req_port in ports_by_type, \
                         "To run simulation, you need port of type " + req_port +" in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
-                s.sim_model = MLB(proj, sim=sim)
+                s.sim_model = module_helper_classes.MLB(proj, sim=sim)
                 
                 MAC_datatypes = ['W', 'I', 'O']
                 inner_proj = proj['inner_projection']
@@ -935,7 +937,7 @@ class Datapath(Component):
                     print(inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_top")
 
-        print(s.__dict__)
+        #print(s.__dict__)
         # TODAY
         # Get the full simulation working for toy
         #    (that means doing the MLB sim model)

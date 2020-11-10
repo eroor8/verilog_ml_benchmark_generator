@@ -396,6 +396,54 @@ def tie_off_port(s, port):
     newwire //= port
 
 
+def connect_ports_by_name_v2(inst1, name1, inst2, name2, factor1=1, factor2=1):
+    """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``
+        to ports named ``name2``_<#*``factor2``> on
+
+    :param inst1: Module instance with output ports to be connected
+    :type inst1: Component class
+    :param inst2: Module instance with input ports to be connected
+    :type inst2: Component class
+    :param name1: Prefix of names of output ports of ``inst1``
+    :type name1: string
+    :param name2: Prefix of names of input ports of ``inst2``
+    :type name2: string
+    :param factor1: Factor used to match port indexes
+                    (p1[i*factor1] <==> p2[i*factor2])
+    :type factor1: string
+    :param factor2: Factor used to match port indexes
+                    (p1[i*factor1] <==> p2[i*factor2])
+    :type factor2: string
+    """
+    match_dict = {}
+    connected_ins = []
+    for port in inst1.get_output_value_ports():
+        port1name = port._dsl.my_name
+        foundname1 = re.search("^" + name1+r"$", port1name)
+        if foundname1:
+            match_dict[str(int(foundname1.group(1))*factor1)] = port
+    
+    assert (len(match_dict) > 0), \
+        "Should have found outputs with name " + \
+        name1 + " in " + str(inst1.get_output_value_ports())
+
+    for port in inst2.get_input_value_ports():
+        port2name = port._dsl.my_name
+        foundname2 = re.search("^" + name2+r"$", port2name)
+        if foundname2:
+            assert (str(int(foundname2.group(1))*factor2) in match_dict), \
+                "Should have found output with name " + name1 + " in " + \
+                str(match_dict)
+            name_to_get = str(int(foundname2.group(1))*factor2)
+            connectport = match_dict.get(name_to_get, None)
+            connect(connectport, port)
+            connected_ins += [port]
+            if (str(int(foundname2.group(1))*factor2) in match_dict):
+                del match_dict[str(int(foundname2.group(1))*factor2)]
+    assert len(match_dict) == 0, "Missing matches for ports " + \
+        str(match_dict) + " in list " + str(inst2.get_input_value_ports())
+    return connected_ins
+
 def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
     """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``
         to ports named ``name2``_<#*``factor2``> on

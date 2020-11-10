@@ -129,9 +129,11 @@ class Buffer(Component):
             
         @update
         def upblk0():
-            if ((s.waddress - startaddr + 1)) <= (length-1):
+            if ((s.waddress - startaddr)) <= (length-1):
                 s.dataout @= s.data[(s.waddress - startaddr) * datawidth:
                     (s.waddress - startaddr) * datawidth + datawidth]
+            else:
+                s.dataout @= 0
             #    if (s.wen):
             #        print("Address ok... " + str(s.waddress) + " for buf " + str(s._dsl.full_name) + " datawidth " + str(datawidth))
             #else:

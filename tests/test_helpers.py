@@ -17,16 +17,18 @@ def merge_bus(v,width):
         sum += v[i] * (2 ** (width * i))
     return sum
 
-def load_buffers(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth):
+def load_buffers(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth, outertestinst=None):
     #eg. ibuf = [[[1
     #         for k in range(ivalues_per_buf)]            # values per word
     #         for i in range(ibuf_len)]                   # words per buffer
     #         for j in range (ibuf_count)]                # buffers
     for j in range(len(buffer_values)):  # For each buffer...
         curr_we = we_portname.format(j)
-        load_buffer(testinst, curr_we, addr_portname, datain_portname, buffer_values[j], dwidth)
+        load_buffer(testinst, curr_we, addr_portname, datain_portname, buffer_values[j], dwidth, outertestinst)
 
-def load_buffer(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth):
+def load_buffer(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
     curr_we = getattr(testinst, we_portname)
     addr_port = getattr(testinst, addr_portname)
     datain_port = getattr(testinst, datain_portname)
@@ -34,22 +36,40 @@ def load_buffer(testinst, we_portname, addr_portname, datain_portname, buffer_va
     for i in range(len(buffer_values)):
         addr_port @= i
         datain_port @= merge_bus(buffer_values[i], dwidth)
-        testinst.sim_tick()
+        outertestinst.sim_tick()
+        print("PYTHON: buf[{}] = {} ({})".format(int(addr_port),int(datain_port),buffer_values[i]))
     curr_we @= 0
 
-def check_buffers(testinst, inner_inst, addr_portname, dataout_portname, buffer_values, dwidth):
+def load_buffers_sm(testinst, datain_portname, buffer_values, dwidth, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
+    datain_port = getattr(testinst, datain_portname)
+    for j in range(len(buffer_values)):  # For each buffer...
+        print("Buffer length:")
+        print(len(buffer_values[j]))
+        for i in range(len(buffer_values[j])):
+            outertestinst.sim_tick()
+            datain_port @= merge_bus(buffer_values[j][i], dwidth)
+            testinst.sm_start @= 0
+            #print("SM: buf[{}] = {} ({})".format(int(j),int(datain_port),buffer_values[j][i]))
+            #print("ENs: w:{} i0:{} i1:{} i2:{} i3:{} i4:{}".format(testinst.datapath.weight_modules_portawe_0_top, testinst.datapath.input_act_modules_portawe_0_top, testinst.datapath.input_act_modules_portawe_1_top, testinst.datapath.input_act_modules_portawe_2_top, testinst.datapath.input_act_modules_portawe_3_top, testinst.datapath.input_act_modules_portawe_4_top))
+    outertestinst.sim_tick()
+
+def check_buffers(testinst, outer_inst, inner_inst_name, buffer_values, dwidth, outertestinst=None):
     for j in range(len(buffer_values)):
-        dataout_portname_j = dataout_portname.format(j)
-        check_buffer(testinst, inner_inst, addr_portname, dataout_portname_j, buffer_values[j], dwidth)
+        inner_inst = getattr(outer_inst, inner_inst_name.format(j))
+        check_buffer(testinst, inner_inst, buffer_values[j], dwidth, outertestinst)
                 
-def load_mlb_values(testinst, chainlen, chainstart, buflen, addr_portname, en_portname):
+def load_mlb_values(testinst, chainlen, chainstart, buflen, addr_portname, en_portname, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
     addr_port = getattr(testinst, addr_portname)
     en_port = getattr(testinst, en_portname)
     en_port @= 1
     for i in range(chainlen):
         prev_addr = (chainstart+i) % buflen
         addr_port @= prev_addr
-        testinst.sim_tick()
+        outertestinst.sim_tick()
     en_port @= 0
         
 def check_mlb_chain_values(testinst,
@@ -61,10 +81,6 @@ def check_mlb_chain_values(testinst,
                            bi_chain_len=0, ubi=0):
     buflen = len(buffer_values)
     all_good = True
-    print(bi_chain_len)
-    print(bo_chain_len)
-    print(bi_chain_len*ubi)
-    print(bo_chain_len*ubi)
     for t in range(mlb_start+mlb_count-1,mlb_start-1,-1):
         
         for r in range(mac_count-1,-1,-1):
@@ -73,18 +89,19 @@ def check_mlb_chain_values(testinst,
             curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
             # Outer weight buffer index
             total_mac_idx = mac_count*mlb_count-mac_idx-1
-            print(total_mac_idx)
+            #print(total_mac_idx)
             buffer_idxo = math.floor(total_mac_idx/(bo_chain_len*ubo*ubi))
             buffer_idxo = buffer_idxo*bo_chain_len
-            print(buffer_idxo)
+            #print(buffer_idxo)
             # Inner weight buffer index
             buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi))
             buffer_idxi = buffer_idxi*bi_chain_len
-            print(buffer_idxi)
+            #print(buffer_idxi)
             # weight index
             buf_item_idx = (total_mac_idx%bi_chain_len)
-            print(buf_item_idx)
-            print(str(int(curr_out)) + " vs " + str(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i]) )
+            #print(buf_item_idx)
+            #print(str(int(curr_out)) + " vs " + str(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i]) )
+            print("[{}]: OUT {} vs EXPECTED {} ({}/{}/{}={}={})".format(mac_idx, int(curr_out),buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i], buffer_idxo, buffer_idxi, buf_item_idx, (buffer_idxo + buffer_idxi + buf_item_idx), (buffer_idxo + buffer_idxi + buf_item_idx)% buflen))
             all_good &= (curr_out == buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
     return all_good
 
@@ -101,6 +118,7 @@ def check_mlb_chains_values(testinst,
     for t in range(outer_dwidth):
         mlb_start_i = t*math.ceil(mlb_count/len(buffer_values))
         for r in range(inner_dwidth):
+            print("Check chain {} {}".format(t,r))
             stream_idx = t*inner_dwidth+r
             buf_idx = math.floor(stream_idx/len(buffer_values))
             part_idx = stream_idx % len(buffer_values)
@@ -113,7 +131,9 @@ def check_mlb_chains_values(testinst,
                                    buffer_values[buf_idx], dwidth, part_idx, bo_chain_len, ubo, bi_chain_len, ubi)
     return all_good
 
-def stream_mlb_values(testinst, time, addr_portnames, os, buf_lens, en_portnames, starti = 0):
+def stream_mlb_values(testinst, time, addr_portnames, os, buf_lens, en_portnames, starti = 0, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
     for en_portname in en_portnames:
         en_port = getattr(testinst, en_portname)
         en_port @= 1
@@ -121,13 +141,14 @@ def stream_mlb_values(testinst, time, addr_portnames, os, buf_lens, en_portnames
         for r in range(len(addr_portnames)):
             addr_port = getattr(testinst, addr_portnames[r])
             addr = i % buf_lens[r]
+            #print ("LEN " + str(buf_lens[r]))
+            #print ("ADDR " + str(i % buf_lens[r]))
             addr_port @= addr + os[r]
-        testinst.sim_tick()
+        outertestinst.sim_tick()
     for en_portname in en_portnames:
         en_port = getattr(testinst, en_portname)
         en_port @= 0
     return i
-
 
 def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
     inner_uw = projection["inner_projection"]["URW"]["value"]
@@ -169,10 +190,20 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                           uei*inner_uw*inner_un + \
                                                           urni*inner_uw + \
                                                           urwi
-                                                
-                                                b_chain_len = outer_ue * outer_un * outer_uw * mac_count
-                                                buffer_idx = math.floor((mac_count*mlb_count-mac_idx-1)/(b_chain_len*outer_ub))
-                                                buffer_idx = buffer_idx*b_chain_len + ((mac_count*mlb_count-mac_idx-1)%b_chain_len)
+                                                w_buf_inst_idx = \
+                                                    ugo*outer_ue*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ueo*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urwo*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urno*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ugi*inner_ue*inner_un*inner_uw + \
+                                                    uei*inner_un*inner_uw + \
+                                                    urni*inner_uw + \
+                                                    urwi
+                                                buffer_idx = (outer_ug*outer_ue*outer_uw*outer_un*inner_ug*\
+                                                              inner_ue*inner_un*inner_uw - w_buf_inst_idx - 1)\
+                                                              % wbuf_len
+                                                print(w_buf_inst_idx)
+                                                print(buffer_idx)
                                                 w = merge_bus(wbuf[0][buffer_idx % wbuf_len],
                                                             projection["stream_info"]["W"])
                                                 if ((i - urw) >= 0) and \
@@ -200,37 +231,51 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
     return obuf
 
 
-def gather_stored_buffer_values(testinst, inner_inst, addr_portname, dataout_portname,
-                                buffer_values, dwidth):
+def read_out_stored_buffer_values(testinst, inner_inst, addr_portname, dataout_portname,
+                                buffer_values, dwidth, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
     addr_port = getattr(testinst, addr_portname)
     dataout_port = getattr(inner_inst, dataout_portname)
     for i in range(len(buffer_values)):
+        dataout_val = getattr(inner_inst.sim_model_inst0,"V"+str(i))
         addr_port @= i
-        testinst.sim_tick()
+        outertestinst.sim_tick()
         curr_obuf_out = int(dataout_port)
+        assert(dataout_val.dataout == dataout_port)
         for section in range(len(buffer_values[i])):
             buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
             curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
     return buffer_values
+
                
-def gather_stored_values(testinst, addr_portname, dataout_portname,
-                         buffer_values, dwidth):
+def read_out_stored_values(testinst, addr_portname, dataout_portname,
+                         buffer_values, dwidth, outertestinst=None):
     for obufi in range(len(buffer_values)):
         curr_obuf = getattr(testinst.output_act_modules, "mlb_outs_inst_" + str(obufi))
-        gather_stored_buffer_values(testinst, testinst, addr_portname, "portadataout_{}".format(obufi),
-                                buffer_values[obufi], dwidth)
+        read_out_stored_buffer_values(testinst, curr_obuf, addr_portname, "portadataout",
+                                    buffer_values[obufi], dwidth, outertestinst)
     return buffer_values
 
-def check_buffer(testinst, inner_inst, addr_portname, dataout_portname, buffer_values, dwidth):
-    #addr_port = getattr(testinst, addr_portname)
-    #dataout_port = getattr(inner_inst, dataout_portname)
+def gather_stored_buffer_values(testinst, inner_inst,
+                                buffer_values, dwidth, outertestinst=None):
+    if not outertestinst:
+        outertestinst = testinst
+    for i in range(len(buffer_values)):
+        curr_obuf= getattr(inner_inst.sim_model_inst0,"V"+str(i))
+        curr_obuf_out = int(curr_obuf.dataout)
+        for section in range(len(buffer_values[i])):
+            buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
+            curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
+    return buffer_values
+
+def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None):
     new_buf = [[0 for i in range(len(buffer_values[0]))] for j in range(len(buffer_values))]
-    new_buf = gather_stored_buffer_values(testinst, inner_inst, addr_portname,
-                                          dataout_portname, new_buf, dwidth)
+    new_buf = gather_stored_buffer_values(testinst, inner_inst,
+                                          new_buf, dwidth, outertestinst)
+    print("STORED_VALUES")
+    print("SM: ={}".format(inner_inst.sim_model_inst0.data))
     print(new_buf)
+    print("EXPECTED_VALUES")
     print(buffer_values)
     assert(new_buf == buffer_values)
-    #for i in range(len(buffer_values)):
-    #    addr_port @= i
-    #    testinst.sim_tick()
-    #    assert (dataout_port == merge_bus(buffer_values[i], dwidth))

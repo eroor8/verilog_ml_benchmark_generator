@@ -366,9 +366,9 @@ def test_Datapath():
     # Calculate required buffers etc.
     mlb_count = utils.get_mlb_count(projection["outer_projection"])
     mac_count = utils.get_mlb_count(projection["inner_projection"])
-    ibuf_len = 2**ib_spec["ports"][0]["width"]-1
-    obuf_len = 2**ob_spec["ports"][0]["width"]-1
-    wbuf_len = 2**wb_spec["ports"][0]["width"]-1
+    ibuf_len = 2**ib_spec["ports"][0]["width"]
+    obuf_len = 2**ob_spec["ports"][0]["width"]
+    wbuf_len = 2**wb_spec["ports"][0]["width"]
     print(obuf_len)
     # Load the weight buffer
     wbuf_count = 1
@@ -387,7 +387,7 @@ def test_Datapath():
                 "weight_modules_portaaddr_top", "weight_datain",
                 wbuf, projection["stream_info"]["W"])
     check_buffers(testinst, testinst.weight_modules,
-                "weight_modules_portaaddr_top", "portadataout_{}",
+                  "ml_block_weights_inst_{}",
                 wbuf, projection["stream_info"]["W"])
     
     # Calculate required buffers etc.
@@ -413,7 +413,7 @@ def test_Datapath():
                 "input_act_modules_portaaddr_top", "input_datain",
                 ibuf, projection["stream_info"]["I"])
     check_buffers(testinst, testinst.input_act_modules,
-                "input_act_modules_portaaddr_top", "portadataout_{}",
+                  "ml_block_inputs_inst_{}",
                 ibuf, projection["stream_info"]["I"])
     
     # Now load the weights into the MLBs
@@ -441,14 +441,14 @@ def test_Datapath():
                               [0],
                               [wbuf_len],
                               ["mlb_modules_a_en_top"], starti=wbi_section_start)
-            
+      
     # Check they are right
     assert(check_mlb_chains_values(testinst, mlb_count, mac_count, 1, 1,
                             "ml_block_inst_{}", "weight_out_{}", wbuf,
                             projection["stream_info"]["W"],
                             wbo_section_length, outer_ub,
                                    wbi_section_length, inner_ub))
-    print("OKKK")
+    
     # Now stream the inputs, and check the outputs!
     stream_mlb_values(testinst, obuf_len,
                       ["input_act_modules_portaaddr_top", "output_act_modules_portaaddr_top"],
@@ -475,7 +475,7 @@ def test_Datapath():
              for i in range(obuf_len)]
              for j in range (obuf_count)]
     
-    obuf_results = gather_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
+    obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
                          obuf_results, projection["stream_info"]["I"])
     
     print("EXPECTED: " + str(obuf))

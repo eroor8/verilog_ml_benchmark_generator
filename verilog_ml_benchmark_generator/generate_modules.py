@@ -3,6 +3,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_classes
+import state_machine_classes
 from pymtl3 import *
 import inspect
 from pymtl3.examples.ex00_quickstart import FullAdder
@@ -303,6 +304,33 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
     
     # Generate the outer module containing many MLBs
     t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
+    return elab_and_write(t, write_to_file, module_name)
+
+def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
+                           projection, write_to_file):
+    """ Validate input specifications, generate the datapath and then write
+        resulting verilog to file ``module_name``.v
+
+    :param module_name: Top level module name and filename
+    :type module_name: string
+    :param mlb_spec: Hardware definition of ML block
+    :type mlb_spec: dict
+    :param wb_spec: Hardware definition of weight buffer
+    :type wb_spec: dict
+    :param ib_spec: Hardware definition of input buffer
+    :type ib_spec: dict
+    :param projection: Projection information
+    :type projection: dict
+    :param write_to_file: Whether or not to write resulting verilog to file.
+    :type  write_to_file: bool
+    """
+    validate(instance=wb_spec, schema=buffer_spec_schema)
+    validate(instance=ab_spec, schema=buffer_spec_schema)
+    validate(instance=mlb_spec, schema=mlb_spec_schema)
+    validate(instance=projection, schema=proj_schema)
+    
+    # Generate the outer module containing many MLBs
+    t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
     return elab_and_write(t, write_to_file, module_name)
 
 

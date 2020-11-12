@@ -47,7 +47,7 @@ ports:
     -   name: portawe
         width: 1
         direction: "in"
-        type: "C"
+        type: "WEN"
     -   name: portaaddr
         width: 8
         direction: "in"

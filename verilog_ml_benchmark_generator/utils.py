@@ -195,7 +195,24 @@ def get_overall_idx(projection, idxs):
             product *= projection[item]['value']
     return total
 
+def AddWire(s, width, newname):
+    """ Create a new wire at level ``s`` (if it doesn't already
+    exist), and name it ``newname``
+    Do nothing for clk and reset ports.
 
+    :param s: Module at which to create a new port
+    :type s: Component class
+    :param newname: Name of port to be created
+    :type newname: string
+    :return: The newly created port
+    """
+    if newname in s.__dict__.keys():
+        return getattr(s, newname)
+    else:
+        neww = Wire(width)
+        setattr(s, newname, neww)
+        return neww
+    
 def AddInPort(s, width, newname):
     """ Create a new input port at level ``s`` (if it doesn't already
     exist), and name it ``newname``
@@ -269,6 +286,26 @@ def connect_out_to_top(s, port, newname):
     newoutport //= port
 
 
+def add_n_wires(s, n, width, prefix, start_idx=0):
+    """ Create ``n`` new inputs on module ``s``, with width ``width``.
+    Ports are named ``prefix``_i, where i begins at ``start_idx``.
+
+    :param s: Module at which to create new ports
+    :type s: Component class
+    :param n: Number of ports to add
+    :type n: int
+    :param width: Bit-width of new ports
+    :type width: int
+    :param start_idx: Index at which to start for port naming
+    :type start_idx: int
+    :param prefix: Prefix of names of new ports
+    :type prefix: string
+    """
+    added_w = []
+    for i in range(start_idx, start_idx+n):
+        added_w += [AddWire(s, width, prefix + str(i))]
+    return added_w
+
 def add_n_inputs(s, n, width, prefix, start_idx=0):
     """ Create ``n`` new inputs on module ``s``, with width ``width``.
     Ports are named ``prefix``_i, where i begins at ``start_idx``.
@@ -284,8 +321,10 @@ def add_n_inputs(s, n, width, prefix, start_idx=0):
     :param prefix: Prefix of names of new ports
     :type prefix: string
     """
+    added_ins = []
     for i in range(start_idx, start_idx+n):
-        AddInPort(s, width, prefix + str(i))
+        added_ins += [AddInPort(s, width, prefix + str(i))]
+    return added_ins
 
 
 def add_n_outputs(s, n, width, prefix, start_idx=0):
@@ -303,8 +342,10 @@ def add_n_outputs(s, n, width, prefix, start_idx=0):
     :param prefix: Prefix of names of new ports
     :type prefix: string
     """
+    added_outs = []
     for i in range(start_idx, start_idx+n):
-        AddOutPort(s, width, prefix + str(i))
+        added_outs += [AddOutPort(s, width, prefix + str(i))]
+    return added_outs
 
 
 def tie_off_clk_reset(s):
@@ -417,32 +458,38 @@ def connect_ports_by_name_v2(inst1, name1, inst2, name2, factor1=1, factor2=1):
     """
     match_dict = {}
     connected_ins = []
+    connected_outs = []
+    common = None
     for port in inst1.get_output_value_ports():
         port1name = port._dsl.my_name
         foundname1 = re.search("^" + name1+r"$", port1name)
         if foundname1:
-            match_dict[str(int(foundname1.group(1))*factor1)] = port
-    
-    assert (len(match_dict) > 0), \
+            try:
+                match_dict[str(int(foundname1.group(1))*factor1)] = port
+            except:
+                common = port
+                
+    assert (len(match_dict) > 0) or common, \
         "Should have found outputs with name " + \
-        name1 + " in " + str(inst1.get_output_value_ports())
+        name1 + " in " + str(inst1.get_output_value_ports()) + " and " + str(common)
 
     for port in inst2.get_input_value_ports():
         port2name = port._dsl.my_name
         foundname2 = re.search("^" + name2+r"$", port2name)
         if foundname2:
-            assert (str(int(foundname2.group(1))*factor2) in match_dict), \
-                "Should have found output with name " + name1 + " in " + \
+            assert (str(int(foundname2.group(1))*factor2) in match_dict) or common, \
+                "Should have found output with name " + name2 + " in " + \
                 str(match_dict)
             name_to_get = str(int(foundname2.group(1))*factor2)
-            connectport = match_dict.get(name_to_get, None)
+            connectport = match_dict.get(name_to_get, common)
             connect(connectport, port)
             connected_ins += [port]
+            connected_outs += [connectport]
             if (str(int(foundname2.group(1))*factor2) in match_dict):
                 del match_dict[str(int(foundname2.group(1))*factor2)]
     assert len(match_dict) == 0, "Missing matches for ports " + \
         str(match_dict) + " in list " + str(inst2.get_input_value_ports())
-    return connected_ins
+    return connected_ins + connected_outs
 
 def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
     """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``

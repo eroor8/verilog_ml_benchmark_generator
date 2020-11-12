@@ -245,11 +245,13 @@ def test_Buffer():
     testinst.address @= 0
     testinst.wen @= 1
     testinst.sim_tick()
+    testinst.sim_tick()
     assert testinst.data == 3
     assert testinst.dataout == 3
     testinst.address @= 1
     testinst.datain @= 1
     testinst.wen @= 1
+    testinst.sim_tick()
     testinst.sim_tick()
     assert testinst.data == 11
     assert testinst.dataout == 1
@@ -257,9 +259,11 @@ def test_Buffer():
     testinst.datain @= 4
     testinst.wen @= 0
     testinst.sim_tick()
+    testinst.sim_tick()
     assert testinst.data == 11
     assert testinst.dataout == 3
     testinst.address @= 2
+    testinst.sim_tick()
     testinst.sim_tick()
     assert testinst.data == 11
     assert testinst.dataout == 0
@@ -275,19 +279,23 @@ def test_Buffer():
     testinst.address @= 0
     testinst.wen @= 1
     testinst.sim_tick()
+    testinst.sim_tick()
     assert testinst.data == 365
     assert testinst.dataout == 0
     testinst.address @= 6
     testinst.wen @= 1
+    testinst.sim_tick()
     testinst.sim_tick()
     assert testinst.data == 363
     assert testinst.dataout == 3
     testinst.address @= 7
     testinst.wen @= 0
     testinst.sim_tick()
+    testinst.sim_tick()
     assert testinst.data == 363
     assert testinst.dataout == 5
     testinst.address @= 6
+    testinst.sim_tick()
     testinst.sim_tick()
     assert testinst.data == 363
     assert testinst.dataout == 3

@@ -19,8 +19,8 @@ from verilog_ml_benchmark_generator import cli
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_helpers import *
 
-def test_Datapath():
-    """Test Component class Datapath"""
+def test_StateMachineSim():
+    """Test Component class Statemachine"""
     projection = {"name": "test",
                   "activation_function": "RELU",
                   "stream_info": {"W": 4,
@@ -145,10 +145,6 @@ def test_Datapath():
     print(ibuf_len)
     load_buffers_sm(sm_testinst, "datapath_input_datain_sm",
                  ibuf, projection["stream_info"]["I"])
-    #assert 1== 0
-    #load_buffers(testinst, "input_act_modules_portawe_{}_top",
-    #            "input_act_modules_portaaddr_top", "input_datain",
-    #             ibuf, projection["stream_info"]["I"], sm_testinst)
     check_buffers(testinst, testinst.input_act_modules,
                   "ml_block_inputs_inst_{}",
                   ibuf, projection["stream_info"]["I"], sm_testinst)
@@ -176,15 +172,10 @@ def test_Datapath():
                             wbi_section_length, inner_ub))
 
     # Now stream the inputs, and check the outputs!
-    stream_mlb_values(testinst, obuf_len,
-                      ["input_act_modules_portaaddr_top", "output_act_modules_portaaddr_top"],
-                      [0, -1],
-                      [ibuf_len, obuf_len],
-                      ["mlb_modules_b_en_top"] +
-                      ["output_act_modules_portawe_{}_top".format(obi)
-                       for obi in range(obuf_count)],
-                      outertestinst=sm_testinst)
-      
+    sm_testinst.sim_tick()
+    for j in range(obuf_len):
+        sm_testinst.sim_tick()
+    
     obuf = [[[0
              for i in range(ostreams_per_buf)]
              for i in range(obuf_len)]
@@ -199,97 +190,19 @@ def test_Datapath():
              for i in range(obuf_len)]
              for j in range (obuf_count)]
     
-    obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
-                                        obuf_results, projection["stream_info"]["I"], sm_testinst)
+    print("Checking...: " )
+    obuf_results = read_out_stored_values_from_sm("external_out",
+                                        obuf_results, projection["stream_info"]["I"],
+                                        sm_testinst)
+    print("DONE!")
+    sm_testinst.sim_tick()
+    sm_testinst.sim_tick()
+    assert(sm_testinst.done)
     
     print("EXPECTED: " + str(obuf))
     print("ACTUAL: " + str(obuf_results))
     print("W: " + str(wbuf))
     print("I: " + str(ibuf))
     for bufi in range(obuf_count):
-        for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1): 
+        for olen in range(min(obuf_len,ibuf_len)-1): 
             assert obuf[bufi][olen] == obuf_results[bufi][olen]
-
-
-
-
-
-    """
-        print("TICK")
-        print(testinst.mlb_modules.ml_block_inst_0.sim_model.mac_modules.sum_out_0)
-        print(testinst.mlb_modules.ml_block_inst_0.sim_model.O_OUT)
-        print(testinst.mlb_modules.ml_block_inst_0.res_out)
-        print(testinst.mlb_modules.res_out_0)
-        print(testinst.mlb_modules.res_in_1)
-        print(testinst.mlb_modules.ml_block_inst_1.res_in)
-        print(testinst.mlb_modules.ml_block_inst_1.sim_model.O_IN)
-        print(testinst.mlb_modules.ml_block_inst_1.sim_model.mac_modules.sum_in_0)
-        print(testinst.mlb_modules.ml_block_inst_1.sim_model.mac_modules.weight_out_0)
-        print(testinst.mlb_modules.ml_block_inst_1.sim_model.mac_modules.input_out_0)
-        print(testinst.mlb_modules.ml_block_inst_1.sim_model.mac_modules.sum_out_0)
-
-    for i in range(obuf_len):
-        prev_addr = i % wbuf_len
-        testinst.input_act_modules_portaaddr_top @= prev_addr
-        testinst.output_act_modules_portawe_0_top @= 1
-        testinst.output_act_modules_portawe_1_top @= 1
-        testinst.output_act_modules_portaaddr_top @= prev_addr-1
-        testinst.mlb_modules_b_en_top @= 1
-        testinst.sim_tick()
-    #    for ibufi in range(ibuf_count): # Check the inputs are ok.
-    #        #print("OUTER INPUT STREAM " + str(ibufi))
-    #        # Check that input stream is right
-    #        curr_out = getattr(testinst.input_act_modules, "portadataout_" + str(ibufi))
-    #        assert (curr_out == merge_bus(ibuf[ibufi][prev_addr], projection["stream_info"]["W"]))   
-    #    for ugbo in range(outer_ug*outer_ub): 
-    #        #print("UGB_outer " + str(ugbo))
-    #        # Check that input and weight and sum values of each MAC is right
-    #        for ueo in range(outer_ue):
-    #            print("\tUE_outer " + str(ueo))
-    #            correct_sum = 0
-    #            for urnw_o in range(outer_uw*outer_un):
-    #                #print("\t\tURNW_outer " + str(urnw_o))
-    #                mlb_inst = ugbo*outer_ue*outer_uw*outer_un + ueo*outer_uw*outer_un + urnw_o
-    #                #print("\t\tMLB " + str(mlb_inst))
-    #                mlb = getattr(testinst.mlb_modules, "ml_block_inst_" + str(mlb_inst))
-    #                assert(mlb.sim_model.I_IN == merge_bus(ibuf[ugbo][prev_addr],8))
-    #                for un in range(inner_un):
-    #                    #print("\t\t\tUN: " + str(un))
-    #                    for uw in range(inner_uw):
-    #                        #print("\t\t\t\tUW: " + str(uw))
-    #                        iv = getattr(mlb.sim_model.mac_modules, "input_out_" + str(un*3+uw))
-    #                        ov = getattr(mlb.sim_model.mac_modules, "weight_out_" + str(un*3+uw))
-    #                        sv = getattr(mlb.sim_model.mac_modules, "sum_out_" + str(un*3+uw))
-    #                        mac_idx = mlb_inst*mac_count + un*3+uw
-    #                        assert(ov == merge_bus(wbuf[(mac_count*mlb_count-mac_idx-1) % wbuf_len],8))
-    #                        if (prev_addr-uw >= 0):
-    #                            assert(iv == ibuf[ugbo][prev_addr-uw][un])
-    #                            correct_sum += ibuf[ugbo][prev_addr-uw][un] * \
-    #                                           merge_bus(wbuf[(mac_count*mlb_count-mac_idx-1)
-    #                                                        % wbuf_len],8) 
-    #                            assert(sv == correct_sum)
-    #                        else:
-    #                            assert(iv == 0)
-    #                            assert(sv == correct_sum)
-    #            last_mlb_idx = ugbo*outer_ue*outer_uw*outer_un + (ueo+1)*outer_uw*outer_un - 1
-    #            chain_out = getattr(testinst.mlb_modules, "ml_block_inst_" + str(last_mlb_idx))
-    #            assert(chain_out.res_out == correct_sum)
-    #            #print("\tCHAIN_OUT "+ str(last_mlb_idx) +":" + str(chain_out.res_out))
-    #            output_idx = ugbo*outer_ue*outer_uw*outer_un + ueo
-    #            chain_out = getattr(testinst.output_ps_interconnect, "outputs_to_afs_" + str(output_idx))
-    #            assert(chain_out == correct_sum)
-    #            chain_out = getattr(testinst.output_interconnect, "input_" + str(output_idx))
-    #            assert(int(chain_out) == int(correct_sum%(2**8)))
-    #            buffer_idx = math.floor(output_idx / 2) 
-    #            chain_out = getattr(testinst.output_interconnect, "output_" + str(buffer_idx))
-    #            section_idx = output_idx%2
-    #            section_start = 8*section_idx
-    #            section_end = 8*(section_idx+1)
-    #            section_part = int(int(chain_out)%(2**section_end))
-    #            section_part = math.floor(section_part / (2**section_start))
-    #            assert(section_part == int(correct_sum%(2**8)))
-    #            chain_out = getattr(testinst.output_act_modules, "portadatain_" + str(buffer_idx))
-    #            section_part = int(int(chain_out)%(2**section_end))
-    #            section_part = math.floor(section_part / (2**section_start))
-    #            assert(section_part == int(correct_sum%(2**8)))
-    #            print("Input to buffer " + str(buffer_idx) + " is " + str(chain_out))"""

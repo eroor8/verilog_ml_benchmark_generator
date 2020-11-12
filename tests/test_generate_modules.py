@@ -70,6 +70,40 @@ def test_yaml_schemas():
         validate(instance=proj_illegal, schema=generate_modules.proj_schema)
 
 
+def test_odinify_statemachine():
+    # Make sure that output gets through odin.
+    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "mlb_spec.yaml")
+    ab_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "b1_spec.yaml")
+    wb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "b0_spec.yaml")
+    proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "projection_spec.yaml")
+    outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_odin.v")
+    archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_arch.xml")
+    with open(mlb_spec) as stream:
+        mlb_yaml = yaml.safe_load(stream)
+    with open(ab_spec) as stream:
+        ab_yaml = yaml.safe_load(stream)
+    with open(wb_spec) as stream:
+        wb_yaml = yaml.safe_load(stream)
+    with open(proj_spec) as stream:
+        proj_yaml = yaml.safe_load(stream)
+    outtxt = generate_modules.generate_statemachine("test_odin_sm", 
+                                            mlb_yaml, wb_yaml,
+                                            ab_yaml, proj_yaml, False)
+    with open(outfile, 'w') as file:
+        file.write(outtxt[1])
+    command = [VTR_FLOW_PATH, outfile, archfile,
+               "-ending_stage", "abc"]
+    process = subprocess.Popen(command,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    assert "OK" in str(process.stdout.read())
+
 def test_odinify():
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -103,3 +137,5 @@ def test_odinify():
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
+
+    

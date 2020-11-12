@@ -277,6 +277,7 @@ def odinify(filename_in):
     
     # replace HW block component names with actual names
     filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__proj_\S*)(\s+)(.*)", r"\2\4\5", filedata)
+    filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
 def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \

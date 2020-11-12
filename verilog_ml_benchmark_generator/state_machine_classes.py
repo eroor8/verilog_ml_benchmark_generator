@@ -61,7 +61,7 @@ class SM_InputSel(Component):
               
 class SM_LoadBufs(Component):
     def construct(s, buffer_count, write_count):
-        s.start = InPort(1)
+        start = utils.AddInPort(s,1,"start")
         s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
         s.buf_address = OutPort(max(int(math.log(write_count,2)),1))
         s.rdy = OutPort(1)
@@ -76,9 +76,9 @@ class SM_LoadBufs(Component):
                 new_wen.buffer_count //= s.buf_count
             new_wen.we_in //= s.buf_wen
             out_wen = getattr(s, "wen_{}".format(wb))
-            out_wen //= new_wen.we
-                      
+            out_wen //= new_wen.we        
         INIT, LOAD = 0, 1
+        
         @update_ff
         def upblk_set_wen():
             if s.reset:
@@ -325,7 +325,7 @@ class StateMachine(Component):
         inner_bus_widths = {dtype: inner_bus_counts[dtype] *
                             inner_data_widths[dtype]
                             for dtype in MAC_datatypes}
-
+        
         # Calculate required number of MLBs, IO streams, activations
         outer_proj = proj_spec['outer_projection']
         MLB_count = utils.get_mlb_count(outer_proj)
@@ -349,7 +349,7 @@ class StateMachine(Component):
         # Instantiate MLBs, buffers
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_spec)
-
+        
         # Load data into weight buffers
         s.sm_start = InPort(1)
         addrw_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'ADDRESS', ["in"]))
@@ -366,7 +366,7 @@ class StateMachine(Component):
                                                      s.datapath,
                                                      r"weight_modules_portawe_(\d+)_top")
         s.weight_address = InPort(addrw_ports[0]["width"])
-
+        
         # Load data into input buffers
         addri_ports = list(utils.get_ports_of_type(buffer_specs['I'], 'ADDRESS', ["in"]))
         s.load_ibufs = SM_LoadBufs(buffer_counts["I"], 2**addri_ports[0]["width"])
@@ -394,7 +394,7 @@ class StateMachine(Component):
         s.external_a_en = InPort(1)
         s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         
-        # Stream Inputs into MLB and read outputs into buffer
+        ## Stream Inputs into MLB and read outputs into buffer
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
         obuf_len = 2**addro_ports[0]["width"]
         s.stream_inputs = SM_IterateThruAddresses(obuf_len, addri_ports[0]["width"])
@@ -415,9 +415,10 @@ class StateMachine(Component):
                                                      s.write_off,
                                                      r"datain_(\d+)")    
         s.external_out //= s.write_off.dataout
-        s.state = Wire(3)
-        s.done = Wire(1)
-        INIT, LOADING_W_BUFFERS, LOADING_I_BUFFERS, LOADING_MLBS, STREAMING_MLBS, WRITE_OFFCHIP, DONE = 1,2,3,4,5,6,7
+        s.state = Wire(5)
+        s.done = OutPort(1)
+        INIT, LOADING_W_BUFFERS, LOADING_I_BUFFERS, LOADING_MLBS, STREAMING_MLBS, WRITE_OFFCHIP, DONE = Bits5(1),Bits5(2),Bits5(3),Bits5(4),Bits5(5),Bits5(6),Bits5(7)
+   
         @update_ff
         def connect_weight_address_ff():
             if s.reset:
@@ -427,13 +428,13 @@ class StateMachine(Component):
                 if (s.state == INIT):
                     if s.sm_start:
                         s.state <<= LOADING_W_BUFFERS
-                if (s.state == LOADING_W_BUFFERS):
+                elif (s.state == LOADING_W_BUFFERS):
                     if s.load_wbufs.rdy:
                         s.state <<= LOADING_I_BUFFERS
-                if (s.state == LOADING_I_BUFFERS):
+                elif (s.state == LOADING_I_BUFFERS):
                     if s.load_ibufs.rdy:
                         s.state <<= LOADING_MLBS
-                if (s.state == LOADING_MLBS):
+                elif (s.state == LOADING_MLBS):
                     if s.preload_weights.rdy:
                         s.state <<= STREAMING_MLBS
                 elif (s.state == STREAMING_MLBS):
@@ -441,11 +442,10 @@ class StateMachine(Component):
                         s.state <<= WRITE_OFFCHIP
                 elif (s.state == WRITE_OFFCHIP):
                     if s.write_off.rdy:
-                      s.state <<= DONE
-                      s.done <<= 1
+                        s.state <<= DONE
+                        s.done <<= 1
                 elif s.state == DONE:
                     s.done <<= 1
-                 
                     
         @update
         def connect_weight_address():

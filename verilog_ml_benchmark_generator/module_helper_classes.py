@@ -147,18 +147,18 @@ class EMIF(Component):
                     s.avalon_readdatavalid <<= 0
                     s.avalon_writeresponsevalid <<= 0          
             else:  
-                #print("Pending " + str(pending_transfers))
-                #print("State " + str(s.state))
-                #print("Read " + str(s.avalon_read))
-                #print("Address" + str(s.avalon_address))
-                #print("Readdata " + str(s.avalon_readdata))
-                #print("Readdatavalid " + str(s.avalon_readdatavalid))
-                #print("Waitrequest " + str(s.avalon_waitrequest))
-                #print("Write " + str(s.avalon_write))
-                #print("Curr transfer " + str(s.curr_pending_start) + " -> " + str(s.curr_pending_end))
-                #print("Countdown " + str(s.latency_countdown))
+                num_pending_transfers = s.curr_pending_end - s.curr_pending_start
+                print("Pending " + str(pending_transfers))
+                print("Num pending" + str(num_pending_transfers))
+                print("Read " + str(s.avalon_read))
+                print("Address" + str(s.avalon_address))
+                print("Readdata " + str(s.avalon_readdata))
+                print("Readdatavalid " + str(s.avalon_readdatavalid))
+                print("Waitrequest " + str(s.avalon_waitrequest))
+                print("Write " + str(s.avalon_write))
+                print("Curr transfer " + str(s.curr_pending_start) + " -> " + str(s.curr_pending_end))
+                print("Countdown " + str(s.latency_countdown))
                 if pipelined:
-                    num_pending_transfers = s.curr_pending_end - s.curr_pending_start
                     if (s.avalon_read or s.avalon_write) and \
                        (num_pending_transfers < max_pipeline_transfers):  # Add a new request to the list
                             pending_transfers[s.curr_pending_end%max_pipeline_transfers] = [
@@ -169,14 +169,17 @@ class EMIF(Component):
                             s.curr_pending_end <<= s.curr_pending_end + 1
 
                     if (s.latency_countdown == 0) and (num_pending_transfers > 0):
-                        s.avalon_readdatavalid <<= 1
+                        s.avalon_readdatavalid <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][0]
                         s.curr_pending_start <<= s.curr_pending_start + 1
                         s.buf.address <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][2]
                         s.buf.wen <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][1]
                         s.buf.datain <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][3]
+                        s.latency_countdown <<= curr_rand
                     else:
                         if (s.latency_countdown > 0):
                             s.latency_countdown <<= s.latency_countdown - 1
+                        else:
+                            s.latency_countdown <<= curr_rand
                         s.avalon_readdatavalid <<= 0
                         
                 else:

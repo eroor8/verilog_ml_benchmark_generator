@@ -383,8 +383,8 @@ def test_EMIF():
     testinst.sim_tick()
     success = False
     print("WRITE ------------")
-    for i in range(30):
-        print("TICK " + " writeidx " + str(writeidx) )
+    for i in range(50):
+        print("TICK " + " writeidx " + str(writeidx) + " / " + str(len(writeaddrs)-1))
         if (testinst.avalon_waitrequest == 0):
             if writeidx == len(writeaddrs)-1:
                 testinst.avalon_write @= 0
@@ -397,9 +397,6 @@ def test_EMIF():
         testinst.sim_tick()
     assert success
     testinst.sim_tick()
-    testinst.sim_tick()
-    testinst.sim_tick()
-    testinst.sim_tick()
     
     print("READ ----------------")
     testinst.avalon_read @= 1
@@ -408,7 +405,7 @@ def test_EMIF():
     testinst.avalon_address @= writeaddrs[writeidx]
     success = False
     testinst.sim_tick()
-    for i in range(30):
+    for i in range(100):
         print("TICK - readix" + str(readidx) + " writeidx " + str(writeidx) )
         if (testinst.avalon_waitrequest == 0):
             if writeidx == len(writeaddrs)-1:

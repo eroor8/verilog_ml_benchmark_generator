@@ -208,9 +208,9 @@ def test_StateMachineSim():
             assert obuf[bufi][olen] == obuf_results[bufi][olen]
 
             
-
 def test_StateMachineEMIFSim():
     """Test Component class Statemachine"""
+    
     projection = {"name": "test",
                   "activation_function": "RELU",
                   "stream_info": {"W": 4,
@@ -225,6 +225,7 @@ def test_StateMachineEMIFSim():
                                        'UG':{'value':2},
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
                   }
+    
     wb_spec = {
         "block_name": "ml_block_weights",
         "simulation_model": "Buffer",
@@ -255,6 +256,7 @@ def test_StateMachineEMIFSim():
             {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
         ]
     }
+    
     mlb_spec = {
         "block_name": "ml_block",
         "simulation_model": "MLB",
@@ -272,6 +274,52 @@ def test_StateMachineEMIFSim():
         ]
     }
 
+    # Calculate required buffers etc.
+    mlb_count = utils.get_mlb_count(projection["outer_projection"])
+    mac_count = utils.get_mlb_count(projection["inner_projection"])
+    ibuf_len = 2**ib_spec["ports"][0]["width"]
+    obuf_len = 2**ob_spec["ports"][0]["width"]
+    wbuf_len = 2**wb_spec["ports"][0]["width"]
+    
+    # Calculate weight buffer info
+    weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
+    wvalues_per_stream = utils.get_proj_stream_count(projection["inner_projection"], 'W')
+    wstream_bitwidth = wvalues_per_stream*projection["stream_info"]["W"]
+    wstreams_per_buf = math.floor(wb_spec["ports"][1]["width"]/wstream_bitwidth)
+    wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
+    wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
+    
+    # Calculate input/output buffer info
+    iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
+    iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
+                         projection["stream_info"]["I"]
+    ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
+                          utils.get_proj_stream_count(projection["inner_projection"], 'O') 
+    activation_width = projection["stream_info"]["I"]
+    istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
+    ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
+    ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
+    ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
+    obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
+
+    # Create random input data arrays to load into EMIF
+    wbuf = [[[random.randint(0,(2**projection["stream_info"]["W"])-1)
+            for k in range(wvalues_per_buf)]    # values per word
+            for i in range(wbuf_len)]           # words per buffer
+            for j in range(wbuf_count)]         # buffer count
+    wbuf_flat = [sum((lambda i: inner[i] * (2**(i*projection["stream_info"]["W"])))(i) for i in range(len(inner))) 
+                 for outer in wbuf for inner in outer]
+    iaddr = len(wbuf_flat)
+    ibuf = [[[random.randint(0,(2**projection["stream_info"]["I"])-1)
+             for k in range(ivalues_per_buf)]            # values per word
+             for i in range(ibuf_len)]                   # words per buffer
+             for j in range (ibuf_count)]                # buffers
+    ibuf_flat = [sum((lambda i: inner[i] * (2**(i*activation_width)))(i) for i in range(len(inner))) 
+                 for outer in ibuf for inner in outer]
+    #ibuf_flat = [inner for outer in ibuf for middle in outer for inner in middle]
+    emif_data = wbuf_flat + ibuf_flat
+    oaddr = len(emif_data)
+       
     emif_spec = {
         "block_name": "ml_block_input",
         "simulation_model": "EMIF",
@@ -286,7 +334,7 @@ def test_StateMachineEMIFSim():
         ],
         "parameters": {
             "pipelined":"True",
-            "fill": [5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]
+            "fill": emif_data
         }
     }
     
@@ -296,67 +344,48 @@ def test_StateMachineEMIFSim():
         ib_spec=ib_spec,
         ob_spec=ob_spec,
         emif_spec=emif_spec,
-        proj_spec=projection)
+        proj_spec=projection,
+        w_address=0,
+        i_address=iaddr,
+        o_address=oaddr)
 
     sm_testinst.elaborate()
     sm_testinst.apply(DefaultPassGroup())
     sm_testinst.sim_reset()
     testinst = sm_testinst.datapath
+
+    # Check that EMIFs have the right data
+    emif_vals = read_out_stored_values_from_emif(sm_testinst.emif_inst.sim_model.buf,
+                                     ivalues_per_buf,
+                                     oaddr, 4)
+    for k in range(len(wbuf)):
+        for j in range(len(wbuf[k])):
+            for i in range(len(wbuf[k][j])):
+                assert emif_vals[k*len(wbuf[k])+j][i] == wbuf[k][j][i]
+    for k in range(len(ibuf)):
+        for j in range(len(ibuf[k])):
+            for i in range(len(ibuf[k][j])):
+                assert emif_vals[iaddr+k*len(ibuf[k])+j][i] == ibuf[k][j][i]
     
-    # Calculate required buffers etc.
-    mlb_count = utils.get_mlb_count(projection["outer_projection"])
-    mac_count = utils.get_mlb_count(projection["inner_projection"])
-    ibuf_len = 2**ib_spec["ports"][0]["width"]
-    obuf_len = 2**ob_spec["ports"][0]["width"]
-    wbuf_len = 2**wb_spec["ports"][0]["width"]
-    
-    # Load the weight buffer
-    wbuf_count = 1
-    weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
-    wvalues_per_stream = utils.get_proj_stream_count(projection["inner_projection"], 'W')
-    wstream_bitwidth = wvalues_per_stream*projection["stream_info"]["W"]
-    wstreams_per_buf = math.floor(wb_spec["ports"][1]["width"]/wstream_bitwidth)
-    wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
-    wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
-    
-    wbuf = [[[random.randint(0,(2**projection["stream_info"]["W"])-1)
-            for k in range(wvalues_per_buf)]    # values per word
-            for i in range(wbuf_len)]           # words per buffer
-            for j in range(wbuf_count)]         # buffer count
     sm_testinst.sm_start @= 1
     load_buffers_sm(sm_testinst, "datapath_weight_datain_sm",
                  wbuf, projection["stream_info"]["W"])
+    for i in range(50):
+        if (sm_testinst.load_wbufs_emif.rdy):
+            break
+        sm_testinst.sim_tick()
     sm_testinst.sm_start @= 0
     
     check_buffers(testinst, testinst.weight_modules,
                   "ml_block_weights_inst_{}",
                   wbuf, projection["stream_info"]["W"], sm_testinst)
-  
-    # Calculate required buffers etc.
-    iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
-    iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
-                         projection["stream_info"]["I"]
-    ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
-                          utils.get_proj_stream_count(projection["inner_projection"], 'O') 
-    activation_width = projection["stream_info"]["I"]
-    istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
-    ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
-    ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
-    ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
-    obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
-    
-    # Load the input buffer
-    # Several values per word, words per buffer, buffers...
-    ibuf = [[[random.randint(0,(2**projection["stream_info"]["I"])-1)
-             for k in range(ivalues_per_buf)]            # values per word
-             for i in range(ibuf_len)]                   # words per buffer
-             for j in range (ibuf_count)]                # buffers
-    print(ibuf_len)
+    assert 1==0
     load_buffers_sm(sm_testinst, "datapath_input_datain_sm",
                  ibuf, projection["stream_info"]["I"])
     check_buffers(testinst, testinst.input_act_modules,
                   "ml_block_inputs_inst_{}",
                   ibuf, projection["stream_info"]["I"], sm_testinst)
+    
     # Now load the weights into the MLBs
     inner_ub = projection["inner_projection"]["UB"]["value"]
     outer_ub = projection["outer_projection"]["UB"]["value"]
@@ -416,7 +445,8 @@ def test_StateMachineEMIFSim():
     emif_vals = read_out_stored_values_from_emif(sm_testinst.emif_inst.sim_model.buf,
                                                  int(32/8),
                                                  min(obuf_len,ibuf_len)*obuf_count,
-                                                 projection["stream_info"]["I"])
+                                                 projection["stream_info"]["I"],
+                                                 oaddr)
     print("EMIF" + str(emif_vals))
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1): 

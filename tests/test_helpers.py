@@ -255,9 +255,9 @@ def read_out_stored_buffer_values_from_sm(dataout_portname,
 def read_out_stored_values_from_emif(emif_inst,
                                      bytes_per_word,
                                      emif_size,
-                                     dwidth):
+                                     dwidth, startaddr=0):
     buffer_values = []
-    for i in range(emif_size):
+    for i in range(startaddr,emif_size+startaddr):
         currvalue = getattr(emif_inst, "V"+str(i))
         #print(currvalue.dataout)
         curr_obuf_out = int(currvalue.dataout)

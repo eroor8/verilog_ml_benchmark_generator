@@ -487,3 +487,352 @@ class StateMachine(Component):
                                             port._dsl.my_name + "_sm")
 
         print(s.__dict__)
+
+                      
+class SM_LoadBufsEMIF(Component):
+    def construct(s, buffer_count, write_count):
+        start = utils.AddInPort(s,1,"start")
+        s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
+        s.buf_address = OutPort(max(int(math.log(write_count,2)),1))
+        s.rdy = OutPort(1)
+        s.buf_state = Wire(2)
+        s.buf_wen = Wire(1)
+        utils.add_n_outputs(s, buffer_count, 1, "wen_")
+        
+        for wb in range(buffer_count):
+            new_wen = SM_BufferWen(int(math.log(buffer_count,2)), wb)
+            setattr(s, "buf_wen{}".format(wb), new_wen)
+            if (buffer_count > 1):
+                new_wen.buffer_count //= s.buf_count
+            new_wen.we_in //= s.buf_wen
+            out_wen = getattr(s, "wen_{}".format(wb))
+            out_wen //= new_wen.we        
+        INIT, LOAD = 0, 1
+        
+        @update_ff
+        def upblk_set_wen():
+            if s.reset:
+                s.buf_count <<= 0
+                s.buf_wen <<= 0
+                s.buf_state <<= INIT
+                s.buf_address <<= 0
+                s.rdy <<= 1
+            else:
+                if (s.buf_state == INIT):
+                    if (s.start):
+                        s.buf_state <<= LOAD
+                        s.buf_wen <<= 1
+                        s.rdy <<= 0
+                elif (s.buf_state == LOAD):
+                    if (s.buf_address == (write_count-1)):
+                        s.buf_address <<= 0
+                        if (s.buf_count == (buffer_count-1)):
+                            s.buf_state <<= INIT
+                            s.rdy <<= 1
+                            s.buf_count <<= 0
+                            s.buf_wen <<= 0
+                        else:
+                            s.buf_state <<= LOAD
+                            s.buf_count <<= s.buf_count + 1
+                    else:
+                        s.buf_address <<= s.buf_address + 1
+        utils.tie_off_clk_reset(s)
+                        
+class SM_WriteOffChipEMIF(Component):
+    def construct(s, buffer_count, write_count, addr_width, datawidth, emif_addr_width=0, emif_data_width=0, startaddr=0):
+        if (emif_addr_width==0):
+            emif_addr_width = addr_width
+        if (emif_data_width==0):
+            emif_data_width = datawidth
+        s.start = InPort(1)
+        s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
+        s.address = OutPort(addr_width)
+        s.bufdata = Wire(datawidth)
+        
+        s.emif_address = OutPort(emif_addr_width)
+        s.emif_write = OutPort(1)
+        s.emif_writedata = OutPort(emif_data_width)
+        s.emif_writedata[0:datawidth] //= s.bufdata
+        s.emif_read = OutPort(1)
+        s.emif_read //= 0
+        s.emif_readdatavalid = InPort(1)
+        s.emif_waitrequest = InPort(1)
+        s.emif_readdata = InPort(emif_data_width)
+        
+        s.rdy = OutPort(1)
+        s.state = Wire(2)
+        datain_inputs = utils.add_n_inputs(s, buffer_count, datawidth, "datain_")
+        datain_inputs = utils.add_n_wires(s, buffer_count, datawidth, "sel_cin")
+        
+        for wb in range(buffer_count):
+            new_sel = SM_InputSel(datawidth, int(math.log(buffer_count,2)), wb)
+            setattr(s, "insel{}".format(wb), new_sel)
+            if (buffer_count > 1):
+                new_sel.buffer_count //= s.buf_count
+            new_sel.cv //= getattr(s, "datain_{}".format(wb))
+            if (wb == 0):
+                new_sel.vin //= 0
+            else:
+                last_sel = getattr(s, "insel{}".format(wb-1))
+                new_sel.vin //= last_sel.vout
+            if (wb == buffer_count - 1):
+                s.bufdata //= new_sel.vout
+                
+        INIT, LOAD = 0, 1
+        @update_ff
+        def upblk_set_wen_ff():
+            if s.reset:
+                s.buf_count <<= 0
+                s.state <<= INIT
+                s.address <<= 0
+                s.emif_address <<= startaddr
+                s.emif_write <<= 0
+                s.rdy <<= 1
+            else:
+                if (s.state == INIT):
+                    if (s.start):
+                        s.state <<= LOAD
+                        s.rdy <<= 0
+                        s.emif_write <<= 1
+                elif (s.state == LOAD):
+                    if (s.emif_waitrequest == 0):
+                        if (s.address == (write_count-1)):
+                            s.address <<= 0
+                            if (s.buf_count == (buffer_count-1)):
+                                s.state <<= INIT
+                                s.rdy <<= 1
+                                s.buf_count <<= 0
+                                s.emif_write <<= 0
+                                s.emif_address <<= 0
+                            else:
+                                s.buf_count <<= s.buf_count + 1
+                                s.emif_address <<= s.emif_address + 1
+                        else:
+                            s.address <<= s.address + 1
+                            s.emif_address <<= s.emif_address + 1
+        utils.tie_off_clk_reset(s)
+            
+class StateMachineEMIF(Component):
+    """" This module includes the whole datapath and the state machine controlling it:
+
+         :param datapath: Contains all MLB modules
+         :type datapath: Component
+         :param weight_buffer_load: Sets control signals for the weight buffers
+         :type  weight_buffer_load: Component
+         :param input_buffer_load: Sets control signals for the weight buffers
+         :type  input_buffer_load: Component
+         :param weight_buffer_control: Sets control signals for the weight buffers
+         :type weight_buffer_control: Component
+    """
+    def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
+                  proj_spec={}):
+        """ Constructor for Datapath
+
+         :param mlb_spec: Contains information about ML block used
+         :type mlb_spec: dict
+         :param wb_spec: Contains information about weight buffers used
+         :type wb_spec: dict
+         :param ib_spec: Contains information about input buffers used
+         :type ib_spec: dict
+         :param ob_spec: Contains information about output buffers used
+         :type ob_spec: dict
+        """
+        print("{:=^60}".format(" Constructing Statemachine with MLB block " +
+                               str(mlb_spec.get('block_name', "unnamed") +
+                                   " ")))
+        MAC_datatypes = ['W', 'I', 'O']
+        buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
+
+        # Calculate required MLB interface widths and print information
+        inner_proj = proj_spec['inner_projection']
+        MAC_count = utils.get_mlb_count(inner_proj)
+        inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
+                                                               dtype)
+                            for dtype in MAC_datatypes}
+        inner_data_widths = {dtype: proj_spec['stream_info'][dtype]
+                             for dtype in MAC_datatypes}
+        inner_bus_widths = {dtype: inner_bus_counts[dtype] *
+                            inner_data_widths[dtype]
+                            for dtype in MAC_datatypes}
+        
+        # Calculate required number of MLBs, IO streams, activations
+        outer_proj = proj_spec['outer_projection']
+        MLB_count = utils.get_mlb_count(outer_proj)
+        outer_bus_counts = {dtype: utils.get_proj_stream_count(outer_proj,
+                                                               dtype)
+                            for dtype in MAC_datatypes}
+        outer_bus_widths = {dtype: outer_bus_counts[dtype] *
+                            inner_bus_widths[dtype]
+                            for dtype in MAC_datatypes}
+        total_bus_counts = {dtype: outer_bus_counts[dtype] *
+                            inner_bus_counts[dtype]
+                            for dtype in MAC_datatypes}
+        buffer_counts = {dtype: utils.get_num_buffers_reqd(buffer_specs[dtype],
+                         outer_bus_counts[dtype], inner_bus_widths[dtype])
+                         for dtype in ['I', 'W']}
+        buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
+                                                        outer_bus_counts['O'] *
+                                                        inner_bus_counts['O'],
+                                                        inner_data_widths['I'])
+        connected_ins = []
+        
+        # Instantiate MLBs, buffers, EMIF
+        s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
+                                             ob_spec, proj_spec)
+        s.emif_inst = module_classes.HWB_Sim(emif_spec, proj_spec, sim=True)
+        connected_ins = [s.emif_inst.read, s.emif_inst.write, s.emif_inst.writedata, s.emif_inst.address]
+        
+        # Load data into weight buffers
+        s.sm_start = InPort(1)
+        addrw_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'ADDRESS', ["in"]))
+        s.load_wbufs = SM_LoadBufs(buffer_counts["W"], 2**addrw_ports[0]["width"])  
+        connected_ins += [s.datapath.weight_modules_portaaddr_top,
+                         s.datapath.input_act_modules_portaaddr_top,
+                         s.datapath.mlb_modules_a_en_top,
+                         s.datapath.mlb_modules_b_en_top,
+                         s.datapath.output_act_modules_portaaddr_top
+                         ]
+        wen_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'WEN', ["in"]))
+        connected_ins += utils.connect_ports_by_name_v2(s.load_wbufs,
+                                                     r"wen_(\d+)",
+                                                     s.datapath,
+                                                     r"weight_modules_portawe_(\d+)_top")
+        s.weight_address = InPort(addrw_ports[0]["width"])
+        
+        # Load data into input buffers
+        addri_ports = list(utils.get_ports_of_type(buffer_specs['I'], 'ADDRESS', ["in"]))
+        s.load_ibufs = SM_LoadBufsEMIF(buffer_counts["I"], 2**addri_ports[0]["width"])
+        connected_ins += utils.connect_ports_by_name_v2(s.load_ibufs,
+                                                     r"wen_(\d+)",
+                                                     s.datapath,
+                                                     r"input_act_modules_portawe_(\d+)_top")
+        
+        # Preload weights into MLBs
+        s.preload_weights = SM_PreloadMLBWeights(
+            addr_width=addrw_ports[0]["width"],
+            num_outer_tiles=outer_proj["UG"]["value"],
+            outer_tile_size=outer_proj["URN"]["value"]*\
+                            outer_proj["URW"]["value"]*\
+                            outer_proj["UE"]["value"]*\
+                            inner_proj["UG"]["value"]*\
+                            inner_proj["URN"]["value"]*\
+                            inner_proj["URW"]["value"]*\
+                            inner_proj["UE"]["value"],
+            inner_tile_size=inner_proj["URN"]["value"]*\
+                            inner_proj["URW"]["value"]*\
+                            inner_proj["UE"]["value"],
+            outer_tile_repeat_x=outer_proj["UB"]["value"],
+            inner_tile_repeat_x=inner_proj["UB"]["value"])
+        s.external_a_en = InPort(1)
+        s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
+        
+        ## Stream Inputs into MLB and read outputs into buffer
+        addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
+        obuf_len = 2**addro_ports[0]["width"]
+        s.stream_inputs = SM_IterateThruAddresses(obuf_len, addri_ports[0]["width"])
+        s.stream_outputs = SM_IterateThruAddresses(obuf_len, addri_ports[0]["width"], initial_address=-1)
+        s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
+        connected_ins += utils.connect_ports_by_name_v2(s.stream_outputs,
+                                                     r"wen",
+                                                     s.datapath,
+                                                     r"output_act_modules_portawe_(\d+)_top")
+        
+        # Now read the outputs out to off-chip memory       
+        datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA', ["out"]))
+        s.external_out = OutPort(datao_ports[0]["width"])
+        
+        s.write_off_emif = SM_WriteOffChipEMIF(buffer_counts['O'], 2**addro_ports[0]["width"],
+                                               addro_ports[0]["width"], datao_ports[0]["width"],
+                                               utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
+                                               utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"))
+
+
+        connected_ins += utils.connect_ports_by_name_v2(s.datapath,
+                                                     r"portadataout_(\d+)",
+                                                     s.write_off_emif,
+                                                     r"datain_(\d+)")   
+        #s.external_out //= s.write_off.dataout
+        s.state = Wire(5)
+        s.done = OutPort(1)
+        INIT, LOADING_W_BUFFERS, LOADING_I_BUFFERS, LOADING_MLBS, STREAMING_MLBS, WRITE_OFFCHIP, DONE = Bits5(1),Bits5(2),Bits5(3),Bits5(4),Bits5(5),Bits5(6),Bits5(7)
+   
+        @update_ff
+        def connect_weight_address_ff():
+            if s.reset:
+                s.state <<= INIT
+                s.done <<= 0
+            else:
+                if (s.state == INIT):
+                    if s.sm_start:
+                        s.state <<= LOADING_W_BUFFERS
+                elif (s.state == LOADING_W_BUFFERS):
+                    if s.load_wbufs.rdy:
+                        s.state <<= LOADING_I_BUFFERS
+                elif (s.state == LOADING_I_BUFFERS):
+                    if s.load_ibufs.rdy:
+                        s.state <<= LOADING_MLBS
+                elif (s.state == LOADING_MLBS):
+                    if s.preload_weights.rdy:
+                        s.state <<= STREAMING_MLBS
+                elif (s.state == STREAMING_MLBS):
+                    if s.stream_outputs.rdy:
+                        s.state <<= WRITE_OFFCHIP
+                elif (s.state == WRITE_OFFCHIP):
+                    if s.write_off_emif.rdy:
+                        s.state <<= DONE
+                        s.done <<= 1
+                elif s.state == DONE:
+                    s.done <<= 1
+                    
+        @update
+        def connect_weight_address():
+            if (s.state == LOADING_MLBS):
+                s.datapath.weight_modules_portaaddr_top @= s.preload_weights.address
+            else:
+                s.datapath.weight_modules_portaaddr_top @= s.load_wbufs.buf_address
+            if (s.state == STREAMING_MLBS):
+                s.datapath.input_act_modules_portaaddr_top @= s.stream_inputs.address
+            else:
+                s.datapath.input_act_modules_portaaddr_top @= s.load_ibufs.buf_address
+            if (s.state == STREAMING_MLBS):
+                s.datapath.output_act_modules_portaaddr_top @= s.stream_outputs.address
+            else:
+                s.datapath.output_act_modules_portaaddr_top @= s.write_off_emif.address
+            if (s.state == WRITE_OFFCHIP):
+                s.emif_inst.address @= s.write_off_emif.emif_address
+                s.emif_inst.read @= s.write_off_emif.emif_read
+                s.emif_inst.write @= s.write_off_emif.emif_write
+                s.emif_inst.writedata @= s.write_off_emif.emif_writedata
+            else:
+                s.emif_inst.address @= 0
+                s.emif_inst.read @= 0
+                s.emif_inst.write @= 0
+                s.emif_inst.writedata @= 0
+            s.load_wbufs.start @= (s.state == INIT) & s.sm_start 
+            s.load_ibufs.start @= (s.state == LOADING_W_BUFFERS) & s.load_wbufs.rdy 
+            s.preload_weights.start @= (s.state == LOADING_I_BUFFERS) & s.load_ibufs.rdy
+            s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
+            s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy 
+            s.write_off_emif.start @= (s.state == STREAMING_MLBS) & s.stream_outputs.rdy
+            s.write_off_emif.emif_readdatavalid @= s.emif_inst.readdatavalid
+            s.write_off_emif.emif_waitrequest @= s.emif_inst.waitrequest
+            s.write_off_emif.emif_readdata @= s.emif_inst.readdata
+        
+        # Connect all inputs not otherwise connected to top
+        for inst in [s.datapath, s.emif_inst]:
+            for port in (inst.get_input_value_ports()):
+                if (port._dsl.my_name not in s.__dict__.keys()) and \
+                   (port not in connected_ins):
+                    utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
+                                            port._dsl.my_name + "_sm")
+                    print(inst._dsl.my_name + "_" +
+                                            port._dsl.my_name + "_sm")
+            for port in (inst.get_output_value_ports()):
+                if (port._dsl.my_name not in s.__dict__.keys()) and \
+                   (port not in connected_ins):
+                    utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
+                                            port._dsl.my_name + "_sm")
+                    print(inst._dsl.my_name + "_" +
+                                            port._dsl.my_name + "_sm")
+
+        print(s.__dict__)

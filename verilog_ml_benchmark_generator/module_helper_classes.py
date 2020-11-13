@@ -16,6 +16,7 @@ import math
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import module_classes
+import random
 
 
 class Register(Component):
@@ -81,6 +82,150 @@ class ShiftRegister(Component):
             PREV_SR = getattr(s, "SR_" + str(shift_reg - 1))
             connect(SR.input_data, PREV_SR.output_data)
 
+class EMIF(Component):
+    """" This module implements a  buffer
+         :param datain: Input port
+         :type datain: Component class
+         :param address: Output data
+         :type address: Component class
+         :param dataout: Output data
+         :type dataout: Component class
+         :param wen: Write enable
+         :type wen: Component class
+    """
+    def construct(s, datawidth=8, length=1, startaddr=0,
+                  preload_vector=[], pipelined=False,
+                  max_pipeline_transfers=4, sim=False):
+        """ Constructor for Buffer
+         :param datawidth: Bit-width of input, output data
+         :type datawidth: int
+         :param addrwidth: Bit-width of address
+         :type addrwidth: int
+         :param length: Number of values in the buffer
+         :type length: int
+         :param startaddr: Useful if there are many buffers
+         :type startaddr: int
+        """
+        addrwidth = int(math.ceil(math.log(length+startaddr,2)))
+        utils.AddInPort(s, addrwidth, "avalon_address")
+        #utils.AddInPort(s, int(math.ceil(addrwidth/8)), "avalon_byteenable")
+        utils.AddInPort(s, 1, "avalon_read")
+        utils.AddInPort(s, 1, "avalon_write")
+        utils.AddInPort(s, datawidth, "avalon_writedata")
+        #utils.AddInPort(s, 1, "avalon_lock")
+        utils.AddOutPort(s, datawidth, "avalon_readdata")
+        utils.AddOutPort(s, 1, "avalon_waitrequest")
+        utils.AddOutPort(s, 1, "avalon_readdatavalid")
+        utils.AddOutPort(s, 1, "avalon_writeresponsevalid")
+        #utils.AddOutPort(s, 1, "burstcount")
+        #utils.AddOutPort(s, 1, "beginbursttransfer")
+        
+        #s.data = Wire(length*datawidth)
+        wide_addr_width = math.ceil(math.log(datawidth*(length+startaddr), 2))
+        s.waddress = Wire(wide_addr_width)
+        connect(s.waddress[0:addrwidth], s.avalon_address)
+        s.waddress[addrwidth:wide_addr_width] //= 0
+        
+        s.buf = Buffer(datawidth, length, startaddr, preload_vector, keepdata=False, sim=True)
+        INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE, DONE = Bits5(1), \
+            Bits5(2),Bits5(3),Bits5(4),Bits5(5),Bits5(6)
+        s.state = Wire(5)
+        curr_pipeline_transfer_count = 0
+        s.latency_countdown = Wire(10)
+        pending_transfers = [[] for i in range(max_pipeline_transfers+1)]
+        s.curr_pending_start = Wire(10)
+        s.curr_pending_end = Wire(10)
+        
+        @update_ff
+        def upff():
+            curr_rand = random.randint(0,4)
+            if s.reset:
+                s.state <<= INIT
+                s.curr_pending_start <<= 0
+                s.curr_pending_end <<= 0
+                if (pipelined):
+                    s.avalon_readdatavalid <<= 0
+                    s.avalon_writeresponsevalid <<= 0          
+            else:  
+                #print("Pending " + str(pending_transfers))
+                #print("State " + str(s.state))
+                #print("Read " + str(s.avalon_read))
+                #print("Address" + str(s.avalon_address))
+                #print("Readdata " + str(s.avalon_readdata))
+                #print("Readdatavalid " + str(s.avalon_readdatavalid))
+                #print("Waitrequest " + str(s.avalon_waitrequest))
+                #print("Write " + str(s.avalon_write))
+                #print("Curr transfer " + str(s.curr_pending_start) + " -> " + str(s.curr_pending_end))
+                #print("Countdown " + str(s.latency_countdown))
+                if pipelined:
+                    num_pending_transfers = s.curr_pending_end - s.curr_pending_start
+                    if (s.avalon_read or s.avalon_write) and \
+                       (num_pending_transfers < max_pipeline_transfers):  # Add a new request to the list
+                            pending_transfers[s.curr_pending_end%max_pipeline_transfers] = [
+                                                                          int(s.avalon_read),
+                                                                          int(s.avalon_write),
+                                                                          int(s.avalon_address),
+                                                                          int(s.avalon_writedata)]
+                            s.curr_pending_end <<= s.curr_pending_end + 1
+
+                    if (s.latency_countdown == 0) and (num_pending_transfers > 0):
+                        s.avalon_readdatavalid <<= 1
+                        s.curr_pending_start <<= s.curr_pending_start + 1
+                        s.buf.address <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][2]
+                        s.buf.wen <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][1]
+                        s.buf.datain <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][3]
+                    else:
+                        if (s.latency_countdown > 0):
+                            s.latency_countdown <<= s.latency_countdown - 1
+                        s.avalon_readdatavalid <<= 0
+                        
+                else:
+                    if (s.state == INIT):
+                        if s.avalon_read:
+                            s.state <<= WAIT_READING
+                            s.buf.address <<= s.avalon_address
+                            s.latency_countdown <<= curr_rand
+                        elif s.avalon_write:
+                            s.state <<= WAIT_WRITING
+                            s.buf.address <<= s.avalon_address
+                            s.buf.datain <<= s.avalon_writedata
+                            s.buf.wen <<= 1
+                            s.latency_countdown <<= curr_rand
+                    elif (s.state == WAIT_READING):
+                        s.latency_countdown <<= s.latency_countdown - 1
+                        if (s.latency_countdown == 0):
+                            s.state <<= DONE_READ
+                            if (pipelined):
+                                s.avalon_readdatavalid <<= 1
+                    elif (s.state == DONE_READ):
+                        s.state <<= INIT
+                        s.latency_countdown <<= 0
+                    elif (s.state ==  WAIT_WRITING):
+                        s.latency_countdown <<= s.latency_countdown - 1
+                        if (s.latency_countdown == 0):
+                            s.state <<= DONE_WRITE
+                            if (pipelined):
+                                s.avalon_writeresponsevalid <<= 1
+                    elif (s.state ==  DONE_WRITE):
+                        s.state <<= INIT
+                
+        @update
+        def upblk0():
+            s.avalon_readdata @= s.buf.dataout
+            if (pipelined):
+                num_pending_transfers = s.curr_pending_end - s.curr_pending_start
+                if (s.avalon_read or s.avalon_write) and \
+                   (num_pending_transfers == max_pipeline_transfers):
+                    s.avalon_waitrequest @= 1
+                else:
+                    s.avalon_waitrequest @= 0
+            else:
+                if ((s.state == INIT) and (s.avalon_read == 0) and (s.avalon_write == 0)) or \
+                   (s.state == DONE_READ) or (s.state == DONE_WRITE):
+                    s.avalon_waitrequest @= 0
+                else:
+                    s.avalon_waitrequest @= 1
+
 class Buffer(Component):
     """" This module implements a  buffer
          :param datain: Input port
@@ -93,7 +238,7 @@ class Buffer(Component):
          :type wen: Component class
     """
     def construct(s, datawidth=8, length=1, startaddr=0,
-                  preload_vector=[], sim=False):
+                  preload_vector=[], keepdata=True, sim=False):
         """ Constructor for Buffer
          :param datawidth: Bit-width of input, output data
          :type datawidth: int
@@ -109,7 +254,8 @@ class Buffer(Component):
         utils.AddInPort(s, addrwidth, "address")
         utils.AddInPort(s, 1, "wen")
         utils.AddOutPort(s, datawidth, "dataout")
-        s.data = Wire(length*datawidth)
+        if (keepdata):
+            s.data = Wire(length*datawidth)
         s.waddress = Wire(math.ceil(math.log(datawidth*(length+startaddr), 2)))
         connect(s.waddress[0:addrwidth], s.address)
         s.waddress[addrwidth:math.ceil(math.log(datawidth*length, 2))] //= 0
@@ -124,16 +270,25 @@ class Buffer(Component):
             val.datain //= s.datain
             val.wen //= s.wen
             val.address //= s.address
-            connect(s.data[(i * datawidth):((i + 1) * datawidth)], val.dataout)
+            if (keepdata):
+                connect(s.data[(i * datawidth):((i + 1) * datawidth)], val.dataout)
 
-            
-        @update
-        def upblk0():
-            if ((s.waddress - startaddr)) <= (length-1):
-                s.dataout @= s.data[(s.waddress - startaddr) * datawidth:
-                    (s.waddress - startaddr) * datawidth + datawidth]
-            else:
-                s.dataout @= 0
+        if keepdata:
+            @update
+            def upblk0():
+                if ((s.waddress - startaddr)) <= (length-1):
+                    s.dataout @= s.data[(s.waddress - startaddr) * datawidth:
+                        (s.waddress - startaddr) * datawidth + datawidth]
+                else:
+                    s.dataout @= 0
+        else:     
+            @update
+            def upblk1():
+                currval = getattr(s, "V" + str(int(s.waddress - startaddr)))
+                if ((s.waddress - startaddr)) <= (length-1):
+                    s.dataout @= currval.dataout
+                else:
+                    s.dataout @= 0
             #    if (s.wen):
             #        print("Address ok... " + str(s.waddress) + " for buf " + str(s._dsl.full_name) + " datawidth " + str(datawidth))
             #else:
@@ -172,7 +327,6 @@ class BufferValue(Component):
         def upblk0():
             s.inner_reg.ena @= s.wen & (addr == s.address)
 
-            
 class MAC(Component):
     """" This module implements a single MAC.
          Weight and input registers are loaded based on

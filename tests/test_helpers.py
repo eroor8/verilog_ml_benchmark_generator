@@ -252,6 +252,22 @@ def read_out_stored_buffer_values_from_sm(dataout_portname,
             curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
     return buffer_values
 
+def read_out_stored_values_from_emif(emif_inst,
+                                     bytes_per_word,
+                                     emif_size,
+                                     dwidth):
+    buffer_values = []
+    for i in range(emif_size):
+        currvalue = getattr(emif_inst, "V"+str(i))
+        #print(currvalue.dataout)
+        curr_obuf_out = int(currvalue.dataout)
+        curr_buffer_vals = []
+        for section in range(bytes_per_word):
+            curr_buffer_vals += [int(curr_obuf_out%(2**dwidth))]
+            curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
+        buffer_values += [curr_buffer_vals]
+    return buffer_values
+
                
 def read_out_stored_values(testinst, addr_portname, dataout_portname,
                          buffer_values, dwidth, outertestinst=None):

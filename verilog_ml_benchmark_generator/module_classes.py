@@ -132,7 +132,7 @@ class HWB_Sim(Component):
         ports_by_type = {}
         special_outs=[]
         if "simulation_model" in spec:
-           special_outs=["DATA", "W", "I", "O"]
+           special_outs=["DATA", "W", "I", "O", "AVALON_READDATA", "AVALON_WAITREQUEST", "AVALON_READDATAVALID"]
         
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
@@ -221,6 +221,30 @@ class HWB_Sim(Component):
                 connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
                 print(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']])
                 connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']], s.sim_model.O_OUT)
+            elif spec["simulation_model"] == "EMIF":
+                assert len(proj) > 0
+                for req_port in ["AVALON_ADDRESS_in", "AVALON_READDATA_out", "AVALON_WRITEDATA_in",
+                                 "AVALON_READDATAVALID_out", "AVALON_WAITREQUEST_out",
+                                 "AVALON_READ_in", "AVALON_WRITE_in"]:
+                    assert req_port in ports_by_type, \
+                        "To run simulation, you need port of type " + req_port +" in definition of " + spec["block_name"] 
+                    assert len(ports_by_type[req_port]) == 1
+                s.sim_model = module_helper_classes.EMIF(
+                    datawidth=ports_by_type["AVALON_WRITEDATA_in"][0][0]["width"],
+                    length=2**ports_by_type["AVALON_ADDRESS_in"][0][0]["width"],
+                    startaddr=0,
+                    preload_vector=spec.get('parameters',{}).get('fill', False),
+                    pipelined=spec.get('parameters',{}).get('pipelined', False),
+                    max_pipeline_transfers=spec.get('max_pipeline_transfers',
+                                                    {}).get('max_pipeline_transfers', 4),
+                    sim=True)
+                connect(ports_by_type["AVALON_ADDRESS_in"][0][1], s.sim_model.avalon_address)
+                connect(ports_by_type["AVALON_WRITEDATA_in"][0][1], s.sim_model.avalon_writedata)
+                connect(s.sim_model.avalon_readdata, ports_by_type["AVALON_READDATA_out"][0][1])
+                connect(ports_by_type["AVALON_READ_in"][0][1], s.sim_model.avalon_read,)
+                connect(ports_by_type["AVALON_WRITE_in"][0][1], s.sim_model.avalon_write)
+                connect(s.sim_model.avalon_readdatavalid, ports_by_type["AVALON_READDATAVALID_out"][0][1])
+                connect(s.sim_model.avalon_waitrequest, ports_by_type["AVALON_WAITREQUEST_out"][0][1])
                     
             
             

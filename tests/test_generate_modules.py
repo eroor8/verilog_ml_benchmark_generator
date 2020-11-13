@@ -81,7 +81,7 @@ def test_odinify_statemachine():
     proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "projection_spec.yaml")
     outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin.v")
+                            "test_odin_sm.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "test_arch.xml")
     with open(mlb_spec) as stream:

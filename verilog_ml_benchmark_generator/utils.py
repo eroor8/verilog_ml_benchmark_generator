@@ -436,6 +436,17 @@ def tie_off_port(s, port):
     setattr(s, port._dsl.my_name + "_tieoff", newwire)
     newwire //= port
 
+def get_port_name(s, plist, t):
+    """ From a list of ports, get the name of port with type t
+    """
+    count = 0
+    retname = ""
+    for port in plist:
+        if (port["type"] == t):
+            count += 1
+            retname = port["name"]
+    assert (count == 1)
+    return port["name"]
 
 def connect_ports_by_name_v2(inst1, name1, inst2, name2, factor1=1, factor2=1):
     """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``

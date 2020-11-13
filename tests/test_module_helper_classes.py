@@ -299,3 +299,132 @@ def test_Buffer():
     testinst.sim_tick()
     assert testinst.data == 363
     assert testinst.dataout == 3
+
+
+    
+def test_EMIF():
+    """Test Component class EMIF"""
+    data = [0,1,2,3,4,5,6,7]
+    testinst = module_helper_classes.EMIF(
+        datawidth=8, length=8, startaddr=0,
+        preload_vector=data,
+        pipelined=False,
+        max_pipeline_transfers=6,
+        sim=True)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    assert testinst.avalon_waitrequest == 0
+    assert testinst.avalon_readdata == 0
+    testinst.avalon_read @= 1
+    testinst.avalon_address @= 3
+    testinst.sim_tick()
+    success = False
+    for i in range(20):
+        if (testinst.avalon_waitrequest == 0):
+            testinst.sim_tick()
+            testinst.avalon_read @= 0
+            assert(testinst.avalon_readdata == data[3])
+            success = True
+            break
+        testinst.sim_tick()
+    assert success
+    
+    testinst.avalon_write @= 1
+    testinst.avalon_address @= 4
+    testinst.avalon_writedata @= 2
+    testinst.sim_tick()
+    success = False
+    for i in range(20):
+        if (testinst.avalon_waitrequest == 0):
+            testinst.sim_tick()
+            testinst.avalon_write @= 0
+            success = True
+            break
+        testinst.sim_tick()
+    assert success
+    
+    testinst.avalon_read @= 1
+    testinst.avalon_address @= 4
+    testinst.sim_tick()
+    success = False
+    for i in range(20):
+        if (testinst.avalon_waitrequest == 0):
+            testinst.sim_tick()
+            testinst.avalon_read @= 0
+            assert(testinst.avalon_readdata == 2)
+            success = True
+            break
+        testinst.sim_tick()
+    assert success
+    testinst.sim_tick()
+
+    data = [0,1,2,3,4,5,6,7]
+    testinst = module_helper_classes.EMIF(
+        datawidth=8, length=8, startaddr=0,
+        preload_vector=data,
+        pipelined=True,
+        max_pipeline_transfers=3,
+        sim=True)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    assert testinst.avalon_waitrequest == 0
+    assert testinst.avalon_readdata == 0
+    assert testinst.avalon_readdatavalid == 0
+    assert testinst.avalon_writeresponsevalid == 0
+    
+    writevals = [11,12,13,14,15,16,17,18]
+    writeaddrs = [4,5,6,7,0,1,2,3]
+    writeidx=0
+    testinst.avalon_write @= 1
+    testinst.avalon_address @= writeaddrs[writeidx]
+    testinst.avalon_writedata @= writevals[writeidx]
+    testinst.sim_tick()
+    success = False
+    print("WRITE ------------")
+    for i in range(30):
+        print("TICK " + " writeidx " + str(writeidx) )
+        if (testinst.avalon_waitrequest == 0):
+            if writeidx == len(writeaddrs)-1:
+                testinst.avalon_write @= 0
+                success = True
+                break
+            else:
+                writeidx += 1
+                testinst.avalon_address @= writeaddrs[writeidx]
+                testinst.avalon_writedata @= writevals[writeidx]
+        testinst.sim_tick()
+    assert success
+    testinst.sim_tick()
+    testinst.sim_tick()
+    testinst.sim_tick()
+    testinst.sim_tick()
+    
+    print("READ ----------------")
+    testinst.avalon_read @= 1
+    writeidx = 0
+    readidx = 0
+    testinst.avalon_address @= writeaddrs[writeidx]
+    success = False
+    testinst.sim_tick()
+    for i in range(30):
+        print("TICK - readix" + str(readidx) + " writeidx " + str(writeidx) )
+        if (testinst.avalon_waitrequest == 0):
+            if writeidx == len(writeaddrs)-1:
+                testinst.avalon_read @= 0
+            else:
+                writeidx += 1
+                testinst.avalon_address @= writeaddrs[writeidx]
+            
+        if (testinst.avalon_readdatavalid):
+            print("Expected:" + str(writevals[readidx]))
+            print("Received:" + str(int(testinst.avalon_readdata)))
+            assert(testinst.avalon_readdata == writevals[readidx])
+            readidx += 1
+            if (readidx == len(writeaddrs)):
+                success = True
+                break
+        testinst.sim_tick()
+        
+    assert success

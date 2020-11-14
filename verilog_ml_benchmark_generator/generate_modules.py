@@ -15,8 +15,9 @@ from jsonschema import validate
 # Schemas to validate input yamls
 supported_activations=["RELU"]
 datatype_mlb = ["I","O","W","C","CLK","RESET", "I_EN", "W_EN", "ACC_EN", "WEN"]
+datatype_emif = ["AVALON_ADDRESS", "AVALON_READ", "AVALON_WRITE", "AVALON_READDATA", "AVALON_WRITEDATA", "AVALON_READDATAVALID", "AVALON_WAITREQUEST"]
 datatype_buffer = ["ADDRESS", "DATA"]
-datatype_any = datatype_mlb+datatype_buffer
+datatype_any = datatype_mlb+datatype_buffer+datatype_emif
 port_schema = {
     "type" : "object",
     "properties" : {
@@ -77,7 +78,7 @@ buffer_spec_schema = {
     "type" : "object",
     "properties" : {
         "block_name" : {"type":"string"},
-        "simulation_model" : {"type":"string", "enum":["MLB","Buffer"]},
+        "simulation_model" : {"type":"string", "enum":["MLB","Buffer", "EMIF"]},
         "MAC_info" : MAC_info_schema,
         "ports" : {"type":"array",
                    "items": port_schema
@@ -308,7 +309,8 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
     return elab_and_write(t, write_to_file, module_name)
 
 def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
-                           projection, write_to_file):
+                           projection, write_to_file, emif_spec={},
+                           waddr=0, iaddr=0, oaddr=0):
     """ Validate input specifications, generate the datapath and then write
         resulting verilog to file ``module_name``.v
 
@@ -330,10 +332,27 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
     validate(instance=mlb_spec, schema=mlb_spec_schema)
     validate(instance=projection, schema=proj_schema)
     
-    # Generate the outer module containing many MLBs
-    t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
+    if (emif_spec == {}):
+        # Generate the outer module containing many MLBs
+        t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
+    else:
+        validate(instance=projection, schema=emif_spec)
+        t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec, ab_spec, emif_spec,
+                                               projection, waddr, iaddr, oaddr)
     return elab_and_write(t, write_to_file, module_name)
 
-
+def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
+                           projection, write_to_file):
+    
+    validate(instance=wb_spec, schema=buffer_spec_schema)
+    validate(instance=ab_spec, schema=buffer_spec_schema)
+    validate(instance=mlb_spec, schema=mlb_spec_schema)
+    validate(instance=projection, schema=proj_schema)
+    
+    # Generate the outer module containing many MLBs
+    t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec,
+                                           ab_spec, projection,
+                                           )
+    
 
     

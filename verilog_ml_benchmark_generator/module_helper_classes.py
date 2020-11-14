@@ -138,7 +138,7 @@ class EMIF(Component):
         
         @update_ff
         def upff():
-            curr_rand = random.randint(0,4)
+            curr_rand = random.randint(0,3)
             if s.reset:
                 s.state <<= INIT
                 s.curr_pending_start <<= 0
@@ -153,6 +153,7 @@ class EMIF(Component):
                 print("Read " + str(s.avalon_read))
                 print("Address" + str(s.avalon_address))
                 print("Readdata " + str(s.avalon_readdata))
+                print("Writedata " + str(s.avalon_writedata))
                 print("Readdatavalid " + str(s.avalon_readdatavalid))
                 print("Waitrequest " + str(s.avalon_waitrequest))
                 print("Write " + str(s.avalon_write))

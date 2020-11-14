@@ -6,7 +6,7 @@ from verilog_ml_benchmark_generator import generate_modules
 import jsonschema
 import subprocess
 from jsonschema import validate
-VTR_FLOW_PATH = "/home/esther/VTR/vpr_with_edits2/vpr_with_edits/vtr_flow/scripts/run_vtr_flow.pl"
+VTR_FLOW_PATH = os.getenv('VTR_FLOW_PATH')
 
 def test_yaml_schemas():
     """Test yaml schema validation"""
@@ -71,6 +71,9 @@ def test_yaml_schemas():
 
 
 def test_odinify_statemachine():
+    assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location of VTR flow scripts"
+        
+    
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "mlb_spec.yaml")
@@ -103,8 +106,54 @@ def test_odinify_statemachine():
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
+    
+def test_odinify_emif_statemachine():
+    assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location of VTR flow scripts"
+        
+    
+    # Make sure that output gets through odin.
+    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "mlb_spec.yaml")
+    ab_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "b1_spec.yaml")
+    wb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "b0_spec.yaml")
+    emif_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "emif_spec.yaml")
+    proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "projection_spec.yaml")
+    outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_odin_emif_sm.v")
+    archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_arch.xml")
+    with open(mlb_spec) as stream:
+        mlb_yaml = yaml.safe_load(stream)
+    with open(ab_spec) as stream:
+        ab_yaml = yaml.safe_load(stream)
+    with open(wb_spec) as stream:
+        wb_yaml = yaml.safe_load(stream)
+    with open(proj_spec) as stream:
+        proj_yaml = yaml.safe_load(stream)
+    with open(emif_spec) as stream:
+        emif_yaml = yaml.safe_load(stream)
+    outtxt = generate_modules.generate_statemachine(module_name="test_odin_emif_sm", 
+                                                    mlb_spec=mlb_yaml, wb_spec=wb_yaml,
+                                                    ab_spec=ab_yaml, projection=proj_yaml,
+                                                    write_to_file=False,
+                                                    emif_spec=emif_yaml,
+                                                    waddr=0, iaddr=20, oaddr=90)
+    with open(outfile, 'w') as file:
+        file.write(outtxt[1])
+    command = [VTR_FLOW_PATH, outfile, archfile,
+               "-ending_stage", "abc"]
+    process = subprocess.Popen(command,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    assert "OK" in str(process.stdout.read())
 
 def test_odinify():
+    assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location of VTR flow scripts"
+        
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "mlb_spec.yaml")

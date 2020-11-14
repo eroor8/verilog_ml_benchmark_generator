@@ -321,7 +321,7 @@ def test_StateMachineEMIFSim():
     oaddr = len(emif_data)
        
     emif_spec = {
-        "block_name": "ml_block_input",
+        "block_name": "emif_block",
         "simulation_model": "EMIF",
         "ports": [
             {"name":"address", "width": 12, "direction": "in", "type": "AVALON_ADDRESS"},
@@ -368,24 +368,38 @@ def test_StateMachineEMIFSim():
                 assert emif_vals[iaddr+k*len(ibuf[k])+j][i] == ibuf[k][j][i]
     
     sm_testinst.sm_start @= 1
-    load_buffers_sm(sm_testinst, "datapath_weight_datain_sm",
-                 wbuf, projection["stream_info"]["W"])
-    for i in range(50):
+    sm_testinst.sim_tick()
+    sm_testinst.sm_start @= 0
+    sm_testinst.sim_tick()
+    for i in range(200):
+        print("TICK" + str(i))
         if (sm_testinst.load_wbufs_emif.rdy):
+            print("DONE WBUFS!")
+            sm_testinst.sim_tick()
             break
         sm_testinst.sim_tick()
-    sm_testinst.sm_start @= 0
-    
+    sm_testinst.sim_tick()
+    assert((sm_testinst.load_wbufs_emif.rdy))
+
+    sm_testinst.sim_tick()
+    for i in range(400):
+        print("TICK" + str(i))
+        if (sm_testinst.load_ibufs_emif.rdy):
+            print("DONE IBUFS!")
+            sm_testinst.sim_tick()
+            break
+        sm_testinst.sim_tick()
+    sm_testinst.sim_tick()
+    assert(int(sm_testinst.load_ibufs_emif.rdy))
+
     check_buffers(testinst, testinst.weight_modules,
                   "ml_block_weights_inst_{}",
                   wbuf, projection["stream_info"]["W"], sm_testinst)
-    assert 1==0
-    load_buffers_sm(sm_testinst, "datapath_input_datain_sm",
-                 ibuf, projection["stream_info"]["I"])
     check_buffers(testinst, testinst.input_act_modules,
                   "ml_block_inputs_inst_{}",
                   ibuf, projection["stream_info"]["I"], sm_testinst)
-    
+    assert(int(sm_testinst.load_ibufs_emif.rdy))
+
     # Now load the weights into the MLBs
     inner_ub = projection["inner_projection"]["UB"]["value"]
     outer_ub = projection["outer_projection"]["UB"]["value"]
@@ -429,28 +443,38 @@ def test_StateMachineEMIFSim():
              for j in range (obuf_count)]
     
     print("Checking...: " )
-    obuf_results = read_out_stored_values_from_sm("external_out",
-                                        obuf_results, projection["stream_info"]["I"],
-                                        sm_testinst)
+    
+    sm_testinst.sim_tick()
+    for i in range(400):
+        print("TICK" + str(i))
+        if (sm_testinst.write_off_emif.rdy):
+            print("DONE OBUFS!")
+            sm_testinst.sim_tick()
+            break
+        sm_testinst.sim_tick()
+    for i in range(20):
+        sm_testinst.sim_tick()
+    
     print("DONE!")
     sm_testinst.sim_tick()
     sm_testinst.sim_tick()
-    assert(sm_testinst.done)
-    
-    print("EXPECTED: " + str(obuf))
-    print("ACTUAL: " + str(obuf_results))
     print("W: " + str(wbuf))
     print("I: " + str(ibuf))
+    
     # Check what has been written to the EMIF
     emif_vals = read_out_stored_values_from_emif(sm_testinst.emif_inst.sim_model.buf,
                                                  int(32/8),
                                                  min(obuf_len,ibuf_len)*obuf_count,
                                                  projection["stream_info"]["I"],
                                                  oaddr)
+
+    print("\n\nEXPECTED: " + str(obuf))
+    print("ACTUAL: " + str(emif_vals))
+    
     print("EMIF" + str(emif_vals))
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1): 
             assert obuf[bufi][olen] == emif_vals[bufi*min(obuf_len,ibuf_len) + olen]
 
-    
-
+    print(iaddr)
+    print(oaddr)

@@ -1,21 +1,28 @@
 """<later>."""
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import module_classes
-import state_machine_classes
-from pymtl3 import *
 import inspect
-from pymtl3.examples.ex00_quickstart import FullAdder
-from pymtl3.passes.backends.verilog import *
 import fileinput
 import re
+import random
+import math
+import yaml
 from jsonschema import validate
+from pymtl3 import *
+from pymtl3.examples.ex00_quickstart import FullAdder
+from pymtl3.passes.backends.verilog import *
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import module_classes
+import utils
+import state_machine_classes
 
 # Schemas to validate input yamls
 supported_activations=["RELU"]
 datatype_mlb = ["I","O","W","C","CLK","RESET", "I_EN", "W_EN", "ACC_EN", "WEN"]
-datatype_emif = ["AVALON_ADDRESS", "AVALON_READ", "AVALON_WRITE", "AVALON_READDATA", "AVALON_WRITEDATA", "AVALON_READDATAVALID", "AVALON_WAITREQUEST"]
+datatype_emif = ["AVALON_ADDRESS", "AVALON_READ", "AVALON_WRITE",
+                 "AVALON_READDATA", "AVALON_WRITEDATA", "AVALON_READDATAVALID",
+                 "AVALON_WAITREQUEST"]
 datatype_buffer = ["ADDRESS", "DATA"]
 datatype_any = datatype_mlb+datatype_buffer+datatype_emif
 port_schema = {
@@ -113,8 +120,10 @@ def elab_and_write(component, write_to_file, module_name):
     # Generate the outer module containing many MLBs
     component.elaborate()
     component.set_metadata(VerilogTranslationPass.enable, True)
-    component.set_metadata(VerilogTranslationPass.explicit_file_name, module_name+"_pymtl.v")
-    component.set_metadata(VerilogTranslationPass.explicit_module_name, module_name)
+    component.set_metadata(VerilogTranslationPass.explicit_file_name,
+                           module_name+"_pymtl.v")
+    component.set_metadata(VerilogTranslationPass.explicit_module_name,
+                           module_name)
     component.apply(VerilogTranslationPass())
 
     # Post-process generated file so that it is compatible with odin :(
@@ -137,8 +146,10 @@ def remove_sim_block_defs(line_list, sim_blocks):
     while lineidx < len(line_list):
         # Remove definitions of hard blocks
         for sim_block in sim_blocks: 
-            found_hardmod = re.search(r"module .*" + sim_block, line_list[lineidx])
-            found_hardmod2 = re.search(r"Full name.*" + sim_block, line_list[lineidx])
+            found_hardmod = re.search(r"module .*" + sim_block,
+                                      line_list[lineidx])
+            found_hardmod2 = re.search(r"Full name.*" + sim_block,
+                                       line_list[lineidx])
             if found_hardmod or found_hardmod2:
                 skipCopy = True
         if skipCopy:
@@ -160,7 +171,8 @@ def remove_non_existant_ports(line_list, non_existant_ports):
     while lineidx < len(line_list):
         # Remove nonexistant ports
         for nep in non_existant_ports:
-            found_nep_def = re.search(r"\.*"+nep+r"\s*;*,*\)*$", line_list[lineidx])
+            found_nep_def = re.search(r"\.*"+nep+r"\s*;*,*\)*$",
+                                      line_list[lineidx])
             found_nep = re.search(r"\(.*"+nep+r"\s*\)", line_list[lineidx])
             if found_nep:
                 # If there was no comma at the end of the line,
@@ -187,7 +199,8 @@ def move_ios_into_module_body(line_list):
     while lineidx < len(line_list):
         # Move inputs out of the module definition
         origline = line_list[lineidx]
-        foundio = re.findall(r"(in|out)put\s+wire\s+\[\d+:\d+\]\s+\S+\s*,*",origline)
+        foundio = re.findall(r"(in|out)put\s+wire\s+\[\d+:\d+\]\s+\S+\s*,*",
+                             origline)
         foundmodstart = re.search(";",origline)
         assert len(foundio) < 2
         if len(foundio)>0:
@@ -277,7 +290,8 @@ def odinify(filename_in):
     filedata =  '\n'.join(line_list)
     
     # replace HW block component names with actual names
-    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__proj_\S*)(\s+)(.*)", r"\2\4\5", filedata)
+    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__proj_\S*)(\s+)(.*)", r"\2\4\5",
+                      filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
@@ -292,8 +306,8 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
     :type mlb_spec: dict
     :param wb_spec: Hardware definition of weight buffer
     :type wb_spec: dict
-    :param ib_spec: Hardware definition of input buffer
-    :type ib_spec: dict
+    :param ab_spec: Hardware definition of input buffer
+    :type ab_spec: dict
     :param projection: Projection information
     :type projection: dict
     :param write_to_file: Whether or not to write resulting verilog to file.
@@ -320,8 +334,8 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
     :type mlb_spec: dict
     :param wb_spec: Hardware definition of weight buffer
     :type wb_spec: dict
-    :param ib_spec: Hardware definition of input buffer
-    :type ib_spec: dict
+    :param ab_spec: Hardware definition of input buffer
+    :type ab_spec: dict
     :param projection: Projection information
     :type projection: dict
     :param write_to_file: Whether or not to write resulting verilog to file.
@@ -334,25 +348,126 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
     
     if (emif_spec == {}):
         # Generate the outer module containing many MLBs
-        t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
+        t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec,
+                                               ab_spec, projection)
     else:
         validate(instance=projection, schema=emif_spec)
-        t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec, ab_spec, emif_spec,
+        t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
+                                                   ab_spec, emif_spec,
                                                projection, waddr, iaddr, oaddr)
     return elab_and_write(t, write_to_file, module_name)
 
-def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
-                           projection, write_to_file):
+def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
+                           projection, write_to_file, randomize=True,
+                           oaddr=0, iaddr=0, waddr=0):
+    """
+    Generate a Statemachine with an EMIF interface
+    Fill the off-chip memory with random data (or assume initial data is
+    included in the spec).
+    """
     
+    emif_spec["simulation_model"] = "EMIF"
+    wb_spec["simulation_model"] = "Buffer"
+    ab_spec["simulation_model"] = "Buffer"
+    mlb_spec["simulation_model"] = "MLB"
     validate(instance=wb_spec, schema=buffer_spec_schema)
     validate(instance=ab_spec, schema=buffer_spec_schema)
     validate(instance=mlb_spec, schema=mlb_spec_schema)
     validate(instance=projection, schema=proj_schema)
-    
-    # Generate the outer module containing many MLBs
-    t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec,
-                                           ab_spec, projection,
-                                           )
-    
+    print(emif_spec)
 
+    # Calculate buffer counts and dimensions
+    wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
+        wb_spec, projection, 'W')
+    ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
+        ab_spec, projection, 'I')
+    ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
+        ab_spec, projection)
+
+    if (randomize):
+        # Fill EMIF with random data
+        wbuf = [[[random.randint(0,(2**projection["stream_info"]["W"])-1)
+                for k in range(wvalues_per_buf)]    
+                for i in range(wbuf_len)]           
+                for j in range(wbuf_count)]         
+        wbuf_flat = [sum((lambda i: inner[i] * \
+                          (2**(i*projection["stream_info"]["W"])))(i)
+                         for i in range(len(inner))) 
+                     for outer in wbuf for inner in outer]
+        iaddr = len(wbuf_flat)
+        ibuf = [[[random.randint(0,(2**projection["stream_info"]["I"])-1)
+                 for k in range(ivalues_per_buf)]            
+                 for i in range(ibuf_len)]                   
+                 for j in range (ibuf_count)]                
+        ibuf_flat = [sum((lambda i: inner[i] * \
+                          (2**(i*projection["stream_info"]["I"])))(i)
+                         for i in range(len(inner))) 
+                     for outer in ibuf for inner in outer]
+        emif_data = wbuf_flat + ibuf_flat
+        emif_spec["parameters"]["fill"] = emif_data
+        oaddr = len(emif_data)
+    else:
+        wbuf = utils.read_out_stored_values_from_array(
+            emif_spec["parameters"]["fill"],
+            wvalues_per_buf,
+            wbuf_len*wbuf_count,
+            projection["stream_info"]["W"],
+            waddr,
+            wbuf_len
+            )
+        print("GETTING IBUF "  + str(ibuf_count))
+        ibuf = utils.read_out_stored_values_from_array(
+            emif_spec["parameters"]["fill"],
+            ivalues_per_buf,
+            ibuf_len*ibuf_count,
+            projection["stream_info"]["I"],
+            iaddr,
+            ibuf_len
+            )
+        
+    # Generate the statemachine
+    t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
+                                               ab_spec, emif_spec, projection,
+                                               w_address=0, i_address=iaddr, o_address=oaddr)
     
+    # Start simulation and wait for done to be asserted
+    t.elaborate()
+    t.apply(DefaultPassGroup())
+    t.sim_reset()
+    t.sm_start @= 1
+    t.sim_tick()
+    t.sm_start @= 0
+    for i in range(2000):
+        if (t.done):
+            print("DONE!")
+            break
+        t.sim_tick()
+    t.sim_tick()
+    #assert(t.done)
+    for i in range(20): # Just make sure that the EMIF finishes reading in data...
+        t.sim_tick()
+
+    emif_vals = utils.read_out_stored_values_from_emif(t.emif_inst.sim_model.buf,
+                                                 ovalues_per_buf,
+                                                 min(obuf_len,ibuf_len)*obuf_count,
+                                                 projection["stream_info"]["I"],
+                                                 oaddr)
+    if (write_to_file):
+        with open("final_offchip_data_contents.yaml", 'w') as file:
+            yaml.dump(emif_vals, file, default_flow_style=False)
+
+    # Check that the outputs are right!
+    obuf = [[[0 for i in range(ovalues_per_buf)]
+         for i in range(obuf_len)]
+         for j in range (obuf_count)]
+    obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
+        wbuf,
+        ibuf, ivalues_per_buf, projection)
+    for bufi in range(obuf_count):
+        for olen in range(min(obuf_len,ibuf_len)-1):
+            print ("Buffer " + str(bufi) + " value " + str(olen) + ":")
+            print("Expected " + str(obuf[bufi][olen]))
+            print("Actual " + str(emif_vals[bufi*min(obuf_len,ibuf_len) + olen]))
+            #assert obuf[bufi][olen] == emif_vals[bufi*min(obuf_len,ibuf_len) + olen]
+            
+    return emif_vals, t

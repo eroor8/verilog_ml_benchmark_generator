@@ -1,0 +1,45 @@
+name: "test_proj"
+outer_projection:
+    URW: 
+        value: 1
+    URN: 
+        value: 1
+    UE: 
+        value: 1
+    UB: 
+        value: 2
+    UG: 
+        value: 1
+    PRELOAD:
+    -   dtype: 'W'
+        bus_count: 1
+inner_projection:
+    URW: 
+        value: 6
+    URN: 
+        value: 1
+    UE: 
+        value: 2
+    UB: 
+        value: 1
+    UG: 
+        value: 1
+    PRELOAD:
+    -   dtype: 'W'
+        bus_count: 1
+temporal_projection:
+    URW: 
+        value: 1
+    URN: 
+        value: 1
+    UE: 
+        value: 1
+    UB: 
+        value: 1
+    UG: 
+        value: 1
+activation_function: 'RELU'
+stream_info:
+    W: 8
+    I: 8
+    O: 32

@@ -8,6 +8,7 @@ from pymtl3 import *
 from click.testing import CliRunner
 
 from verilog_ml_benchmark_generator import utils
+from verilog_ml_benchmark_generator import module_helper_classes
 from verilog_ml_benchmark_generator import cli
 
 def test_get_var_product():
@@ -129,6 +130,22 @@ def test_get_ports_of_type():
     assert list(utils.get_ports_of_type(example_hw, 'D')) == [pH, pI]
     assert list(utils.get_ports_of_type(example_hw, 'A',[])) == []
     assert list(utils.get_ports_of_type(example_hw, '')) == []
+
+def test_get_port_name():
+    """Test util function get_ports_of_type"""
+    pA = {"name": "testA", "width":3, "direction":"in", "type":"A"}
+    pB = {"name": "testB", "width":4, "direction":"in", "type":"A"}
+    pC = {"name": "testC", "width":5, "direction":"out", "type":"A"}
+    pJ = {"name": "testJ", "width":5, "direction":"out", "type":"A"}
+    pD = {"name": "testD", "width":6, "direction":"in", "type":"B"}
+    example_hw = [pA, pB, pC, pD, pJ]
+    assert utils.get_port_name(example_hw, 'B') == "testD"
+    
+    with pytest.raises(AssertionError):
+         utils.get_port_name(example_hw, 'A')
+    
+    with pytest.raises(AssertionError):
+         utils.get_port_name(example_hw, 'C')
 
 def test_get_sum_datatype_width():
     """Test util function get_sum_datatype_width"""
@@ -266,7 +283,7 @@ def test_connect_in_out_to_top():
     assert testinst.function_out_outer == Bits3(7)
     
 
-def test_add_n_inputs_outputs():
+def test_add_n_inputs_outputs_wires():
     """Test util functions add_n_inputs and add_n_outputs"""
     class test_function(Component):
         def construct(s, n=1):
@@ -275,10 +292,14 @@ def test_add_n_inputs_outputs():
             s.OUT5 = OutPort(3)
             utils.add_n_inputs(s, n, 3, "IN", 0)
             utils.add_n_outputs(s, n, 3, "OUT", 5)
+            utils.add_n_wires(s, n, 3, "W", 5)
+            utils.AddWire(s, 3, "W5")
             for i in range(n):
                 ip = getattr(s, "IN"+str(i))
                 op = getattr(s, "OUT"+str(i+5))
-                op //= ip
+                w = getattr(s, "W"+str(i+5))
+                w //= ip
+                op //= w
     N = 3
     testinst = test_function(N)
     testinst.elaborate()
@@ -309,6 +330,58 @@ def test_tie_off_clk_reset():
     testinst.clk @= 1
     assert testinst.reset_tieoff == 0
     assert testinst.clk_tieoff == 1
+
+def test_chain_ports():
+    """Test util function test_chain_ports"""
+    class test_function(Component):
+        def construct(s, n=5):
+            # Shorten the module name to the provided name.
+            utils.add_n_inputs(s, n, 8, "IN_", 0)
+            utils.add_n_outputs(s, n, 8, "OUT_", 0)
+            outp, inp = utils.chain_ports(s, 0, 3, "IN_{}", "OUT_{}", 8)
+            outp //= 10 
+    testinst = test_function()
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.IN_0 @= 0
+    testinst.IN_1 @= 1
+    testinst.IN_2 @= 2
+    testinst.IN_3 @= 3
+    testinst.IN_4 @= 4
+    testinst.sim_tick()
+    assert testinst.OUT_0 == 10
+    assert testinst.OUT_1 == 0
+    assert testinst.OUT_2 == 1
+    assert testinst.OUT_3 == 2
+    assert testinst.OUT_4 == 0
+
+def test_print_table():
+    """Test util function print_table"""
+    test_list = [["a","bbbbbb", "cc"],
+                 ["test1",{"test2":2, "test3":4}, 9],
+                 [{"yes":"no"}, "yesorno", 7]
+    ]
+    expected = "----------------------------\n" +\
+               "Title\n" + \
+               "----------------------------\n" + \
+               "a         bbbbbb      cc    \n" + \
+               "test1     test2 = 2   9     \n" + \
+               "          test3 = 4         \n" + \
+               "yes = no  yesorno     7 "
+    return_str = utils.print_table("Title", test_list)
+    print(return_str)
+    assert expected in return_str
+    
+def test_tie_off_port():
+    """Test util function tie_off_clk_reset"""
+    class test_function(Component):
+        def construct(s, n=1):
+            some_port = utils.AddInPort(s, 8, "some_port")
+    testinst = test_function()
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.some_port @= 1
+    assert testinst.some_port_tieoff == 1
     
 def test_connect_ports_by_name():
     """Test util function connect_ports_by_name"""
@@ -354,11 +427,11 @@ def test_connect_ports_by_name():
             utils.connect_out_to_top(s,s.f2.OUT_0, "OUT0_outer")
             utils.connect_out_to_top(s,s.f2.OUT_1, "OUT1_outer")
             utils.connect_out_to_top(s,s.f2.OUT_2, "OUT2_outer")
-            utils.connect_ports_by_name(s.f1,"OUT",s.f2,"IN", i_f, o_f)
+            utils.connect_ports_by_name(s.f1,"OUT_(\d+)",s.f2,"IN_(\d+)", i_f, o_f)
             utils.connect_out_to_top(s,s.f2.YOUT_0, "YOUT0_outer")
             utils.connect_out_to_top(s,s.f2.YOUT_1, "YOUT1_outer")
             utils.connect_out_to_top(s,s.f2.YOUT_2, "YOUT2_outer")
-            utils.connect_ports_by_name(s.f1,"YOUT",s.f2,"YIN", i_f, o_f)
+            utils.connect_ports_by_name(s.f1,r"YOUT",s.f2,"YIN_(\d+)", i_f, o_f)
     
     testinst = TestWrapper(1,1)
     with pytest.raises(AssertionError):
@@ -377,6 +450,7 @@ def test_connect_ports_by_name():
     testinst.OUT1_outer @= 2 
     testinst.OUT2_outer @= 3 
 
+    
 def test_connect_inst_ports_by_name():
     """Test util function connect_ports_by_name"""
     
@@ -395,20 +469,51 @@ def test_connect_inst_ports_by_name():
     class TestWrapper(Component):
         def construct(s):
             s.f1 = test_function1(3)
-            utils.connect_in_to_top(s,s.f1.IN_0, "IN0_outer")
-            utils.connect_in_to_top(s,s.f1.IN_1, "IN1_outer")
-            utils.connect_in_to_top(s,s.f1.IN_2, "IN2_outer")
+            s.in_all = InPort(3)
             utils.add_n_outputs(s, 3, 3, "OUT_outer_", 0)
             utils.connect_inst_ports_by_name(s, "OUT_outer", s.f1, "OUT")
+            utils.connect_inst_ports_by_name(s, "in_all", s.f1, "IN")
 
     testinst = TestWrapper()
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
-    testinst.IN0_outer @= 1 
-    testinst.IN1_outer @= 2 
-    testinst.IN2_outer @= 3 
+    testinst.in_all @= 2
     testinst.sim_tick()
-    testinst.OUT_outer_0 @= 1 
+    testinst.OUT_outer_0 @= 2 
     testinst.OUT_outer_1 @= 2 
-    testinst.OUT_outer_2 @= 3 
+    testinst.OUT_outer_2 @= 2 
 
+def test_read_out_from_emif():
+    """Test util function connect_ports_by_name"""
+    data = [0,1,2,3,4,5,6,7]
+    testinst = module_helper_classes.EMIF(
+        datawidth=8, length=8, startaddr=0,
+        preload_vector=data,
+        pipelined=False,
+        max_pipeline_transfers=6,
+        sim=True)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.sim_tick()
+    contents = utils.read_out_stored_values_from_emif(testinst.buf, 1, 8, 8, 0)
+    print(contents)
+    for value in range(len(data)):
+        assert data[value] == contents[value][0]
+
+def test_read_out_from_array():
+    """Test util function connect_ports_by_name"""
+    data = [17, 14, 27, 35, 18]
+    contents = utils.read_out_stored_values_from_array(data, 2, 5, 4, 0, 2)
+    print(contents)
+    assert contents == [[[1,1],[14,0]],[[11,1],[3,2]],[[2,1]]]
+    
+def test_merge_bus():
+    """Test util function connect_ports_by_name"""
+    data = [3,12,3,2]
+    contents = utils.merge_bus(data,4)
+    assert contents == 3 + 12*16 + 3*256 + 2*4096
+
+
+        
+        

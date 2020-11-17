@@ -18,7 +18,6 @@ from verilog_ml_benchmark_generator import cli
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_helpers import *
 
-
 def test_RELU():
     """Test Component class RELU"""
     test_vecs = [
@@ -80,14 +79,21 @@ def test_ActivationWrapper():
 def test_HWB():
     """Test Component class HWB"""
     spec = {
-        "block_name": "test_block",
-        "ports": [{"name":"A", "width":5, "direction": "in", "type":"C"},
-                  {"name":"B", "width":5, "direction": "out", "type":"C"},
-                  {"name":"C", "width":5, "direction": "in", "type":"ADDRESS"},
-                  {"name":"D", "width":5, "direction": "out", "type":"ADDRESS"},
-                  {"name":"E", "width":5, "direction": "in", "type":"OTHER"},
-                  {"name":"F", "width":5, "direction": "out", "type":"OTHER"},
-                  ]
+        "block_name": "emif_block",
+        "simulation_model": "EMIF",
+        "ports": [
+            {"name":"address", "width": 12, "direction": "in", "type": "AVALON_ADDRESS"},
+            {"name":"read", "width": 1,"direction": "in","type": "AVALON_READ"},
+            {"name":"readdata","width": 32,"direction": "out","type": "AVALON_READDATA"},
+            {"name":"writedata","width": 32,"direction": "in","type": "AVALON_WRITEDATA"},
+            {"name":"write","width": 1,"direction": "in","type": "AVALON_WRITE"},
+            {"name":"waitrequest", "width": 1, "direction": "out", "type": "AVALON_WAITREQUEST"},
+            {"name":"readdatavalid", "width": 1, "direction": "out", "type": "AVALON_READDATAVALID"}
+        ],
+        "parameters": {
+            "pipelined":"True",
+            "fill": []
+        }
     }
     testinst = module_classes.HWB_Sim(spec)
     testinst.elaborate()
@@ -110,7 +116,7 @@ def test_HWB():
                   'UG':{'value':1}}
     testinst = module_classes.HWB_Sim(spec, proj_spec)
     testinst.elaborate()
-        
+    
 def test_HWB_Wrapper():
     """Test Component class HWB Wrapper"""
     spec = {
@@ -143,7 +149,7 @@ def test_HWB_Wrapper():
     assert testinst.D_1 == 0
     assert testinst.F_0 == 0
     assert testinst.F_1 == 0
-        
+    
 def test_MergeBusses():
     """Test Component class MergeBusses"""
     test_vecs = [
@@ -187,7 +193,7 @@ def test_MergeBusses():
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3])
         with pytest.raises(AssertionError):
             testinst.elaborate()
-        
+    
 def test_WeightInterconnect():
     """Test Component class WeightInterconnect"""
     test_vecs = [ # bufferwidth, mlbwidth, mlbwidthused, num_buffers, num_mlbs, proj.
@@ -234,7 +240,7 @@ def test_WeightInterconnect():
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3],
                         testvec["ins"][4], testvec["ins"][5])
             testinst.elaborate()
-        
+    
 def test_InputInterconnect():
     """Test Component class InputInterconnect"""
     test_vecs = [ # bufferwidth, mlbwidth, mlbwidthused, num_buffers, num_mlbs, proj.
@@ -263,7 +269,7 @@ def test_InputInterconnect():
         for i in range(len(testvec["outs"][2])):
             out_bus = getattr(testinst, "outputs_to_mlb_"+str(i))
             assert out_bus == testvec["outs"][2][i]
-        
+    
 def test_OutputPSInterconnect():
     """Test Component class InputInterconnect"""
     test_vecs = [ # afwidth, mlbwidth, mlbwidthused, num_afs, num_mlbs, proj.
@@ -466,7 +472,7 @@ def test_Datapath():
              for i in range(ostreams_per_buf)]
              for i in range(obuf_len)]
              for j in range (obuf_count)]
-    obuf = get_expected_outputs(obuf, ostreams_per_buf,
+    obuf = utils.get_expected_outputs(obuf, ostreams_per_buf,
                                 wbuf,
                                 ibuf, ivalues_per_buf,
                                 projection)

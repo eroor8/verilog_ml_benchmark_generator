@@ -1,0 +1,19 @@
+block_name: "ml_block_weights"
+ports:
+    -   name: portawe
+        width: 1
+        direction: "in"
+        type: "WEN"
+    -   name: portaaddr
+        width: 4
+        direction: "in"
+        type: "ADDRESS"
+    -   name: portadatain
+        width: 16
+        direction: "in"
+        type: "DATA"
+    -   name: portadataout
+        width: 16
+        direction: "out"
+        type: "DATA"
+    

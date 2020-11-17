@@ -1,5 +1,4 @@
 block_name: "ml_block_weights"
-simulation_model: "Buffer"
 ports:
     -   name: clk_portain
         width: 1

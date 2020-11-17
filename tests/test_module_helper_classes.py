@@ -12,7 +12,6 @@ from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import module_helper_classes
 from verilog_ml_benchmark_generator import cli
 
-
 def test_Register():
     """Test Component class Register"""
     testinst = module_helper_classes.Register(8)
@@ -27,7 +26,7 @@ def test_Register():
     testinst.ena @= 1
     testinst.sim_tick()
     assert testinst.output_data == 5
-    
+   
 def test_ShiftRegister():
     """Test Component class ShiftRegister"""
     testinst = module_helper_classes.ShiftRegister(8,0)
@@ -300,8 +299,15 @@ def test_Buffer():
     assert testinst.data == 363
     assert testinst.dataout == 3
 
+    testinst = module_helper_classes.Buffer(datawidth=3,length=600,startaddr=0,
+                                            preload_vector=[5,5,5], keepdata=False)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.address @= 602
+    testinst.sim_tick()
+    assert testinst.dataout == 0
 
-    
 def test_EMIF():
     """Test Component class EMIF"""
     data = [0,1,2,3,4,5,6,7]

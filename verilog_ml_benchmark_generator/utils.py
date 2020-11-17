@@ -1,19 +1,12 @@
 """Utility functions"""
 import math
 import re
+import sys
 from pymtl3 import connect, Wire, InPort, OutPort
 
 
 def get_var_product(projection, var_array):
     """ Multiply a subset of projection factors
-
-    :param projection: Projection definition
-                       (according to projection yaml schema)
-    :type projection: dict
-    :param var_array: Names of factors to multiply - none by default
-    :type var_array: array
-    :return: Product
-    :rtype: int
     """
     product = 1
     for var in var_array:
@@ -26,26 +19,12 @@ def get_var_product(projection, var_array):
 def get_mlb_count(projection):
     """ Calculate the number of ML Blocks required based on the projection
         definition (``projections``)
-
-    :param projection: Projection definition
-                       (according to projection yaml schema)
-    :type projection: dict
-    :return: Number of blocks required
-    :rtype: int
     """
     return get_var_product(projection, ['URN', 'URW', 'UB', 'UE', 'UG'])
 
 
 def get_proj_chain_length(projection, dtype):
     """ Calculate cascade chain length
-
-    :param projection: Projection definition
-                       (according to projection yaml schema)
-    :type projection: dict
-    :param dtype: datatype considered - all by default
-    :type dtype: string
-    :return: dtype
-    :rtype: int
     """
     assert re.search(r"^[WIO]*$", dtype), "Unknown type " + dtype
     if ('W' == dtype):
@@ -436,7 +415,7 @@ def tie_off_port(s, port):
     setattr(s, port._dsl.my_name + "_tieoff", newwire)
     newwire //= port
 
-def get_port_name(s, plist, t):
+def get_port_name(plist, t):
     """ From a list of ports, get the name of port with type t
     """
     count = 0
@@ -446,9 +425,9 @@ def get_port_name(s, plist, t):
             count += 1
             retname = port["name"]
     assert (count == 1)
-    return port["name"]
+    return retname
 
-def connect_ports_by_name_v2(inst1, name1, inst2, name2, factor1=1, factor2=1):
+def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
     """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``
         to ports named ``name2``_<#*``factor2``> on
 
@@ -502,64 +481,6 @@ def connect_ports_by_name_v2(inst1, name1, inst2, name2, factor1=1, factor2=1):
         str(match_dict) + " in list " + str(inst2.get_input_value_ports())
     return connected_ins + connected_outs
 
-def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
-    """ Connect ports named ``name1``_<#*``factor1``> on ``inst1``
-        to ports named ``name2``_<#*``factor2``> on
-
-    :param inst1: Module instance with output ports to be connected
-    :type inst1: Component class
-    :param inst2: Module instance with input ports to be connected
-    :type inst2: Component class
-    :param name1: Prefix of names of output ports of ``inst1``
-    :type name1: string
-    :param name2: Prefix of names of input ports of ``inst2``
-    :type name2: string
-    :param factor1: Factor used to match port indexes
-                    (p1[i*factor1] <==> p2[i*factor2])
-    :type factor1: string
-    :param factor2: Factor used to match port indexes
-                    (p1[i*factor1] <==> p2[i*factor2])
-    :type factor2: string
-    """
-    match_dict = {}
-    connected_ins = []
-    for port in inst1.get_output_value_ports():
-        port1name = port._dsl.my_name
-        foundname1 = re.search("^" + name1+r"_(\d+)$", port1name)
-        if foundname1:
-            match_dict[str(int(foundname1.group(1))*factor1)] = port
-
-    commonport = None
-    if len(match_dict) == 0:
-        for port in inst1.get_output_value_ports():
-            port1name = port._dsl.my_name
-            foundname1 = re.search("^" + name1+"$", port1name)
-            if foundname1:
-                commonport = port
-    
-    assert (len(match_dict) > 0) or commonport, \
-        "Should have found outputs with name " + \
-        name1 + " in " + str(inst1.get_output_value_ports())
-
-    for port in inst2.get_input_value_ports():
-        port2name = port._dsl.my_name
-        foundname2 = re.search("^" + name2+r"_(\d+)$", port2name)
-        if foundname2:
-            assert (str(int(foundname2.group(1))*factor2) in match_dict) \
-                or commonport, \
-                "Should have found output with name " + name1 + "_" + \
-                str(int(foundname2.group(1))*factor2) + " in " + \
-                str(match_dict)
-            name_to_get = str(int(foundname2.group(1))*factor2)
-            connectport = match_dict.get(name_to_get, commonport)
-            connect(connectport, port)
-            connected_ins += [port]
-            if (str(int(foundname2.group(1))*factor2) in match_dict):
-                del match_dict[str(int(foundname2.group(1))*factor2)]
-    assert len(match_dict) == 0, "Missing matches for ports " + \
-        str(match_dict) + " in list " + str(inst2.get_input_value_ports())
-    return connected_ins
-
 def connect_inst_ports_by_name(parent, namep, inst, namei, \
                                factor1=1, factor2=1):
     """ Connect ports named ``namei``_<#*``factor1``> on ``inst``
@@ -601,3 +522,155 @@ def connect_inst_ports_by_name(parent, namep, inst, namei, \
     assert foundport, "Port " + namei + " not found in " + str(instports)
     return connected_ins
 
+
+def get_iw_buffer_dimensions(buf_spec, projection, data_type):
+    """ Find the required number and sizes of buffers """
+    
+    stream_count = get_proj_stream_count(projection["outer_projection"],
+                                         data_type)
+    values_per_stream = get_proj_stream_count(projection["inner_projection"],
+                                              data_type)
+    stream_bitwidth = values_per_stream * projection["stream_info"][data_type]
+    streams_per_buf = math.floor(
+         get_sum_datatype_width(buf_spec, "DATA", ["in"]) / stream_bitwidth)
+    assert (streams_per_buf > 0)
+    buf_count = math.ceil(stream_count / streams_per_buf)
+    values_per_buf = min(streams_per_buf * values_per_stream,
+                         values_per_stream * stream_count)
+    buf_len = 2 ** get_sum_datatype_width(buf_spec, "ADDRESS", ["in"])
+    return (values_per_buf, buf_len, buf_count)
+
+def get_obuffer_dimensions(buf_spec, projection):
+    """ Find the required number and sizes of output buffers """
+    stream_count = \
+        get_proj_stream_count(projection["outer_projection"], 'O') * \
+        get_proj_stream_count(projection["inner_projection"], 'O') 
+    activation_width = projection["stream_info"]["I"]
+    streams_per_buf = math.floor(
+        get_sum_datatype_width(buf_spec, "DATA", ["in"]) / activation_width)
+    buf_count = math.ceil(stream_count / streams_per_buf)
+    buf_len = 2 ** get_sum_datatype_width(buf_spec, "ADDRESS", ["in"])
+    return (streams_per_buf, buf_len, buf_count)
+
+def read_out_stored_values_from_emif(emif_inst,
+                                     bytes_per_word,
+                                     emif_size,
+                                     dwidth, startaddr=0,
+                                     words_per_buffer=sys.maxsize):
+    """ Return the contents of the emif instance """
+    emif_array = [0 for i in range(emif_size+startaddr)]
+    for i in range(startaddr,emif_size+startaddr):
+        currvalue = getattr(emif_inst, "V"+str(i))
+        emif_array[i] = int(currvalue.dataout)
+    print(emif_array)
+    return read_out_stored_values_from_array(emif_array, bytes_per_word, emif_size, dwidth, startaddr, words_per_buffer)
+
+def read_out_stored_values_from_array(array,
+                                     values_per_word,
+                                     emif_size,
+                                      dwidth, startaddr=0,
+                                      words_per_buffer=sys.maxsize):
+    """ Return the contents of the emif instance """
+    buffer_values = []
+    curr_buffer = []
+    for i in range(startaddr, emif_size + startaddr):
+        curr_obuf_out = array[i]
+        curr_buffer_vals = []
+        for section in range(values_per_word):
+            curr_buffer_vals += [int(curr_obuf_out%(2**dwidth))]
+            curr_obuf_out = curr_obuf_out // (2**dwidth)
+        curr_buffer += [curr_buffer_vals]
+        if ((i - startaddr + 1) % words_per_buffer == 0):
+            buffer_values += [curr_buffer]
+            curr_buffer = []
+
+    if (words_per_buffer == sys.maxsize):
+        return curr_buffer
+    else:
+        return buffer_values + [curr_buffer]
+
+
+def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
+    inner_uw = projection["inner_projection"]["URW"]["value"]
+    inner_un = projection["inner_projection"]["URN"]["value"]
+    inner_ue = projection["inner_projection"]["UE"]["value"]
+    inner_ub = projection["inner_projection"]["UB"]["value"]
+    inner_ug = projection["inner_projection"]["UG"]["value"]
+    outer_uw = projection["outer_projection"]["URW"]["value"]
+    outer_un = projection["outer_projection"]["URN"]["value"]
+    outer_ue = projection["outer_projection"]["UE"]["value"]
+    outer_ub = projection["outer_projection"]["UB"]["value"]
+    outer_ug = projection["outer_projection"]["UG"]["value"]
+    mlb_count = get_mlb_count(projection["outer_projection"])
+    mac_count = get_mlb_count(projection["inner_projection"])
+    obuf_len = len(obuf[0])
+    wbuf_len = len(wbuf[0])
+    ibuf_len = len(ibuf[0])
+    for i in range(obuf_len):
+        for ugo in range(outer_ug): 
+            for ugi in range(inner_ug):
+                for ubo in range(outer_ub): 
+                    for ubi in range(inner_ub):
+                        for ueo in range(outer_ue):
+                            for uei in range(inner_ue):
+                                correct_sum = 0
+                                for urno in range(outer_un):
+                                    for urni in range(inner_un):
+                                        for urwo in range(outer_uw):
+                                            for urwi in range(inner_uw):
+                                                urw = urwo*inner_uw + urwi
+                                                mlb_inst = ugo*outer_ub*outer_ue*outer_uw*outer_un + \
+                                                           ubo*outer_ue*outer_uw*outer_un + \
+                                                           ueo*outer_uw*outer_un + \
+                                                           urno*outer_uw + \
+                                                           urwo
+                                                mac_idx = mlb_inst*mac_count + \
+                                                          ugi*inner_ub*inner_ue*inner_uw*inner_un + \
+                                                          ubi*inner_ue*inner_uw*inner_un + \
+                                                          uei*inner_uw*inner_un + \
+                                                          urni*inner_uw + \
+                                                          urwi
+                                                w_buf_inst_idx = \
+                                                    ugo*outer_ue*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ueo*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urwo*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urno*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ugi*inner_ue*inner_un*inner_uw + \
+                                                    uei*inner_un*inner_uw + \
+                                                    urni*inner_uw + \
+                                                    urwi
+                                                buffer_idx = (outer_ug*outer_ue*outer_uw*outer_un*inner_ug*\
+                                                              inner_ue*inner_un*inner_uw - w_buf_inst_idx - 1)\
+                                                              % wbuf_len
+                                                w = merge_bus(wbuf[0][buffer_idx % wbuf_len],
+                                                            projection["stream_info"]["W"])
+                                                if ((i - urw) >= 0) and \
+                                                   ((i - urw) < wbuf_len):
+                                                    i_stream_idx = (outer_ub*outer_un*ugo + \
+                                                                    ubo*outer_un + \
+                                                                    urno)
+                                                    i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
+                                                                  (inner_ub*inner_un*ugi + \
+                                                                   ubi*inner_un + \
+                                                                   urni)
+                                                    ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
+                                                    iv_idx = i_value_idx % ivalues_per_buf
+                                                    correct_sum += (ibuf[ibuf_idx][(i - urw)%ibuf_len][iv_idx] * w)
+                                out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                              ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                              ueo*inner_ug*inner_ub*inner_ue + \
+                                              ugi*inner_ub*inner_ue + \
+                                              ubi*inner_ue + \
+                                              uei
+                                obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
+                                os_idx = out_act_idx % ostreams_per_buf
+                                obuf[obuf_idx][i][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
+    return obuf
+
+
+def merge_bus(v,width):
+    """ Given a list of values, combine them into a single value """
+    sum = 0
+    for i in range(len(v)):
+        sum += v[i] * (2 ** (width * i))
+    return sum

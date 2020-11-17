@@ -126,7 +126,8 @@ class EMIF(Component):
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
         
-        s.buf = Buffer(datawidth, length, startaddr, preload_vector, keepdata=False, sim=True)
+        s.buf = Buffer(datawidth, length, startaddr, preload_vector, keepdata=False,
+                       sim=True)
         INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE, DONE = Bits5(1), \
             Bits5(2),Bits5(3),Bits5(4),Bits5(5),Bits5(6)
         s.state = Wire(5)
@@ -148,33 +149,34 @@ class EMIF(Component):
                     s.avalon_writeresponsevalid <<= 0          
             else:  
                 num_pending_transfers = s.curr_pending_end - s.curr_pending_start
-                print("Pending " + str(pending_transfers))
-                print("Num pending" + str(num_pending_transfers))
-                print("Read " + str(s.avalon_read))
-                print("Address" + str(s.avalon_address))
-                print("Readdata " + str(s.avalon_readdata))
-                print("Writedata " + str(s.avalon_writedata))
-                print("Readdatavalid " + str(s.avalon_readdatavalid))
-                print("Waitrequest " + str(s.avalon_waitrequest))
-                print("Write " + str(s.avalon_write))
-                print("Curr transfer " + str(s.curr_pending_start) + " -> " + str(s.curr_pending_end))
-                print("Countdown " + str(s.latency_countdown))
+                #print("Pending " + str(pending_transfers))
+                #print("Num pending" + str(num_pending_transfers))
+                #print("Read " + str(s.avalon_read))
+                #print("Address" + str(s.avalon_address))
+                #print("Readdata " + str(s.avalon_readdata))
+                #print("Writedata " + str(s.avalon_writedata))
+                #print("Readdatavalid " + str(s.avalon_readdatavalid))
+                #print("Waitrequest " + str(s.avalon_waitrequest))
+                #print("Write " + str(s.avalon_write))
+                #print("Countdown " + str(s.latency_countdown))
                 if pipelined:
                     if (s.avalon_read or s.avalon_write) and \
-                       (num_pending_transfers < max_pipeline_transfers):  # Add a new request to the list
-                            pending_transfers[s.curr_pending_end%max_pipeline_transfers] = [
-                                                                          int(s.avalon_read),
-                                                                          int(s.avalon_write),
-                                                                          int(s.avalon_address),
-                                                                          int(s.avalon_writedata)]
+                       (num_pending_transfers < max_pipeline_transfers): 
+                            pending_transfers[s.curr_pending_end%max_pipeline_transfers] = \
+                                [int(s.avalon_read), int(s.avalon_write),
+                                 int(s.avalon_address), int(s.avalon_writedata)]
                             s.curr_pending_end <<= s.curr_pending_end + 1
 
                     if (s.latency_countdown == 0) and (num_pending_transfers > 0):
-                        s.avalon_readdatavalid <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][0]
+                        s.avalon_readdatavalid <<= pending_transfers[s.curr_pending_start % \
+                                                      max_pipeline_transfers][0]
                         s.curr_pending_start <<= s.curr_pending_start + 1
-                        s.buf.address <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][2]
-                        s.buf.wen <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][1]
-                        s.buf.datain <<= pending_transfers[s.curr_pending_start%max_pipeline_transfers][3]
+                        s.buf.address <<= pending_transfers[s.curr_pending_start % \
+                                                            max_pipeline_transfers][2]
+                        s.buf.wen <<= pending_transfers[s.curr_pending_start % \
+                                                        max_pipeline_transfers][1]
+                        s.buf.datain <<= pending_transfers[s.curr_pending_start % \
+                                                           max_pipeline_transfers][3]
                         s.latency_countdown <<= curr_rand
                     else:
                         if (s.latency_countdown > 0):
@@ -199,8 +201,6 @@ class EMIF(Component):
                         s.latency_countdown <<= s.latency_countdown - 1
                         if (s.latency_countdown == 0):
                             s.state <<= DONE_READ
-                            if (pipelined):
-                                s.avalon_readdatavalid <<= 1
                     elif (s.state == DONE_READ):
                         s.state <<= INIT
                         s.latency_countdown <<= 0
@@ -208,8 +208,6 @@ class EMIF(Component):
                         s.latency_countdown <<= s.latency_countdown - 1
                         if (s.latency_countdown == 0):
                             s.state <<= DONE_WRITE
-                            if (pipelined):
-                                s.avalon_writeresponsevalid <<= 1
                     elif (s.state ==  DONE_WRITE):
                         s.state <<= INIT
                 
@@ -224,8 +222,8 @@ class EMIF(Component):
                 else:
                     s.avalon_waitrequest @= 0
             else:
-                if ((s.state == INIT) and (s.avalon_read == 0) and (s.avalon_write == 0)) or \
-                   (s.state == DONE_READ) or (s.state == DONE_WRITE):
+                if ((s.state == INIT) and (s.avalon_read == 0) and (s.avalon_write == 0)) \
+                   or (s.state == DONE_READ) or (s.state == DONE_WRITE):
                     s.avalon_waitrequest @= 0
                 else:
                     s.avalon_waitrequest @= 1
@@ -288,15 +286,11 @@ class Buffer(Component):
         else:     
             @update
             def upblk1():
-                currval = getattr(s, "V" + str(int(s.waddress - startaddr)))
                 if ((s.waddress - startaddr)) <= (length-1):
+                    currval = getattr(s, "V" + str(int(s.waddress - startaddr)))
                     s.dataout @= currval.dataout
                 else:
                     s.dataout @= 0
-            #    if (s.wen):
-            #        print("Address ok... " + str(s.waddress) + " for buf " + str(s._dsl.full_name) + " datawidth " + str(datawidth))
-            #else:
-            #    print("Address " + str(s.waddress) + " exceeds maximum length! " + str(length) + " for buf " + str(s._dsl.full_name) + " datawidth " + str(datawidth))
 
 class BufferValue(Component):
     """" This module implements a single value in a buffer
@@ -517,29 +511,29 @@ class MLB(Component):
         
         # Connect between interconnects, MACs and top level
         utils.connect_ports_by_name(s.mac_modules,
-            "weight_out", s.weight_interconnect, "inputs_from_mlb")
+            "weight_out_(\d+)", s.weight_interconnect, "inputs_from_mlb_(\d+)")
         utils.connect_ports_by_name(s.weight_interconnect,
-            "outputs_to_mlb", s.mac_modules, "weight_in")
+            "outputs_to_mlb_(\d+)", s.mac_modules, "weight_in_(\d+)")
         utils.connect_inst_ports_by_name(s,
             "W_IN", s.weight_interconnect, "inputs_from_buffer")
         utils.connect_inst_ports_by_name(s, "W_OUT", s.weight_interconnect,
             "outputs_to_buffer")
         
         utils.connect_ports_by_name(s.mac_modules,
-            "input_out", s.input_interconnect, "inputs_from_mlb")
+            "input_out_(\d+)", s.input_interconnect, "inputs_from_mlb_(\d+)")
         utils.connect_ports_by_name(s.input_interconnect,
-            "outputs_to_mlb", s.mac_modules, "input_in")
+            "outputs_to_mlb_(\d+)", s.mac_modules, "input_in_(\d+)")
         utils.connect_inst_ports_by_name(s,
             "I_IN", s.input_interconnect, "inputs_from_buffer")
         utils.connect_inst_ports_by_name(s, "I_OUT", s.input_interconnect,
             "outputs_to_buffer")
         
         utils.connect_ports_by_name(s.mac_modules,
-            "sum_out", s.output_ps_interconnect, "inputs_from_mlb")
+            "sum_out_(\d+)", s.output_ps_interconnect, "inputs_from_mlb_(\d+)")
         utils.connect_ports_by_name(s.output_ps_interconnect,
-            "outputs_to_mlb", s.mac_modules, "sum_in")
+            "outputs_to_mlb_(\d+)", s.mac_modules, "sum_in_(\d+)")
         utils.connect_ports_by_name(s.output_ps_interconnect,
-            "outputs_to_afs", s.output_interconnect, "input")
+            "outputs_to_afs_(\d+)", s.output_interconnect, "input_(\d+)")
         utils.connect_inst_ports_by_name(s,
             "O_IN", s.output_ps_interconnect, "ps_inputs_from_buffer")
         utils.connect_inst_ports_by_name(s, "O_OUT", s.output_interconnect,

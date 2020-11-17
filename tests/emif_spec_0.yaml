@@ -1,0 +1,34 @@
+block_name: "emif"
+parameters:
+    pipelined: "True"
+    fill: []
+ports:
+    -   name: address
+        width: 12
+        direction: "in"
+        type: "AVALON_ADDRESS"
+    -   name: read
+        width: 1
+        direction: "in"
+        type: "AVALON_READ"
+    -   name: readdata
+        width: 32
+        direction: "out"
+        type: "AVALON_READDATA"
+    -   name: writedata
+        width: 32
+        direction: "in"
+        type: "AVALON_WRITEDATA"
+    -   name: write
+        width: 1
+        direction: "in"
+        type: "AVALON_WRITE"
+    -   name: waitrequest
+        width: 1
+        direction: "out"
+        type: "AVALON_WAITREQUEST"
+    -   name: readdatavalid
+        width: 1
+        direction: "out"
+        type: "AVALON_READDATAVALID"
+    

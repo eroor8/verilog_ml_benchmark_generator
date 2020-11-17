@@ -31,7 +31,6 @@ class RELU(Component):
          :type activation_function_out: Component class
          :param internal_out0/1: Internal port used to connect input to out
          :type internal_out0/1: Component class
-
     """
     def construct(s, input_width=1, output_width=1, registered=False):
         """ Constructor for RELU
@@ -132,7 +131,8 @@ class HWB_Sim(Component):
         ports_by_type = {}
         special_outs=[]
         if "simulation_model" in spec:
-           special_outs=["DATA", "W", "I", "O", "AVALON_READDATA", "AVALON_WAITREQUEST", "AVALON_READDATAVALID"]
+           special_outs=["DATA", "W", "I", "O", "AVALON_READDATA", "AVALON_WAITREQUEST",
+                         "AVALON_READDATAVALID"]
         
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
@@ -176,7 +176,7 @@ class HWB_Sim(Component):
                     addrlen = ports_by_type["ADDRESS_in"][buffer_inst][0]["width"]
                     size = 2**addrlen
                     sim_model = module_helper_classes.Buffer(datalen,
-                                                             size, sim=sim)
+                                                             size, keepdata=False, sim=sim)
                     setattr(s,"sim_model_inst" + str(buffer_inst), sim_model)
                     connect(ports_by_type["DATA_in"][buffer_inst][1],
                             sim_model.datain)
@@ -195,7 +195,8 @@ class HWB_Sim(Component):
                         "To run simulation, you need port of type " + req_port
                 for req_port in ["W_EN_in", "I_EN_in", "ACC_EN_in"]:
                     assert req_port in ports_by_type, \
-                        "To run simulation, you need port of type " + req_port +" in definition of " + spec["block_name"] 
+                        "To run simulation, you need port of type " + req_port + \
+                        " in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
                 s.sim_model = module_helper_classes.MLB(proj, sim=sim)
                 
@@ -220,14 +221,16 @@ class HWB_Sim(Component):
                         s.sim_model.O_IN)
                 connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
                 print(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']])
-                connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']], s.sim_model.O_OUT)
+                connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']],
+                        s.sim_model.O_OUT)
             elif spec["simulation_model"] == "EMIF":
-                assert len(proj) > 0
-                for req_port in ["AVALON_ADDRESS_in", "AVALON_READDATA_out", "AVALON_WRITEDATA_in",
+                for req_port in ["AVALON_ADDRESS_in", "AVALON_READDATA_out",
+                                 "AVALON_WRITEDATA_in",
                                  "AVALON_READDATAVALID_out", "AVALON_WAITREQUEST_out",
                                  "AVALON_READ_in", "AVALON_WRITE_in"]:
                     assert req_port in ports_by_type, \
-                        "To run simulation, you need port of type " + req_port +" in definition of " + spec["block_name"] 
+                        "To run simulation, you need port of type " + req_port + \
+                        " in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
                 s.sim_model = module_helper_classes.EMIF(
                     datawidth=ports_by_type["AVALON_WRITEDATA_in"][0][0]["width"],
@@ -239,12 +242,16 @@ class HWB_Sim(Component):
                                                     {}).get('max_pipeline_transfers', 4),
                     sim=True)
                 connect(ports_by_type["AVALON_ADDRESS_in"][0][1], s.sim_model.avalon_address)
-                connect(ports_by_type["AVALON_WRITEDATA_in"][0][1], s.sim_model.avalon_writedata)
-                connect(s.sim_model.avalon_readdata, ports_by_type["AVALON_READDATA_out"][0][1])
+                connect(ports_by_type["AVALON_WRITEDATA_in"][0][1],
+                        s.sim_model.avalon_writedata)
+                connect(s.sim_model.avalon_readdata,
+                        ports_by_type["AVALON_READDATA_out"][0][1])
                 connect(ports_by_type["AVALON_READ_in"][0][1], s.sim_model.avalon_read,)
                 connect(ports_by_type["AVALON_WRITE_in"][0][1], s.sim_model.avalon_write)
-                connect(s.sim_model.avalon_readdatavalid, ports_by_type["AVALON_READDATAVALID_out"][0][1])
-                connect(s.sim_model.avalon_waitrequest, ports_by_type["AVALON_WAITREQUEST_out"][0][1])
+                connect(s.sim_model.avalon_readdatavalid,
+                        ports_by_type["AVALON_READDATAVALID_out"][0][1])
+                connect(s.sim_model.avalon_waitrequest,
+                        ports_by_type["AVALON_WAITREQUEST_out"][0][1])
                     
             
             
@@ -584,7 +591,8 @@ class InputInterconnect(Component):
                         # And one of the outputs
                         if (ue == 0):
                             output_bus = utils.AddOutPort(s, buffer_width,
-                                                          "outputs_to_buffer_" + str(input_bus_idx))
+                                                          "outputs_to_buffer_" +
+                                                          str(input_bus_idx))
                             connect(newin[0:mlb_width_used],
                                     output_bus[input_bus_start:input_bus_end])
 
@@ -876,60 +884,61 @@ class Datapath(Component):
         connected_ins = []
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["out"]):
             connected_ins += utils.connect_ports_by_name(s.mlb_modules,
-                                                         portname["name"],
+                                                         portname["name"]+"_(\d+)",
                                                          s.weight_interconnect,
-                                                         "inputs_from_mlb")
+                                                         "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["in"]):
             print(portname)
             connected_ins += utils.connect_ports_by_name(
-                s.weight_interconnect, "outputs_to_mlb", s.mlb_modules,
-                portname["name"])
+                s.weight_interconnect, "outputs_to_mlb_(\d+)", s.mlb_modules,
+                portname["name"]+"_(\d+)")
         for portname in utils.get_ports_of_type(buffer_specs['W'], 'DATA',
                                                 ["out"]):
             connected_ins += utils.connect_ports_by_name(s.weight_modules,
-                                                         portname["name"],
+                                                         portname["name"]+"_(\d+)",
                                                          s.weight_interconnect,
-                                                         "inputs_from_buffer")
+                                                         "inputs_from_buffer_(\d+)")
 
         # Connect input interconnect
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["out"]):
             connected_ins += utils.connect_ports_by_name(s.mlb_modules,
-                                                         portname["name"],
+                                                         portname["name"]+"_(\d+)",
                                                          s.input_interconnect,
-                                                         "inputs_from_mlb")
+                                                         "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["in"]):
             connected_ins += utils.connect_ports_by_name(s.input_interconnect,
-                                                         "outputs_to_mlb",
+                                                         "outputs_to_mlb_(\d+)",
                                                          s.mlb_modules,
-                                                         portname["name"])
+                                                         portname["name"]+"_(\d+)")
         for portname in utils.get_ports_of_type(buffer_specs['I'], 'DATA',
                                                 ["out"]):
             connected_ins += utils.connect_ports_by_name(s.input_act_modules,
-                                                         portname["name"],
+                                                         portname["name"]+"_(\d+)",
                                                          s.input_interconnect,
-                                                         "inputs_from_buffer")
+                                                         "inputs_from_buffer_(\d+)")
 
         # Connect partial sum interconnect
         for portname in utils.get_ports_of_type(mlb_spec, 'O', ["out"]):
             connected_ins += utils.connect_ports_by_name(s.mlb_modules,
-                portname["name"], s.output_ps_interconnect, "inputs_from_mlb")
+                portname["name"]+"_(\d+)", s.output_ps_interconnect,
+                "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'O', ["in"]):
             connected_ins += utils.connect_ports_by_name(
-                s.output_ps_interconnect, "outputs_to_mlb",
-                s.mlb_modules, portname["name"])
+                s.output_ps_interconnect, "outputs_to_mlb_(\d+)",
+                s.mlb_modules, portname["name"]+"_(\d+)")
         connected_ins += utils.connect_ports_by_name(
-            s.output_ps_interconnect, "outputs_to_afs",
-            s.activation_function_modules, "activation_function_in")
+            s.output_ps_interconnect, "outputs_to_afs_(\d+)",
+            s.activation_function_modules, "activation_function_in_(\d+)")
 
         # Connect output activations
         connected_ins += utils.connect_ports_by_name(
-            s.activation_function_modules, "activation_function_out",
-            s.output_interconnect, "input")
+            s.activation_function_modules, "activation_function_out_(\d+)",
+            s.output_interconnect, "input_(\d+)")
         for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["in"]):
             connected_ins += utils.connect_ports_by_name(
-                s.output_interconnect, "output", s.output_act_modules,
-                portname["name"])
+                s.output_interconnect, "output_(\d+)", s.output_act_modules,
+                portname["name"]+"_(\d+)")
 
         # Connect output buffers to top
         for port in s.output_act_modules.get_output_value_ports():
@@ -942,11 +951,15 @@ class Datapath(Component):
         utils.AddInPort(s,utils.get_sum_datatype_width(buffer_specs['I'], 'DATA', ["in"]),
                   "input_datain")
         for port in utils.get_ports_of_type(buffer_specs['I'], 'DATA', ["in"]):
-            connected_ins += utils.connect_inst_ports_by_name(s, "input_datain", s.input_act_modules, port["name"])
+            connected_ins += utils.connect_inst_ports_by_name(s, "input_datain",
+                                                              s.input_act_modules,
+                                                              port["name"])
         utils.AddInPort(s,utils.get_sum_datatype_width(buffer_specs['W'], 'DATA', ["in"]),
                   "weight_datain")
         for port in utils.get_ports_of_type(buffer_specs['W'], 'DATA', ["in"]):
-            connected_ins += utils.connect_inst_ports_by_name(s, "weight_datain", s.weight_modules, port["name"])
+            connected_ins += utils.connect_inst_ports_by_name(s, "weight_datain",
+                                                              s.weight_modules,
+                                                              port["name"])
     
         # Connect all inputs not otherwise connected to top
         for inst in [s.activation_function_modules, s.mlb_modules,

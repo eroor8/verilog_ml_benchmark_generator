@@ -141,84 +141,6 @@ def stream_mlb_values(testinst, time, addr_portnames, os, buf_lens, en_portnames
         en_port @= 0
     return i
 
-def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
-    inner_uw = projection["inner_projection"]["URW"]["value"]
-    inner_un = projection["inner_projection"]["URN"]["value"]
-    inner_ue = projection["inner_projection"]["UE"]["value"]
-    inner_ub = projection["inner_projection"]["UB"]["value"]
-    inner_ug = projection["inner_projection"]["UG"]["value"]
-    outer_uw = projection["outer_projection"]["URW"]["value"]
-    outer_un = projection["outer_projection"]["URN"]["value"]
-    outer_ue = projection["outer_projection"]["UE"]["value"]
-    outer_ub = projection["outer_projection"]["UB"]["value"]
-    outer_ug = projection["outer_projection"]["UG"]["value"]
-    mlb_count = utils.get_mlb_count(projection["outer_projection"])
-    mac_count = utils.get_mlb_count(projection["inner_projection"])
-    obuf_len = len(obuf[0])
-    wbuf_len = len(wbuf[0])
-    ibuf_len = len(ibuf[0])
-    for i in range(obuf_len):
-        for ugo in range(outer_ug): 
-            for ugi in range(inner_ug):
-                for ubo in range(outer_ub): 
-                    for ubi in range(inner_ub):
-                        for ueo in range(outer_ue):
-                            for uei in range(inner_ue):
-                                correct_sum = 0
-                                for urno in range(outer_un):
-                                    for urni in range(inner_un):
-                                        for urwo in range(outer_uw):
-                                            for urwi in range(inner_uw):
-                                                urw = urwo*inner_uw + urwi
-                                                mlb_inst = ugo*outer_ub*outer_ue*outer_uw*outer_un + \
-                                                           ubo*outer_ue*outer_uw*outer_un + \
-                                                           ueo*outer_uw*outer_un + \
-                                                           urno*outer_uw + \
-                                                           urwo
-                                                mac_idx = mlb_inst*mac_count + \
-                                                          ugi*inner_ub*inner_ue*inner_uw*inner_un + \
-                                                          ubi*inner_ue*inner_uw*inner_un + \
-                                                          uei*inner_uw*inner_un + \
-                                                          urni*inner_uw + \
-                                                          urwi
-                                                w_buf_inst_idx = \
-                                                    ugo*outer_ue*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    ueo*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urwo*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urno*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    ugi*inner_ue*inner_un*inner_uw + \
-                                                    uei*inner_un*inner_uw + \
-                                                    urni*inner_uw + \
-                                                    urwi
-                                                buffer_idx = (outer_ug*outer_ue*outer_uw*outer_un*inner_ug*\
-                                                              inner_ue*inner_un*inner_uw - w_buf_inst_idx - 1)\
-                                                              % wbuf_len
-                                                w = merge_bus(wbuf[0][buffer_idx % wbuf_len],
-                                                            projection["stream_info"]["W"])
-                                                if ((i - urw) >= 0) and \
-                                                   ((i - urw) < wbuf_len):
-                                                    i_stream_idx = (outer_ub*outer_un*ugo + \
-                                                                    ubo*outer_un + \
-                                                                    urno)
-                                                    i_value_idx = i_stream_idx*utils.get_proj_stream_count(projection["inner_projection"], 'I') + \
-                                                                  (inner_ub*inner_un*ugi + \
-                                                                   ubi*inner_un + \
-                                                                   urni)
-                                                    ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
-                                                    iv_idx = i_value_idx % ivalues_per_buf
-                                                    correct_sum += (ibuf[ibuf_idx][(i - urw)%ibuf_len][iv_idx] * w)
-                                out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
-                                              ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
-                                              ueo*inner_ug*inner_ub*inner_ue + \
-                                              ugi*inner_ub*inner_ue + \
-                                              ubi*inner_ue + \
-                                              uei
-                                obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
-                                os_idx = out_act_idx % ostreams_per_buf
-                                obuf[obuf_idx][i][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
-    return obuf
-
-
 def read_out_stored_buffer_values(testinst, inner_inst, addr_portname, dataout_portname,
                                 buffer_values, dwidth, outertestinst=None):
     if not outertestinst:
@@ -251,23 +173,6 @@ def read_out_stored_buffer_values_from_sm(dataout_portname,
             buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
             curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
     return buffer_values
-
-def read_out_stored_values_from_emif(emif_inst,
-                                     bytes_per_word,
-                                     emif_size,
-                                     dwidth, startaddr=0):
-    buffer_values = []
-    for i in range(startaddr,emif_size+startaddr):
-        currvalue = getattr(emif_inst, "V"+str(i))
-        #print(currvalue.dataout)
-        curr_obuf_out = int(currvalue.dataout)
-        curr_buffer_vals = []
-        for section in range(bytes_per_word):
-            curr_buffer_vals += [int(curr_obuf_out%(2**dwidth))]
-            curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
-        buffer_values += [curr_buffer_vals]
-    return buffer_values
-
                
 def read_out_stored_values(testinst, addr_portname, dataout_portname,
                          buffer_values, dwidth, outertestinst=None):
@@ -298,7 +203,7 @@ def gather_stored_buffer_values(testinst, inner_inst,
         curr_obuf_out = int(curr_obuf.dataout)
         for section in range(len(buffer_values[i])):
             buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
-            curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
+            curr_obuf_out = curr_obuf_out // (2**dwidth)
     return buffer_values
 
 def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None):
@@ -306,7 +211,6 @@ def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None
     new_buf = gather_stored_buffer_values(testinst, inner_inst,
                                           new_buf, dwidth, outertestinst)
     print("STORED_VALUES")
-    print("SM: ={}".format(inner_inst.sim_model_inst0.data))
     print(new_buf)
     print("EXPECTED_VALUES")
     print(buffer_values)

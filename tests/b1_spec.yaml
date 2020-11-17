@@ -49,7 +49,7 @@ ports:
         direction: "in"
         type: "WEN"
     -   name: portaaddr
-        width: 8
+        width: 3
         direction: "in"
         type: "ADDRESS"
     -   name: portadatain

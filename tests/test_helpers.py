@@ -68,7 +68,46 @@ def load_mlb_values(testinst, chainlen, chainstart, buflen, addr_portname, en_po
         addr_port @= prev_addr
         outertestinst.sim_tick()
     en_port @= 0
-        
+
+def check_mac_weight_values(proj_yaml, curr_mlb,
+                           weight_out_name, 
+                           buffer_values,
+                           mlb_start_addr, i=0,
+                           preload=True):
+    mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
+    if ("PRELOAD" in proj_yaml["inner_projection"]):
+        bi_chain_len = proj_yaml["inner_projection"]["UE"]["value"] * \
+                            proj_yaml["inner_projection"]["URN"]["value"] * \
+                            proj_yaml["inner_projection"]["URW"]["value"]
+        ubi = proj_yaml["inner_projection"]["UB"]["value"]
+        buflen = len(buffer_values)
+        for r in range(mac_count-1,-1,-1):
+            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
+            mac_idx = mac_count-r-1
+            
+            # Calculate expected buffer value
+            buffer_idxi = math.floor(mac_idx/(bi_chain_len*ubi))*bi_chain_len
+            buf_item_idx = (mac_idx%bi_chain_len)
+            print(str(r) + " ==> " + str(int(curr_out)) + " vs " +
+                  str(int(buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])))
+            assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])
+    else: 
+        for ugi in range(proj_yaml["inner_projection"]["UG"]["value"]):
+            for ubi in range(proj_yaml["inner_projection"]["UB"]["value"]):
+                for uei in range(proj_yaml["inner_projection"]["UE"]["value"]):
+                    for uni in range(proj_yaml["inner_projection"]["URN"]["value"]):
+                        for uwi in range(proj_yaml["inner_projection"]["URW"]["value"]):
+                            mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
+                                {'URN': uni, 'UB': ubi, 'UG': ugi, 'UE': uei, 'URW':uwi})
+                            stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
+                                {'URN': uni, 'UG': ugi, 'UE': uei, 'URW':uwi})
+                            print("Stream: " + str(stream_idx) + " -- B" + str(buffer_idx) + " values " + 
+                                  str(buffer_stream_idx*values_per_stream) + " to " + str((buffer_stream_idx+1)*values_per_stream-1))
+                            buffer_idx = mac_count-mac_idx-1
+                            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(mac_idx))
+                            assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][stream_idx])
+    return True
+
 def check_mlb_chain_values(testinst,
                            mlb_count, mac_count,
                            mlb_start, mac_start,
@@ -79,23 +118,22 @@ def check_mlb_chain_values(testinst,
     buflen = len(buffer_values)
     all_good = True
     for t in range(mlb_start+mlb_count-1,mlb_start-1,-1):
-        
         for r in range(mac_count-1,-1,-1):
             mac_idx = t*mac_count + r
             curr_mlb = getattr(testinst.mlb_modules, mlb_name.format(t))
             curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
+            
             # Outer weight buffer index
             total_mac_idx = mac_count*mlb_count-mac_idx-1
-            #print(total_mac_idx)
             buffer_idxo = math.floor(total_mac_idx/(bo_chain_len*ubo*ubi))
             buffer_idxo = buffer_idxo*bo_chain_len
-            #print(buffer_idxo)
+            
             # Inner weight buffer index
             buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi))
             buffer_idxi = buffer_idxi*bi_chain_len
-            #print(buffer_idxi)
-            # weight index
             buf_item_idx = (total_mac_idx%bi_chain_len)
+            print( str(int(curr_out)) + " vs " + str(int(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])))
+            # weight index
             all_good &= (curr_out == buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
     return all_good
 
@@ -123,6 +161,63 @@ def check_mlb_chains_values(testinst,
                                    weight_out_name, 
                                    buffer_values[buf_idx], dwidth, part_idx, bo_chain_len, ubo, bi_chain_len, ubi)
     return all_good
+
+
+def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name, 
+                            buffer_values):
+    mlb_count = utils.get_mlb_count(proj_yaml["outer_projection"])
+    mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
+    bi_chain_len = proj_yaml["inner_projection"]["UE"]["value"] * \
+                            proj_yaml["inner_projection"]["URN"]["value"] * \
+                            proj_yaml["inner_projection"]["URW"]["value"]
+    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
+    print(buffer_values)
+    if ("PRELOAD" in proj_yaml["outer_projection"]):
+        outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
+        bo_chain_len = proj_yaml["outer_projection"]["UE"]["value"] * \
+                            proj_yaml["outer_projection"]["URN"]["value"] * \
+                            proj_yaml["outer_projection"]["URW"]["value"] *\
+                            proj_yaml["inner_projection"]["UG"]["value"] *  bi_chain_len
+        
+        # Calculate required buffers etc.
+        return check_mlb_chains_values(testinst,
+                                mlb_count, mac_count,
+                                proj_yaml["outer_projection"]["PRELOAD"][0]["bus_count"],
+                                proj_yaml["inner_projection"]["PRELOAD"][0]["bus_count"],
+                                mlb_name, weight_out_name, 
+                                buffer_values, proj_yaml["stream_info"]["W"],
+                                bo_chain_len, outer_ub,
+                                bi_chain_len, inner_ub)
+    else:
+        buflen = len(buffer_values)
+        print(proj_yaml["outer_projection"])
+        for ugo in range(proj_yaml["outer_projection"]["UG"]["value"]):
+            for ubo in range(proj_yaml["outer_projection"]["UB"]["value"]):
+                for ueo in range(proj_yaml["outer_projection"]["UE"]["value"]):
+                    for uno in range(proj_yaml["outer_projection"]["URN"]["value"]):
+                        for uwo in range(proj_yaml["outer_projection"]["URW"]["value"]):
+                            mlb_idx = utils.get_overall_idx(proj_yaml["outer_projection"],
+                                {'URN': uno, 'UB': ubo, 'UG': ugo, 'UE': ueo, 'URW':uwo})
+                            curr_mlb = getattr(testinst.mlb_modules, mlb_name.format(mlb_idx))
+                            stream_idx = utils.get_overall_idx(proj_yaml["outer_projection"],
+                                {'URN': uno, 'UG': ugo, 'UE': ueo, 'URW':uwo})
+                            print("MLB: " + str(mlb_idx))
+                            values_per_stream = utils.get_proj_stream_count(
+                                proj_yaml["inner_projection"], 'W')
+                            streams_per_buf = len(buffer_values[0][0]) / values_per_stream
+                            buffer_idx = int(stream_idx // streams_per_buf)
+                            buffer_stream_idx = int(stream_idx % streams_per_buf)
+                            assert(values_per_stream == 1)
+                            print("Stream: " + str(stream_idx) + " -- B" + str(buffer_idx) + " values " + 
+                                  str(buffer_stream_idx*values_per_stream) + " to " +
+                                  str((buffer_stream_idx+1)*values_per_stream-1))
+                            check_mac_weight_values(curr_mlb, mac_count,
+                                weight_out_name, buffer_values[buffer_idx],
+                                mlb_start_addr=0,
+                                i=buffer_stream_idx,
+                                bi_chain_len=bi_chain_len, ubi=inner_ub)
+                            return True
+        
 
 def stream_mlb_values(testinst, time, addr_portnames, os, buf_lens, en_portnames, starti = 0, outertestinst=None):
     if not outertestinst:
@@ -157,7 +252,7 @@ def read_out_stored_buffer_values(testinst, inner_inst, addr_portname, dataout_p
         addr_port @= i
         outertestinst.sim_tick()
         curr_obuf_out = int(dataout_port)
-        assert(curr_obuf_out == dataout_val.dataout)
+        assert (curr_obuf_out == dataout_val.dataout)
         for section in range(len(buffer_values[i])):
             buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
             curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
@@ -214,4 +309,4 @@ def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None
     print(new_buf)
     print("EXPECTED_VALUES")
     print(buffer_values)
-    assert(new_buf == buffer_values)
+    assert (new_buf == buffer_values), "Invalid contents for buffer " + str(inner_inst)

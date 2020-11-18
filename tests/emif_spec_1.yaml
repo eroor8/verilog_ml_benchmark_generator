@@ -4,7 +4,7 @@ parameters:
     fill: []
 ports:
     -   name: address
-        width: 16
+        width: 8
         direction: "in"
         type: "AVALON_ADDRESS"
     -   name: read
@@ -12,11 +12,11 @@ ports:
         direction: "in"
         type: "AVALON_READ"
     -   name: readdata
-        width: 128
+        width: 64
         direction: "out"
         type: "AVALON_READDATA"
     -   name: writedata
-        width: 128
+        width: 64
         direction: "in"
         type: "AVALON_WRITEDATA"
     -   name: write

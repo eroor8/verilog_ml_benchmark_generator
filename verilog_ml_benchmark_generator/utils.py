@@ -350,7 +350,7 @@ def chain_ports(s, start_idx, end_idx, in_name, out_name, width=8):
     p2name = in_name.format(str(end_idx))
     return AddOutPort(s, width, p1name), AddInPort(s, width, p2name)
 
-def print_table(title, table, col_width=0):
+def print_table(title, table, indent=0, col_width=0):
     """ Print a table nicely on the command line.
 
     :param table: table to be printed
@@ -361,7 +361,7 @@ def print_table(title, table, col_width=0):
     :type col_width: int
     """
     def printline(row, col_widths):
-        orig_str = ''
+        orig_str = ""
         prev_width = 0
         for j in range(max(map(lambda i: 1 if (type(i) in [int, str])
                                else len(i), row))):
@@ -378,7 +378,7 @@ def print_table(title, table, col_width=0):
                     orig_str = orig_str.format(curr_key + " = " +
                                                curr_value)
                 prev_width += col_widths[i]
-            orig_str += "\n"
+            orig_str += "\n" + "\t"*indent 
         return orig_str
 
     def get_item_len(item):
@@ -394,9 +394,9 @@ def print_table(title, table, col_width=0):
                 itemlen = get_item_len(line[i])
                 if (itemlen+4) > widths[i]:
                     widths[i] = itemlen+4
-    string_to_print = ('-' * sum(widths)) + "\n"
-    string_to_print = "\n" + string_to_print + title + "\n" + \
-                      string_to_print
+    string_to_print = ("\t"*indent + '-' * sum(widths)) + "\n"
+    string_to_print = "\n" + string_to_print + "\t"*indent + title + "\n" + \
+                      string_to_print + "\t"*indent
     for line in table:
         string_to_print += printline(line, widths)
     return string_to_print
@@ -562,7 +562,6 @@ def read_out_stored_values_from_emif(emif_inst,
     for i in range(startaddr,emif_size+startaddr):
         currvalue = getattr(emif_inst, "V"+str(i))
         emif_array[i] = int(currvalue.dataout)
-    print(emif_array)
     return read_out_stored_values_from_array(emif_array, bytes_per_word, emif_size, dwidth, startaddr, words_per_buffer)
 
 def read_out_stored_values_from_array(array,
@@ -619,9 +618,9 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                         for urwo in range(outer_uw):
                                             for urwi in range(inner_uw):
                                                 urw = urwo*inner_uw + urwi
-                                                mlb_inst = ugo*outer_ub*outer_ue*outer_uw*outer_un + \
-                                                           ubo*outer_ue*outer_uw*outer_un + \
-                                                           ueo*outer_uw*outer_un + \
+                                                mlb_inst = ugo*outer_ub*outer_ue*outer_un*outer_uw + \
+                                                           ubo*outer_ue*outer_un*outer_uw + \
+                                                           ueo*outer_un*outer_uw + \
                                                            urno*outer_uw + \
                                                            urwo
                                                 mac_idx = mlb_inst*mac_count + \
@@ -631,10 +630,10 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                           urni*inner_uw + \
                                                           urwi
                                                 w_buf_inst_idx = \
-                                                    ugo*outer_ue*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    ueo*outer_uw*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urwo*outer_un*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urno*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ugo*outer_ue*outer_un*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    ueo*outer_un*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urno*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
+                                                    urwo*inner_ug*inner_ue*inner_un*inner_uw + \
                                                     ugi*inner_ue*inner_un*inner_uw + \
                                                     uei*inner_un*inner_uw + \
                                                     urni*inner_uw + \
@@ -645,7 +644,7 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                 w = merge_bus(wbuf[0][buffer_idx % wbuf_len],
                                                             projection["stream_info"]["W"])
                                                 if ((i - urw) >= 0) and \
-                                                   ((i - urw) < wbuf_len):
+                                                   ((i - urw) < ibuf_len):
                                                     i_stream_idx = (outer_ub*outer_un*ugo + \
                                                                     ubo*outer_un + \
                                                                     urno)
@@ -674,3 +673,16 @@ def merge_bus(v,width):
     for i in range(len(v)):
         sum += v[i] * (2 ** (width * i))
     return sum
+
+def print_heading(string, step = -1):
+    """ Print something out on the terminal in green with underlines """
+    to_print = '\n===> '
+    if (step > -1):
+        to_print += "Step " + str(step) + ": "
+    to_print += string + "\n"
+    to_print += ("=" * len(to_print))
+    print(to_print)
+
+def printi(level, string):
+    """ Print something out with indents """
+    print(('\t' * level) + str(string))

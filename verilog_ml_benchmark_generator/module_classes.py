@@ -14,9 +14,10 @@ import math
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
+from utils import printi
 import module_helper_classes
 from module_helper_classes import *
-
+il = 1
 
 class RELU(Component):
     """" This class implements a RELU function. It can either be registered
@@ -153,7 +154,7 @@ class HWB_Sim(Component):
         
         # If this is an ML block, add behavioural info
         if "simulation_model" not in spec:
-            print("Warning: HW block " + spec.get("block_name","unnamed") + \
+            printi(il,"Warning: HW block " + spec.get("block_name","unnamed") + \
                   "has no sim model - all outputs tied off")
         else:
             if spec["simulation_model"] == "Buffer":
@@ -207,6 +208,18 @@ class HWB_Sim(Component):
                     for dtype in MAC_datatypes}
                 inner_bus_widths = {dtype: inner_bus_counts[dtype] *
                     proj['stream_info'][dtype] for dtype in MAC_datatypes}
+                assert(ports_by_type["I_out"][0][0]['width'] == ports_by_type["I_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB I ports)"
+                assert(ports_by_type["W_out"][0][0]['width'] == ports_by_type["W_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB W ports)"
+                assert(ports_by_type["O_out"][0][0]['width'] == ports_by_type["O_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB O ports)"
+                assert(inner_bus_widths['W'] <= ports_by_type["W_in"][0][0]['width']),\
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
+                assert(inner_bus_widths['I'] <= ports_by_type["I_in"][0][0]['width']), \
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
+                assert(inner_bus_widths['O'] <= ports_by_type["O_in"][0][0]['width']), \
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
                 connect(ports_by_type["W_in"][0][1][0:inner_bus_widths['W']],
                         s.sim_model.W_IN)
                 connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
@@ -220,7 +233,6 @@ class HWB_Sim(Component):
                 connect(ports_by_type["O_in"][0][1][0:inner_bus_widths['O']],
                         s.sim_model.O_IN)
                 connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
-                print(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']])
                 connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']],
                         s.sim_model.O_OUT)
             elif spec["simulation_model"] == "EMIF":
@@ -765,9 +777,9 @@ class Datapath(Component):
          :param projection: Projection specification
          :type projection: dict
         """
-        print("{:=^60}".format(" Constructing Datapath with MLB block " +
+        printi(il,"{:=^60}".format("> Constructing Datapath with MLB block " +
                                str(mlb_spec.get('block_name', "unnamed") +
-                                   " ")))
+                                   " <")))
         MAC_datatypes = ['W', 'I', 'O']
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
 
@@ -791,7 +803,7 @@ class Datapath(Component):
                                  ["data widths by type", inner_data_widths,
                                   "(bit-width of each value)"],
                                  ["total bus width, by type", inner_bus_widths,
-                                  "(bit-width of MLB interface)"]]) + "\n")
+                                  "(bit-width of MLB interface)"]], il) + "\n")
 
         # Check that this configuration is supported by the hardware model
         assert MAC_count <= mlb_spec['MAC_info']['num_units']
@@ -829,8 +841,8 @@ class Datapath(Component):
                                   "(total data width from buffers)"],
                                  ["bandwidth, by type", total_bus_counts,
                                   "(total # values from buffers)"],
-                                 ["# buffers, by type", buffer_counts]]
-                                ) + "\n")
+                                 ["# buffers, by type", buffer_counts]],
+                                  il) + "\n")
 
         # Instantiate MLBs, buffers
         s.mlb_modules = HWB_Wrapper(mlb_spec, MLB_count,
@@ -888,7 +900,6 @@ class Datapath(Component):
                                                          s.weight_interconnect,
                                                          "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["in"]):
-            print(portname)
             connected_ins += utils.connect_ports_by_name(
                 s.weight_interconnect, "outputs_to_mlb_(\d+)", s.mlb_modules,
                 portname["name"]+"_(\d+)")
@@ -971,29 +982,7 @@ class Datapath(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_top")
-                    print(inst._dsl.my_name + "_" +
+                    printi(il,inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_top")
 
-        #print(s.__dict__)
-        # TODAY
-        # Get the full simulation working for toy
-        #    (that means doing the MLB sim model)
-        # better memory interfaces
-        # Output stationary option (update W, I, o interfaces)
 
-        # THURS
-        # Think aboud preloading the memories ... how?
-        
-        # FRIDAY
-        # Method to switch between interconnects
-        # Different types of blocks
-
-        # Later...
-        # Method to map hw blocks to physical locations and to match
-        # up different projections
-        # Method to decide which buffers to write to when (a table?)
-
-        # Look into modelling MLB for simulations
-        # Run whole simulations here in python...
-        #    Make sure whole thing is runnable
-        #    Write golden comparison

@@ -5,15 +5,15 @@ ports:
         direction: "in"
         type: "WEN"
     -   name: portaaddr
-        width: 8
+        width: 2
         direction: "in"
         type: "ADDRESS"
     -   name: portadatain
-        width: 16
+        width: 32
         direction: "in"
         type: "DATA"
     -   name: portadataout
-        width: 16
+        width: 32
         direction: "out"
         type: "DATA"
     

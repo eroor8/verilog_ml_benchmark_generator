@@ -15,17 +15,45 @@ from test_helpers import *
 
 VTR_FLOW_PATH = os.getenv('VTR_FLOW_PATH')
 
-filesets = [#("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-            # "emif_spec_0.yaml", "projection_spec_0.yaml"),
-            ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-             "emif_spec_1.yaml", "projection_spec_0.yaml"),
-            ("mlb_spec_0.yaml","input_spec_1.yaml", "weight_spec_0.yaml",
-             "emif_spec_1.yaml", "projection_spec_0.yaml"),
-            ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_1.yaml",
-             "emif_spec_1.yaml", "projection_spec_0.yaml"),
-            ("mlb_spec_1.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-             "emif_spec_0.yaml", "projection_spec_1.yaml")
-           ]
+filesets = [# EMIF, input, MLB interface same width
+            # Preload weights from wide buffer
+            # Inner: URW3, URN2, UE1, UB2, UG2
+            # Outer: URW1, URN2, UE1, UB2, UG2
+              ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
+               "emif_spec_0.yaml", "projection_spec_0.yaml"),
+            # EMIF wider than input, weight buffer
+              ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
+               "emif_spec_1.yaml", "projection_spec_0.yaml"),
+            # Input 2x as wide as MLB interface
+              ("mlb_spec_0.yaml","input_spec_1.yaml", "weight_spec_0.yaml",
+               "emif_spec_1.yaml", "projection_spec_0.yaml"),
+            # Narrower weight buffer
+              ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_1.yaml",
+              "emif_spec_1.yaml", "projection_spec_0.yaml"),
+            # Inner: URW6, URN1, UE2, UB1, UG1
+            # Outer: URW1, URN1, UE1, UB2, UG1
+               ("mlb_spec_1.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
+                "emif_spec_0.yaml", "projection_spec_1.yaml"),
+            #
+            # Narrower I, W, 
+            # Inner: URW1, URN2, UE2, UB2, UG1
+            # Outer: URW1, URN1, UE3, UB1,UG1
+             ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
+                "emif_spec_1.yaml", "projection_spec_3.yaml"),
+            # Narrower I, W, 
+            # Outer: URW1, URN2, UE2, UB2, UG1
+            # Inner: URW1, URN1, UE3, UB1,UG1
+               ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
+                 "emif_spec_1.yaml", "projection_spec_4.yaml"),
+            # Inner: URW6, URN1, UE1, UB2, UG1
+            # Outer: URW2, URN2, UE2, UB1, UG1
+               ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
+                 "emif_spec_1.yaml", "projection_spec_5.yaml"),
+            # Inner: All2
+            # Outer: All2
+                ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
+                  "emif_spec_1.yaml", "projection_spec_5.yaml"),
+           ]  # bad: URW2, URN2
 
 def test_yaml_schemas():
     """Test yaml schema validation"""
@@ -127,12 +155,15 @@ def test_odinify_statemachine():
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
 
+
+
 @pytest.mark.parametrize(
     "mlb_file,ab_file,wb_file,emif_file,proj_file", filesets
 )
 @pytest.mark.full_simulations
+@pytest.mark.skip
 def test_simulate_emif_statemachine(
-        mlb_file, ab_file, wb_file, emif_file, proj_file):
+        mlb_file, ab_file, wb_file, emif_file, proj_file, v=True):
     
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -185,9 +216,6 @@ def test_simulate_emif_statemachine(
     emif_data = wbuf_flat + ibuf_flat
     oaddr = len(emif_data)
     
-    print("\n\nOriginally")
-    print(emif_data)
-    
     emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
     outvals, testinst = generate_modules.simulate_statemachine(
         module_name="test_odin_emif_sm", 
@@ -200,7 +228,8 @@ def test_simulate_emif_statemachine(
                                                     randomize=False,
                                                     waddr=0,
                                                     iaddr=iaddr,
-                                                    oaddr=oaddr)
+                                                    oaddr=oaddr,
+                                                    validate_output=v)
 
     # Check that EMIFs have the right data
     #wvalues_per_emif_word = math.ceil( \
@@ -213,10 +242,7 @@ def test_simulate_emif_statemachine(
         for j in range(len(wbuf[k])):
             for i in range(len(wbuf[k][j])):
                 assert emif_vals[k*len(wbuf[k])+j][i] == wbuf[k][j][i]
-    
-    #ivalues_per_emif_word = math.ceil( \
-    #    utils.get_sum_datatype_width(ab_yaml, "DATA", ["in"]) / \
-    #    proj_yaml["stream_info"]["I"])
+                
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddr-iaddr,
         proj_yaml["stream_info"]["I"], iaddr)
@@ -224,39 +250,23 @@ def test_simulate_emif_statemachine(
     print(emif_vals)
     print("WITH")
     print(ibuf)
-    print("WITH")
-    print(ibuf_flat)
-    print("WITH")
-    print(emif_data)
     for k in range(len(ibuf)):
         for j in range(len(ibuf[k])):
             for i in range(len(ibuf[k][j])):
                 assert emif_vals[k*len(ibuf[k])+j][i] == ibuf[k][j][i]
+
+    # Check that the right data got into the on-chip buffers
     check_buffers(testinst.datapath, testinst.datapath.weight_modules,
                   "ml_block_weights_inst_{}",
                   wbuf, proj_yaml["stream_info"]["W"], testinst)
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
                   "ml_block_inputs_inst_{}",
                   ibuf, proj_yaml["stream_info"]["I"], testinst)
-    
-    # Now load the weights into the MLBsejr
-    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
-    outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
-    wbi_section_length = proj_yaml["inner_projection"]["UE"]["value"] * \
-                        proj_yaml["inner_projection"]["URN"]["value"] * \
-                        proj_yaml["inner_projection"]["URW"]["value"]
-    wbo_section_length = proj_yaml["outer_projection"]["UE"]["value"] * \
-                        proj_yaml["outer_projection"]["URN"]["value"] * \
-                        proj_yaml["outer_projection"]["URW"]["value"] *\
-                        proj_yaml["inner_projection"]["UG"]["value"] *  wbi_section_length
-    # Calculate required buffers etc.
-    mlb_count = utils.get_mlb_count(proj_yaml["outer_projection"])
-    mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
-    assert(check_mlb_chains_values(testinst.datapath, mlb_count, mac_count, 1, 1,
-                            "ml_block_inst_{}", "weight_out_{}", wbuf,
-                            proj_yaml["stream_info"]["W"],
-                            wbo_section_length, outer_ub,
-                            wbi_section_length, inner_ub))
+
+    # Check that the right data is in the MLBs
+    assert(check_weight_contents(
+        testinst.datapath, proj_yaml,
+        "ml_block_inst_{}", "weight_out_{}", wbuf))
 
     obuf = [[[0 for i in range(ovalues_per_buf)]
              for i in range(obuf_len)]
@@ -277,11 +287,11 @@ def test_simulate_emif_statemachine(
             assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
 
 def test_simulate_emif_statemachine_unit():
-    test_simulate_emif_statemachine("mlb_spec_0.yaml",
-                               "input_spec_0.yaml",
-                               "weight_spec_0.yaml",
-                               "emif_spec_0.yaml",
-                               "projection_spec_0.yaml")
+    test_simulate_emif_statemachine("mlb_spec_3.yaml",
+                               "input_spec_1.yaml",
+                               "weight_spec_3.yaml",
+                               "emif_spec_1.yaml",
+                                    "projection_spec_5.yaml", False)
     
 def test_simulate_random_emif_statemachine():
 

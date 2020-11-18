@@ -14,8 +14,10 @@ import math
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
+from utils import printi
 import module_helper_classes
 import module_classes
+il = 1
         
 class SM_BufferWen(Component):
     def construct(s, buf_count_width, curr_buffer_count):
@@ -169,10 +171,10 @@ class SM_PreloadMLBWeights(Component):
                   num_outer_tiles, outer_tile_size,
                   inner_tile_size,
                   outer_tile_repeat_x, inner_tile_repeat_x):
-        w_addr_width = max(int(math.log(outer_tile_size*num_outer_tiles,2)),addr_width)
+        w_addr_width = max(int(math.log(outer_tile_size*num_outer_tiles*2,2)),addr_width)
         s.start = InPort(1)
-        s.outer_tile_repeat_count = Wire(max(int(math.log(outer_tile_repeat_x,2)),1))
-        s.inner_tile_repeat_count = Wire(max(int(math.log(inner_tile_repeat_x,2)),1))
+        s.outer_tile_repeat_count = Wire(max(int(math.log(outer_tile_repeat_x,2))+1,1))
+        s.inner_tile_repeat_count = Wire(max(int(math.log(inner_tile_repeat_x,2))+1,1))
         s.index_within_inner_tile = Wire(w_addr_width)
         s.inner_tile_index = Wire(w_addr_width)
         max_inner_tile_idx = int(outer_tile_size/inner_tile_size)
@@ -309,9 +311,9 @@ class StateMachine(Component):
          :param ob_spec: Contains information about output buffers used
          :type ob_spec: dict
         """
-        print("{:=^60}".format(" Constructing Statemachine with MLB block " +
+        printi(il,"{:=^60}".format("> Constructing Statemachine with MLB block " +
                                str(mlb_spec.get('block_name', "unnamed") +
-                                   " ")))
+                                   " <")))
         MAC_datatypes = ['W', 'I', 'O']
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
 
@@ -472,7 +474,7 @@ class StateMachine(Component):
             s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
             s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy 
             s.write_off.start @= (s.state == STREAMING_MLBS) & s.stream_outputs.rdy
-        print(connected_ins)
+        printi(il,connected_ins)
         
         # Connect all inputs not otherwise connected to top
         for inst in [s.datapath]:
@@ -481,17 +483,17 @@ class StateMachine(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    print(inst._dsl.my_name + "_" +
+                    printi(il,inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    print(inst._dsl.my_name + "_" +
+                    printi(il,inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
 
-        print(s.__dict__)
+        printi(il,s.__dict__)
 
                       
 class SM_LoadBufsEMIF(Component):
@@ -541,9 +543,9 @@ class SM_LoadBufsEMIF(Component):
                 s.rdy <<= 1
                 s.buf_wen <<= 0
             else:
-                #print("***WEN: " + str(s.buf_wen))
+                #printi(il,"***WEN: " + str(s.buf_wen))
                 if (s.state == INIT):
-                    #print("***INIT: " + str(s.buf_address))
+                    #printi(il,"***INIT: " + str(s.buf_address))
                     s.buf_wen <<= 0
                     if (s.start):
                         s.state <<= LOAD
@@ -583,8 +585,10 @@ class SM_LoadBufsEMIF(Component):
 class SM_WriteOffChipEMIF(Component):
     def construct(s, buffer_count, write_count, addr_width, datawidth,
                   emif_addr_width, emif_data_width, startaddr=0):
-        assert (emif_addr_width>0)
-        assert (emif_data_width>0)
+        assert (addr_width>0)
+        assert (emif_addr_width>=addr_width)
+        assert (datawidth>0)
+        assert (emif_data_width>=datawidth)
         s.start = InPort(1)
         s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
         s.address = OutPort(addr_width)
@@ -677,9 +681,9 @@ class StateMachineEMIF(Component):
          :param ob_spec: Contains information about output buffers used
          :type ob_spec: dict
         """
-        print("{:=^60}".format(" Constructing Statemachine with MLB block " +
+        printi(il, "{:=^60}".format("> Constructing Statemachine with MLB block " +
                                str(mlb_spec.get('block_name', "unnamed") +
-                                   " ")))
+                                   " <")))
         MAC_datatypes = ['W', 'I', 'O']
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
 
@@ -824,7 +828,7 @@ class StateMachineEMIF(Component):
    
         @update_ff
         def connect_weight_address_ff():
-            #print("---------------- STATE " + str(s.state))
+            #printi(il,"---------------- STATE " + str(s.state))
             if s.reset:
                 s.state <<= INIT
                 s.done <<= 0
@@ -902,14 +906,14 @@ class StateMachineEMIF(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    print(inst._dsl.my_name + "_" +
+                    printi(il,inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    print(inst._dsl.my_name + "_" +
+                    printi(il,inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
 
-        print(s.__dict__)
+        printi(il,s.__dict__)

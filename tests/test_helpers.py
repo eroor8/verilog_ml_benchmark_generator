@@ -72,8 +72,8 @@ def load_mlb_values(testinst, chainlen, chainstart, buflen, addr_portname, en_po
 def check_mac_weight_values(proj_yaml, curr_mlb,
                            weight_out_name, 
                            buffer_values,
-                           mlb_start_addr, i=0,
-                           preload=True):
+                           mlb_start_addr, i=0):
+    print(proj_yaml["inner_projection"])
     mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
     if ("PRELOAD" in proj_yaml["inner_projection"]):
         bi_chain_len = proj_yaml["inner_projection"]["UE"]["value"] * \
@@ -81,6 +81,7 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                             proj_yaml["inner_projection"]["URW"]["value"]
         ubi = proj_yaml["inner_projection"]["UB"]["value"]
         buflen = len(buffer_values)
+        print("MLB: " + str(curr_mlb) + " MAC_count=" + str(mac_count))
         for r in range(mac_count-1,-1,-1):
             curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
             mac_idx = mac_count-r-1
@@ -88,10 +89,15 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
             # Calculate expected buffer value
             buffer_idxi = math.floor(mac_idx/(bi_chain_len*ubi))*bi_chain_len
             buf_item_idx = (mac_idx%bi_chain_len)
+            print(mlb_start_addr)
+            print(buf_item_idx)
+            print(buffer_idxi)
+            print((mlb_start_addr + buffer_idxi + buf_item_idx))
             print(str(r) + " ==> " + str(int(curr_out)) + " vs " +
                   str(int(buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])))
             assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])
-    else: 
+    else:
+        print(buffer_values)
         for ugi in range(proj_yaml["inner_projection"]["UG"]["value"]):
             for ubi in range(proj_yaml["inner_projection"]["UB"]["value"]):
                 for uei in range(proj_yaml["inner_projection"]["UE"]["value"]):
@@ -99,13 +105,13 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                         for uwi in range(proj_yaml["inner_projection"]["URW"]["value"]):
                             mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UB': ubi, 'UG': ugi, 'UE': uei, 'URW':uwi})
+                            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(mac_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UG': ugi, 'UE': uei, 'URW':uwi})
-                            print("Stream: " + str(stream_idx) + " -- B" + str(buffer_idx) + " values " + 
-                                  str(buffer_stream_idx*values_per_stream) + " to " + str((buffer_stream_idx+1)*values_per_stream-1))
-                            buffer_idx = mac_count-mac_idx-1
-                            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(mac_idx))
-                            assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][stream_idx])
+                            print("Stream: " + str(stream_idx) + " -- B values ")
+                            print([mlb_start_addr, mlb_start_addr % len(buffer_values), i, stream_idx])
+                            print (str(curr_out) + " == " + str(buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx]))
+                            assert (curr_out == buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx])
     return True
 
 def check_mlb_chain_values(testinst,
@@ -114,27 +120,46 @@ def check_mlb_chain_values(testinst,
                            mlb_name, weight_out_name, 
                            buffer_values, dwidth, i=0,
                            bo_chain_len=0, ubo=0,
-                           bi_chain_len=0, ubi=0):
+                           bi_chain_len=0, ubi=0, proj_yaml={}):
     buflen = len(buffer_values)
     all_good = True
     for t in range(mlb_start+mlb_count-1,mlb_start-1,-1):
-        for r in range(mac_count-1,-1,-1):
-            mac_idx = t*mac_count + r
-            curr_mlb = getattr(testinst.mlb_modules, mlb_name.format(t))
-            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
-            
-            # Outer weight buffer index
-            total_mac_idx = mac_count*mlb_count-mac_idx-1
+        curr_mlb = getattr(testinst.mlb_modules, mlb_name.format(t))
+        if (len(proj_yaml) > 0):
+            total_mac_idx = mac_count*mlb_count-t*mac_count-1
             buffer_idxo = math.floor(total_mac_idx/(bo_chain_len*ubo*ubi))
             buffer_idxo = buffer_idxo*bo_chain_len
             
-            # Inner weight buffer index
-            buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi))
-            buffer_idxi = buffer_idxi*bi_chain_len
-            buf_item_idx = (total_mac_idx%bi_chain_len)
-            print( str(int(curr_out)) + " vs " + str(int(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])))
-            # weight index
-            all_good &= (curr_out == buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
+            ugi = proj_yaml["inner_projection"]["UG"]["value"]
+            buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi*ugi))
+            buffer_idxi = buffer_idxi*bi_chain_len*ugi
+            values_per_stream = utils.get_proj_stream_count(
+                                proj_yaml["inner_projection"], 'W')
+            print(buffer_idxo + buffer_idxi)
+            print("Check MLB " + str(curr_mlb))
+            
+            all_good &= check_mac_weight_values(proj_yaml, curr_mlb,
+                           weight_out_name, 
+                           buffer_values,
+                           int((buffer_idxo + buffer_idxi)//values_per_stream), i=0)
+        else:
+            total_mac_idx = mac_count*mlb_count-t*mac_count-1
+            buffer_idxo = math.floor(total_mac_idx/(bo_chain_len*ubo*ubi))
+            buffer_idxo = buffer_idxo*bo_chain_len
+
+            for r in range(mac_count-1,-1,-1):
+                mac_idx = t*mac_count + r
+                curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
+                
+                # Inner weight buffer index
+                total_mac_idx = mac_count*mlb_count-mac_idx-1
+                buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi))
+                buffer_idxi = buffer_idxi*bi_chain_len
+                buf_item_idx = (total_mac_idx%bi_chain_len)
+                print( str(int(curr_out)) + " vs " + str(int(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])))
+                # weight index
+                all_good &= (curr_out == buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
+
     return all_good
 
 def check_mlb_chains_values(testinst,
@@ -143,7 +168,7 @@ def check_mlb_chains_values(testinst,
                             mlb_name, weight_out_name, 
                             buffer_values, dwidth,
                             bo_chain_len=0, ubo=0,
-                            bi_chain_len=0, ubi=0):
+                            bi_chain_len=0, ubi=0, proj_yaml={}):
     part_mlb_count = math.ceil(mlb_count/outer_dwidth)
     part_mac_count = math.ceil(mac_count/inner_dwidth)
     all_good = True
@@ -159,7 +184,8 @@ def check_mlb_chains_values(testinst,
                                    mlb_start_i, mac_start_i,
                                    mlb_name,
                                    weight_out_name, 
-                                   buffer_values[buf_idx], dwidth, part_idx, bo_chain_len, ubo, bi_chain_len, ubi)
+                                   buffer_values[buf_idx], dwidth,
+                                   part_idx, bo_chain_len, ubo, bi_chain_len, ubi, proj_yaml)
     return all_good
 
 
@@ -182,12 +208,11 @@ def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name,
         # Calculate required buffers etc.
         return check_mlb_chains_values(testinst,
                                 mlb_count, mac_count,
-                                proj_yaml["outer_projection"]["PRELOAD"][0]["bus_count"],
-                                proj_yaml["inner_projection"]["PRELOAD"][0]["bus_count"],
+                                1,1,
                                 mlb_name, weight_out_name, 
                                 buffer_values, proj_yaml["stream_info"]["W"],
                                 bo_chain_len, outer_ub,
-                                bi_chain_len, inner_ub)
+                                bi_chain_len, inner_ub, proj_yaml)
     else:
         buflen = len(buffer_values)
         print(proj_yaml["outer_projection"])
@@ -207,15 +232,14 @@ def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name,
                             streams_per_buf = len(buffer_values[0][0]) / values_per_stream
                             buffer_idx = int(stream_idx // streams_per_buf)
                             buffer_stream_idx = int(stream_idx % streams_per_buf)
-                            assert(values_per_stream == 1)
                             print("Stream: " + str(stream_idx) + " -- B" + str(buffer_idx) + " values " + 
                                   str(buffer_stream_idx*values_per_stream) + " to " +
                                   str((buffer_stream_idx+1)*values_per_stream-1))
-                            check_mac_weight_values(curr_mlb, mac_count,
+                            print("Check MLB " + str(curr_mlb))
+                            check_mac_weight_values(proj_yaml, curr_mlb, 
                                 weight_out_name, buffer_values[buffer_idx],
                                 mlb_start_addr=0,
-                                i=buffer_stream_idx,
-                                bi_chain_len=bi_chain_len, ubi=inner_ub)
+                                i=buffer_stream_idx)
                             return True
         
 

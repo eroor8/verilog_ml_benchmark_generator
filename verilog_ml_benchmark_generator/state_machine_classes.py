@@ -184,7 +184,7 @@ class SM_PreloadMLBWeights(Component):
         s.rdy = OutPort(1)
         s.state = Wire(2)
         s.wen = OutPort(1)
-            
+        
         INIT, LOAD = 0, 1
         @update
         def upblk_preload_comb():
@@ -210,6 +210,7 @@ class SM_PreloadMLBWeights(Component):
                         s.wen <<= 1
                         s.rdy <<= 0
                 elif (s.state == LOAD):
+                    print([s.index_within_inner_tile, s.inner_tile_repeat_count,s.inner_tile_index, s.outer_tile_repeat_count])
                     if (s.index_within_inner_tile < (inner_tile_size - 1)):
                         s.index_within_inner_tile <<= s.index_within_inner_tile + 1
                     else:
@@ -379,21 +380,32 @@ class StateMachine(Component):
                                                      r"input_act_modules_portawe_(\d+)_top")
         
         # Preload weights into MLBs
-        s.preload_weights = SM_PreloadMLBWeights(
-            addr_width=addrw_ports[0]["width"],
-            num_outer_tiles=outer_proj["UG"]["value"],
-            outer_tile_size=outer_proj["URN"]["value"]*\
+        outer_tile_repeat_x = 1
+        num_outer_tiles = 1
+        outer_tile_size = 1
+        inner_tile_size = 1
+        inner_tile_repeat_x=1
+        if ("PRELOAD" in proj_yaml["outer_projection"]):
+            outer_tile_repeat_x = outer_proj["UB"]["value"]
+            outer_tile_size = outer_proj["URN"]["value"]*\
                             outer_proj["URW"]["value"]*\
                             outer_proj["UE"]["value"]*\
                             inner_proj["UG"]["value"]*\
                             inner_proj["URN"]["value"]*\
                             inner_proj["URW"]["value"]*\
-                            inner_proj["UE"]["value"],
+                            inner_proj["UE"]["value"]
+            num_outer_tiles= outer_proj["UG"]["value"]
             inner_tile_size=inner_proj["URN"]["value"]*\
                             inner_proj["URW"]["value"]*\
-                            inner_proj["UE"]["value"],
-            outer_tile_repeat_x=outer_proj["UB"]["value"],
-            inner_tile_repeat_x=inner_proj["UB"]["value"])
+                            inner_proj["UE"]["value"]
+            inner_tile_repeat_x=inner_proj["UB"]["value"]
+        s.preload_weights = SM_PreloadMLBWeights(
+            addr_width=addrw_ports[0]["width"],
+            num_outer_tiles=num_outer_tiles,
+            outer_tile_size=outer_tile_size,
+            inner_tile_size=inner_tile_size,
+            outer_tile_repeat_x=outer_tile_repeat_x,
+            inner_tile_repeat_x=inner_tile_repeat_x)
         s.external_a_en = InPort(1)
         s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         
@@ -770,21 +782,35 @@ class StateMachineEMIF(Component):
                                                      r"input_act_modules_portawe_(\d+)_top")
         
         # Preload weights into MLBs
-        s.preload_weights = SM_PreloadMLBWeights(
-            addr_width=addrw_ports[0]["width"],
-            num_outer_tiles=outer_proj["UG"]["value"],
-            outer_tile_size=outer_proj["URN"]["value"]*\
-                            outer_proj["URW"]["value"]*\
-                            outer_proj["UE"]["value"]*\
-                            inner_proj["UG"]["value"]*\
+        outer_tile_repeat_x = 1
+        num_outer_tiles = 1
+        inner_tile_size = 1
+        outer_tile_size = 1
+        inner_tile_repeat_x= 1
+        if ("PRELOAD" in proj_spec["inner_projection"]):
+            inner_tile_repeat_x= inner_proj["UB"]["value"]
+            inner_tile_size = inner_proj["URN"]["value"]*\
+                              inner_proj["URW"]["value"]*\
+                              inner_proj["UE"]["value"]
+            inner_tile_repeat_x= inner_proj["UB"]["value"]
+            outer_tile_size = inner_proj["UG"]["value"]*\
                             inner_proj["URN"]["value"]*\
                             inner_proj["URW"]["value"]*\
-                            inner_proj["UE"]["value"],
-            inner_tile_size=inner_proj["URN"]["value"]*\
-                            inner_proj["URW"]["value"]*\
-                            inner_proj["UE"]["value"],
-            outer_tile_repeat_x=outer_proj["UB"]["value"],
-            inner_tile_repeat_x=inner_proj["UB"]["value"])
+                            inner_proj["UE"]["value"]
+        if ("PRELOAD" in proj_spec["outer_projection"]):
+            outer_tile_repeat_x = outer_proj["UB"]["value"]
+            outer_tile_size = outer_proj["URN"]["value"]*\
+                            outer_proj["URW"]["value"]*\
+                            outer_proj["UE"]["value"]*outer_tile_size
+            num_outer_tiles= outer_proj["UG"]["value"]
+            
+        s.preload_weights = SM_PreloadMLBWeights(
+            addr_width=addrw_ports[0]["width"],
+            num_outer_tiles=num_outer_tiles,
+            outer_tile_size=outer_tile_size,
+            inner_tile_size=inner_tile_size,
+            outer_tile_repeat_x=outer_tile_repeat_x,
+            inner_tile_repeat_x=inner_tile_repeat_x)
         s.external_a_en = InPort(1)
         s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         

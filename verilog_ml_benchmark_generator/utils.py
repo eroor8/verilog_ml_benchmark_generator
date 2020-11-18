@@ -629,20 +629,51 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                           uei*inner_uw*inner_un + \
                                                           urni*inner_uw + \
                                                           urwi
-                                                w_buf_inst_idx = \
-                                                    ugo*outer_ue*outer_un*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    ueo*outer_un*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urno*outer_uw*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    urwo*inner_ug*inner_ue*inner_un*inner_uw + \
-                                                    ugi*inner_ue*inner_un*inner_uw + \
-                                                    uei*inner_un*inner_uw + \
-                                                    urni*inner_uw + \
-                                                    urwi
-                                                buffer_idx = (outer_ug*outer_ue*outer_uw*outer_un*inner_ug*\
-                                                              inner_ue*inner_un*inner_uw - w_buf_inst_idx - 1)\
-                                                              % wbuf_len
-                                                w = merge_bus(wbuf[0][buffer_idx % wbuf_len],
-                                                            projection["stream_info"]["W"])
+                                                
+                                                w_buf_inst_idx = 0
+                                                buffer_idx = 0
+                                                buffer_cnt = 0
+                                                stream_width = inner_ug*inner_ue*inner_un*inner_uw
+                                                bus_idx=0
+                                                mlb_chain_len=1
+                                                outer_chain_len=1
+                                                
+                                                if ("PRELOAD" in projection["inner_projection"]):
+                                                    mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
+                                                    w_buf_inst_idx = \
+                                                        ugi*inner_ue*inner_un*inner_uw + \
+                                                        uei*inner_un*inner_uw + \
+                                                        urni*inner_uw + \
+                                                        urwi
+                                                    buffer_idx = (outer_ug*outer_ue*outer_uw*outer_un*inner_ug*\
+                                                                  inner_ue*inner_un*inner_uw - w_buf_inst_idx - 1)\
+                                                                  % wbuf_len
+                                                    stream_width = 1
+                                                else:
+                                                    bus_idx = ugi*inner_ue*inner_un*inner_uw + \
+                                                              uei*inner_un*inner_uw + \
+                                                              urni*inner_uw + \
+                                                              urwi
+                                                if ("PRELOAD" in projection["outer_projection"]):
+                                                    w_buf_inst_idx = \
+                                                        (ugo*outer_ue*outer_un*outer_uw + \
+                                                        ueo*outer_un*outer_uw + \
+                                                        urno*outer_uw + \
+                                                        urwo)*mlb_chain_len + \
+                                                        w_buf_inst_idx
+                                                    outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
+                                                else:
+                                                    stream_idx = ugo*outer_ue*outer_un*outer_uw + \
+                                                        ueo*outer_un*outer_uw + \
+                                                        urno*outer_uw + \
+                                                        urwo
+                                                    streams_per_buffer = math.floor(len(wbuf[0][0]) / stream_width)
+                                                    buffer_cnt = math.floor(stream_idx / streams_per_buffer)
+                                                    bus_idx = stream_idx % streams_per_buffer
+                                                buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1) % wbuf_len
+
+                                                    
+                                                w = wbuf[buffer_cnt][buffer_idx % wbuf_len][bus_idx]
                                                 if ((i - urw) >= 0) and \
                                                    ((i - urw) < ibuf_len):
                                                     i_stream_idx = (outer_ub*outer_un*ugo + \

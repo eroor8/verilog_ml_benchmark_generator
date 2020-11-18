@@ -450,6 +450,7 @@ class WeightInterconnect(Component):
                 newout, newin = utils.chain_ports(s, start_idx,
                             end_idx, "inputs_from_mlb_{}",
                             "outputs_to_mlb_{}", mlb_width)
+                
                 # Then connect each chain input
                 input_bus_idx = math.floor(chain / streams_per_buffer)
                 input_bus = getattr(s, "inputs_from_buffer_" +
@@ -481,7 +482,7 @@ class WeightInterconnect(Component):
                                 newout = utils.AddOutPort(s, mlb_width,
                                                           "outputs_to_mlb_" +
                                                           str(out_idx))
-                                utils.AddInPort(s, mlb_width,
+                                newin = utils.AddInPort(s, mlb_width,
                                                 "inputs_from_mlb_" +
                                                 str(out_idx))
             
@@ -499,6 +500,13 @@ class WeightInterconnect(Component):
                                                 mlb_width_used
                                 connect(newout[0:mlb_width_used],
                                     input_bus[input_bus_start:input_bus_end])
+                
+                                # Then connect each chain output
+                                if (ub == 0):
+                                    output_bus = utils.AddOutPort(s, buffer_width,
+                                                              "outputs_to_buffer_" + str(input_bus_idx))
+                                    connect(newin[0:mlb_width_used],
+                                        output_bus[input_bus_start:input_bus_end])
 
         # Tie disconnected MLBs to 0
         for i in range(num_mlbs):

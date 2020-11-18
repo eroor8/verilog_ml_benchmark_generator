@@ -1,21 +1,21 @@
 name: "test_proj"
-outer_projection:
+inner_projection:
     URW: 
         value: 1
     URN: 
-        value: 1
+        value: 2
     UE: 
-        value: 1
+        value: 2
     UB: 
         value: 2
     UG: 
-        value: 1
+        value: 2
     PRELOAD:
     -   dtype: 'W'
         bus_count: 1
-inner_projection:
+outer_projection:
     URW: 
-        value: 6
+        value: 1
     URN: 
         value: 1
     UE: 

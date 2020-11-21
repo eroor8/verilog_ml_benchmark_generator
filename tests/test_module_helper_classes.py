@@ -106,26 +106,29 @@ def test_MAC():
     assert testinst.sum_out == 1+7*3
     
     # Test output stationary
-    testinst.acc_en @= 1
     testinst.input_en @= 0
     testinst.sim_reset()
+    testinst.sim_tick()
     assert testinst.input_out == 0
-    assert testinst.sum_out == 0
     testinst.weight_in @= 2
     testinst.input_in @= 6
+    testinst.sum_in @= 0
     testinst.input_en @= 1
     testinst.weight_en @= 1
     testinst.sim_tick()
+    assert testinst.sum_out == 12
     assert testinst.weight_out == 2
     assert testinst.input_out == 6
-    assert testinst.sum_out == 12
+    testinst.acc_en @= 1
     testinst.input_in @= 3
     testinst.weight_in @= 3
-    testinst.input_en @= 1
     testinst.sim_tick()
+    assert testinst.sum_out == 12+9+9
+    testinst.weight_in @= 1
+    testinst.input_in @= 1
+    testinst.acc_en @= 0
     assert testinst.weight_out == 3
     assert testinst.input_out == 3
-    assert testinst.sum_out == 12+9
             
 
 def test_MLB():

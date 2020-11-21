@@ -379,7 +379,7 @@ class MAC(Component):
         utils.AddInPort(s,1, "acc_en")
         utils.AddOutPort(s,sum_width, "sum_out")
         s.sum_reg = Register(sum_width, sim=sim)
-        s.sum_reg.ena //= s.acc_en
+        s.sum_reg.ena //= 1 #s.acc_en
 
         s.input_out_w = Wire(sum_width)
         s.weight_out_w = Wire(sum_width)
@@ -405,12 +405,18 @@ class MAC(Component):
                 
         @update
         def upblk0():
-            s.sum_reg.input_data @= s.sum_reg.output_data + \
-                                    s.input_in_w * s.weight_in_w
             if s.acc_en:
-                s.sum_out @= s.sum_reg.output_data
+                #print("SUM_REG <= " + str(s.sum_reg.output_data) + " + " + str(s.input_in_w * s.weight_in_w))
+                #print("    OUT <= " + str(s.sum_reg.output_data))
+                s.sum_out @= s.sum_reg.output_data + \
+                                    s.input_in_w * s.weight_in_w
+                s.sum_reg.input_data @= s.sum_reg.output_data + \
+                                    s.input_in_w * s.weight_in_w
             else:
+                #print("SUM_REG <= " + str(s.input_in_w * s.weight_in_w))
+                #print("    OUT <= " + str(s.sum_in + s.input_out_w * s.weight_out_w))
                 s.sum_out @= s.sum_in + s.input_out_w * s.weight_out_w
+                s.sum_reg.input_data @= s.input_in_w * s.weight_in_w
 
                 
 class MACWrapper(Component):

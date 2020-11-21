@@ -210,7 +210,6 @@ class SM_PreloadMLBWeights(Component):
                         s.wen <<= 1
                         s.rdy <<= 0
                 elif (s.state == LOAD):
-                    print([s.index_within_inner_tile, s.inner_tile_repeat_count,s.inner_tile_index, s.outer_tile_repeat_count])
                     if (s.index_within_inner_tile < (inner_tile_size - 1)):
                         s.index_within_inner_tile <<= s.index_within_inner_tile + 1
                     else:
@@ -238,7 +237,7 @@ class SM_PreloadMLBWeights(Component):
         utils.tie_off_clk_reset(s)
                         
 class SM_IterateThruAddresses(Component):
-    def construct(s, write_count, addr_width, initial_address=0):
+    def construct(s, write_count, addr_width, initial_address=0, skip_n=0, start_wait=0):
         if initial_address < 0:
             abs_init_val = 2**addr_width + initial_address
         else:
@@ -253,6 +252,7 @@ class SM_IterateThruAddresses(Component):
         s.rdy = OutPort(1)
         s.wen = OutPort(1)
         s.state = Wire(4)
+        s.skip_cnt = Wire(w_addr_width)
 
         @update
         def upblk_set_wenc():
@@ -262,7 +262,7 @@ class SM_IterateThruAddresses(Component):
                 s.w_address @= 0
             s.address @= s.w_address[0:addr_width]
             
-        INIT, LOAD = 0, 1
+        INIT, LOAD, START_WAIT = 0, 1, 2
         @update_ff
         def upblk_set_wen():
             if s.reset:
@@ -270,13 +270,25 @@ class SM_IterateThruAddresses(Component):
                 s.incr <<= 0
                 s.rdy <<= 1
                 s.wen <<= 0
+                s.skip_cnt <<= 0
             else:
                 if (s.state == INIT):
                     if (s.start):
-                        s.state <<= LOAD
+                        if (start_wait > 0):
+                            s.state <<= START_WAIT
+                        else:
+                            s.state <<= LOAD
                         s.rdy <<= 0
-                        s.wen <<= 1
+                        if (skip_n == 0):
+                            s.wen <<= 1
                     s.incr <<= 0
+                    s.skip_cnt <<= 1
+                elif (s.state == START_WAIT):
+                    if (s.skip_cnt >= start_wait - 1):
+                        s.state <<= LOAD
+                        s.skip_cnt <<= 0
+                    else:
+                        s.skip_cnt <<= s.skip_cnt + 1
                 elif (s.state == LOAD):
                     if (s.incr == (write_count-1)):
                         s.state <<= INIT
@@ -284,7 +296,15 @@ class SM_IterateThruAddresses(Component):
                         s.wen <<= 0
                         s.incr <<= 0
                     else:
-                        s.incr <<= s.incr + 1
+                        if s.skip_cnt >= skip_n:
+                            s.wen <<= 1
+                            s.incr <<= s.incr + 1
+                        else:
+                            s.wen <<= 0
+                    if (s.skip_cnt >= skip_n):
+                        s.skip_cnt <<= 0
+                    else:
+                        s.skip_cnt <<= s.skip_cnt + 1
         utils.tie_off_clk_reset(s)
             
 class StateMachine(Component):
@@ -385,7 +405,7 @@ class StateMachine(Component):
         outer_tile_size = 1
         inner_tile_size = 1
         inner_tile_repeat_x=1
-        if ("PRELOAD" in proj_yaml["outer_projection"]):
+        if ("PRELOAD" in proj_spec["outer_projection"]):
             outer_tile_repeat_x = outer_proj["UB"]["value"]
             outer_tile_size = outer_proj["URN"]["value"]*\
                             outer_proj["URW"]["value"]*\
@@ -407,7 +427,6 @@ class StateMachine(Component):
             outer_tile_repeat_x=outer_tile_repeat_x,
             inner_tile_repeat_x=inner_tile_repeat_x)
         s.external_a_en = InPort(1)
-        s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         
         ## Stream Inputs into MLB and read outputs into buffer
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
@@ -420,6 +439,7 @@ class StateMachine(Component):
                                                      r"wen",
                                                      s.datapath,
                                                      r"output_act_modules_portawe_(\d+)_top")
+        s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         
         # Now read the outputs out to off-chip memory       
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA', ["out"]))
@@ -681,7 +701,7 @@ class StateMachineEMIF(Component):
          :type weight_buffer_control: Component
     """
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
-                  proj_spec={}, w_address=0, i_address=0, o_address=0):
+                  proj_spec={}, w_address=0, i_address=0, o_address=0, ws=True):
         """ Constructor for Datapath
 
          :param mlb_spec: Contains information about ML block used
@@ -699,6 +719,11 @@ class StateMachineEMIF(Component):
         MAC_datatypes = ['W', 'I', 'O']
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
 
+        # Make sure that projection makes sense
+        if (ws == False):
+            assert ("PRELOAD" not in proj_spec["inner_projection"])
+            assert ("PRELOAD" not in proj_spec["outer_projection"])
+        
         # Calculate required MLB interface widths and print information
         inner_proj = proj_spec['inner_projection']
         MAC_count = utils.get_mlb_count(inner_proj)
@@ -755,6 +780,7 @@ class StateMachineEMIF(Component):
                          s.datapath.input_act_modules_portaaddr_top,
                          s.datapath.mlb_modules_a_en_top,
                          s.datapath.mlb_modules_b_en_top,
+                          s.datapath.mlb_modules_acc_en_top,
                           s.datapath.output_act_modules_portaaddr_top,
                           s.datapath.weight_datain,
                           s.datapath.input_datain
@@ -811,21 +837,34 @@ class StateMachineEMIF(Component):
             inner_tile_size=inner_tile_size,
             outer_tile_repeat_x=outer_tile_repeat_x,
             inner_tile_repeat_x=inner_tile_repeat_x)
-        s.external_a_en = InPort(1)
-        s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         
         ## Stream Inputs into MLB and read outputs into buffer
+        skip_n = proj_spec.get("temporal_projection",{}).get("URN", {}).get("value",1)
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
         obuf_len = 2**addro_ports[0]["width"]
-        s.stream_inputs = SM_IterateThruAddresses(obuf_len, addri_ports[0]["width"])
-        s.stream_outputs = SM_IterateThruAddresses(obuf_len, addri_ports[0]["width"],
+        ugt = proj_spec.get("temporal_projection",{}).get("UG",{}).get("value",obuf_len-1)+1
+        ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len-1)+1
+        s.stream_inputs = SM_IterateThruAddresses(ugt*(skip_n), addri_ports[0]["width"])
+        if (ws):
+            s.stream_outputs = SM_IterateThruAddresses(ugt*(skip_n), addri_ports[0]["width"],
                                                    initial_address=-1)
+        else:
+            s.stream_outputs = SM_IterateThruAddresses(ugt, addri_ports[0]["width"],
+                                                       initial_address=-1, skip_n=(skip_n-1),
+                                                       start_wait=0)
+        s.stream_weights = SM_IterateThruAddresses(ugt*(skip_n), addrw_ports[0]["width"],
+                                                   initial_address=0)
         s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
         connected_ins += utils.connect_ports_by_name(s.stream_outputs,
                                                      r"wen",
                                                      s.datapath,
                                                      r"output_act_modules_portawe_(\d+)_top")
+        if (ws):
+            s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
+        else:
+            s.datapath.mlb_modules_a_en_top //= s.stream_weights.wen
         
+       
         # Now read the outputs out to off-chip memory       
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA', ["out"]))
         s.external_out = OutPort(datao_ports[0]["width"])
@@ -845,12 +884,11 @@ class StateMachineEMIF(Component):
                                                      r"portadataout_(\d+)",
                                                      s.write_off_emif,
                                                      r"datain_(\d+)")   
-        #s.external_out //= s.write_off.dataout
         s.state = Wire(5)
         s.done = OutPort(1)
         INIT, LOADING_W_BUFFERS, LOADING_I_BUFFERS, LOADING_MLBS, STREAMING_MLBS, \
-            WRITE_OFFCHIP, DONE = Bits5(1),Bits5(2),Bits5(3),Bits5(4),Bits5(5), \
-                Bits5(6),Bits5(7)
+            WRITE_OFFCHIP, DONE, READ_OUT_OUTPUTS = Bits5(1),Bits5(2),Bits5(3),Bits5(4),Bits5(5), \
+                Bits5(6),Bits5(7),Bits5(8)
    
         @update_ff
         def connect_weight_address_ff():
@@ -869,9 +907,21 @@ class StateMachineEMIF(Component):
                     if s.load_ibufs_emif.rdy:
                         s.state <<= LOADING_MLBS
                 elif (s.state == LOADING_MLBS):
-                    if s.preload_weights.rdy:
-                        s.state <<= STREAMING_MLBS
+                    if (ws):
+                        if s.preload_weights.rdy:
+                            s.state <<= STREAMING_MLBS
+                    else:
+                        s.state <<= STREAMING_MLBS        
                 elif (s.state == STREAMING_MLBS):
+                    #print("WEN: " + str(s.datapath.output_act_modules.ml_block_inputs_inst_0.sim_model_inst0.wen) + " and " + str(s.datapath.output_act_modules.ml_block_inputs_inst_0.sim_model_inst0.address) + " and " + str(s.datapath.mlb_modules.ml_block_inst_0.sim_model.O_OUT))
+                    #print(s.datapath.mlb_modules.ml_block_inst_0.sim_model.O_OUT)
+                    #print(s.datapath.output_act_modules.ml_block_inputs_inst_0.sim_model_inst0.V0.dataout)
+                    #print("ACC: " + str(s.datapath.mlb_modules_acc_en_top))
+                    #print(s.stream_outputs.wen)
+                    #print(str(s.state) + " and " + str(s.stream_outputs.address) + " and " + str(s.stream_outputs.rdy))
+                    if s.stream_inputs.rdy:
+                        s.state <<= WRITE_OFFCHIP
+                elif (s.state == READ_OUT_OUTPUTS):
                     if s.stream_outputs.rdy:
                         s.state <<= WRITE_OFFCHIP
                 elif (s.state == WRITE_OFFCHIP):
@@ -880,11 +930,15 @@ class StateMachineEMIF(Component):
                         s.done <<= 1
                 elif s.state == DONE:
                     s.done <<= 1
+                s.datapath.mlb_modules_acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
                     
+     
         @update
         def connect_weight_address():
             if (s.state == LOADING_MLBS):
                 s.datapath.weight_modules_portaaddr_top @= s.preload_weights.address
+            elif (s.state == STREAMING_MLBS):
+                s.datapath.weight_modules_portaaddr_top @= s.stream_weights.address
             else:
                 s.datapath.weight_modules_portaaddr_top @= s.load_wbufs_emif.buf_address
             if (s.state == STREAMING_MLBS):
@@ -919,11 +973,19 @@ class StateMachineEMIF(Component):
             s.load_ibufs_emif.emif_readdatavalid @= s.emif_inst.readdatavalid
             s.load_ibufs_emif.emif_waitrequest @= s.emif_inst.waitrequest
             s.load_ibufs_emif.emif_readdata @= s.emif_inst.readdata
-            s.preload_weights.start @= (s.state == LOADING_I_BUFFERS) & s.load_ibufs_emif.rdy
-            s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
-            s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy 
-            s.write_off_emif.start @= (s.state == STREAMING_MLBS) & s.stream_outputs.rdy
+            if (ws):
+                s.preload_weights.start @= (s.state == LOADING_I_BUFFERS) & s.load_ibufs_emif.rdy
+                s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
+                s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
+                #s.datapath.mlb_modules_acc_en_top @= 0
+            else:
+                s.preload_weights.start @= 0
+                s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.load_ibufs_emif.rdy
+                s.stream_weights.start @= (s.state == LOADING_MLBS) & s.load_ibufs_emif.rdy
+               # s.datapath.mlb_modules_acc_en_top @= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
+                s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.load_ibufs_emif.rdy
             s.write_off_emif.emif_waitrequest @= s.emif_inst.waitrequest
+            s.write_off_emif.start @= (s.state == STREAMING_MLBS) & s.stream_inputs.rdy
         
         # Connect all inputs not otherwise connected to top
         for inst in [s.datapath, s.emif_inst]:

@@ -20,39 +20,39 @@ filesets = [# EMIF, input, MLB interface same width
             # Inner: URW3, URN2, UE1, UB2, UG2
             # Outer: URW1, URN2, UE1, UB2, UG2
               ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-               "emif_spec_0.yaml", "projection_spec_0.yaml"),
+               "emif_spec_0.yaml", "projection_spec_0.yaml", True),
             # EMIF wider than input, weight buffer
               ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-               "emif_spec_1.yaml", "projection_spec_0.yaml"),
+               "emif_spec_1.yaml", "projection_spec_0.yaml", True),
             # Input 2x as wide as MLB interface
               ("mlb_spec_0.yaml","input_spec_1.yaml", "weight_spec_0.yaml",
-               "emif_spec_1.yaml", "projection_spec_0.yaml"),
+               "emif_spec_1.yaml", "projection_spec_0.yaml", True),
             # Narrower weight buffer
               ("mlb_spec_0.yaml","input_spec_0.yaml", "weight_spec_1.yaml",
-              "emif_spec_1.yaml", "projection_spec_0.yaml"),
+              "emif_spec_1.yaml", "projection_spec_0.yaml", True),
             # Inner: URW6, URN1, UE2, UB1, UG1
             # Outer: URW1, URN1, UE1, UB2, UG1
                ("mlb_spec_1.yaml","input_spec_0.yaml", "weight_spec_0.yaml",
-                "emif_spec_0.yaml", "projection_spec_1.yaml"),
+                "emif_spec_0.yaml", "projection_spec_1.yaml", True),
             #
             # Narrower I, W, 
             # Inner: URW1, URN2, UE2, UB2, UG1
             # Outer: URW1, URN1, UE3, UB1,UG1
              ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
-                "emif_spec_1.yaml", "projection_spec_3.yaml"),
+                "emif_spec_1.yaml", "projection_spec_3.yaml", True),
             # Narrower I, W, 
             # Outer: URW1, URN2, UE2, UB2, UG1
             # Inner: URW1, URN1, UE3, UB1,UG1
                ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
-                 "emif_spec_1.yaml", "projection_spec_4.yaml"),
+                 "emif_spec_1.yaml", "projection_spec_4.yaml", True),
             # Inner: URW6, URN1, UE1, UB2, UG1
             # Outer: URW2, URN2, UE2, UB1, UG1
                ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
-                 "emif_spec_1.yaml", "projection_spec_5.yaml"),
+                 "emif_spec_1.yaml", "projection_spec_5.yaml", True),
             # Inner: All2
             # Outer: All2
                 ("mlb_spec_3.yaml","input_spec_1.yaml", "weight_spec_3.yaml",
-                  "emif_spec_1.yaml", "projection_spec_5.yaml"),
+                  "emif_spec_1.yaml", "projection_spec_5.yaml", True),
            ]  # bad: URW2, URN2
 
 def test_yaml_schemas():
@@ -117,6 +117,7 @@ def test_yaml_schemas():
         validate(instance=proj_illegal, schema=generate_modules.proj_schema)
 
 
+@pytest.mark.skip
 def test_odinify_statemachine():
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to " + \
         "location of VTR flow scripts"
@@ -158,12 +159,12 @@ def test_odinify_statemachine():
 
 
 @pytest.mark.parametrize(
-    "mlb_file,ab_file,wb_file,emif_file,proj_file", filesets
+    "mlb_file,ab_file,wb_file,emif_file,proj_file,ws", filesets
 )
 @pytest.mark.full_simulations
 @pytest.mark.skip
 def test_simulate_emif_statemachine(
-        mlb_file, ab_file, wb_file, emif_file, proj_file, v=True):
+        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True):
     
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -229,12 +230,10 @@ def test_simulate_emif_statemachine(
                                                     waddr=0,
                                                     iaddr=iaddr,
                                                     oaddr=oaddr,
+                                                    ws=ws,
                                                     validate_output=v)
-
+    print("done simulating")
     # Check that EMIFs have the right data
-    #wvalues_per_emif_word = math.ceil( \
-    #    utils.get_sum_datatype_width(wb_yaml, "DATA", ["in"]) / \
-    #    proj_yaml["stream_info"]["W"])
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, wvalues_per_buf, iaddr,
         proj_yaml["stream_info"]["W"], 0)
@@ -262,12 +261,17 @@ def test_simulate_emif_statemachine(
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
                   "ml_block_inputs_inst_{}",
                   ibuf, proj_yaml["stream_info"]["I"], testinst)
-
     # Check that the right data is in the MLBs
-    assert(check_weight_contents(
-        testinst.datapath, proj_yaml,
-        "ml_block_inst_{}", "weight_out_{}", wbuf))
+    #if (ws):
+    print("okkkk...")
+    print(testinst.datapath.mlb_modules.ml_block_inst_0.sim_model.mac_modules.input_out_0)
+    print(testinst.datapath.mlb_modules.ml_block_inst_0.sim_model.mac_modules.sum_out_0)
+    if (ws):
+        assert(check_weight_contents(
+            testinst.datapath, proj_yaml,
+            "ml_block_inst_{}", "weight_out_{}", wbuf))
 
+    print("\n\n\n\nHERE")
     obuf = [[[0 for i in range(ovalues_per_buf)]
              for i in range(obuf_len)]
              for j in range (obuf_count)]
@@ -282,16 +286,33 @@ def test_simulate_emif_statemachine(
     with open("final_offchip_data_contents.yaml") as outfile:
         outvals_yaml = yaml.safe_load(outfile)
     print(outvals_yaml)
+    print(obuf_count)
+    print(obuf_len)
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1): 
             assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
+    #assert 1==0
 
-def test_simulate_emif_statemachine_unit():
+def test_simulate_emif_statemachine_unit_ws_pl():
     test_simulate_emif_statemachine("mlb_spec_3.yaml",
                                "input_spec_1.yaml",
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
-                                    "projection_spec_5.yaml", False)
+                                    "projection_spec_5.yaml", True, False)
+    
+def test_simulate_emif_statemachine_unit_ws_bc():
+    test_simulate_emif_statemachine("mlb_spec_3.yaml",
+                               "input_spec_1.yaml",
+                               "weight_spec_3.yaml",
+                               "emif_spec_1.yaml",
+                                    "projection_spec_6.yaml", True, False)
+    
+def test_simulate_emif_statemachine_unit_os_bc():
+    test_simulate_emif_statemachine("mlb_spec_3.yaml",
+                               "input_spec_1.yaml",
+                               "weight_spec_3.yaml",
+                               "emif_spec_1.yaml",
+                               "projection_spec_7.yaml", False, False)
     
 def test_simulate_random_emif_statemachine():
 

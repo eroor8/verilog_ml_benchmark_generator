@@ -324,7 +324,7 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
 
 def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
                            projection, write_to_file, emif_spec={},
-                           waddr=0, iaddr=0, oaddr=0):
+                           waddr=0, iaddr=0, oaddr=0, ws=True):
     """ Validate input specifications, generate the datapath and then write
         resulting verilog to file ``module_name``.v
 
@@ -354,12 +354,12 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
         validate(instance=projection, schema=emif_spec)
         t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
                                                    ab_spec, emif_spec,
-                                               projection, waddr, iaddr, oaddr)
+                                                   projection, waddr, iaddr, oaddr, ws)
     return elab_and_write(t, write_to_file, module_name)
 
 def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
                            projection, write_to_file, randomize=True,
-                           oaddr=0, iaddr=0, waddr=0, validate_output=True):
+                           oaddr=0, iaddr=0, waddr=0, ws=True, validate_output=True):
     """
     Generate a Statemachine with an EMIF interface
     Fill the off-chip memory with random data (or assume initial data is
@@ -428,7 +428,7 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
     utils.print_heading("Generating pyMTL model of network and statemachine",1)
     t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
                                                ab_spec, emif_spec, projection,
-                                               w_address=0, i_address=iaddr, o_address=oaddr)
+                                               w_address=0, i_address=iaddr, o_address=oaddr, ws=ws)
     
     # Start simulation and wait for done to be asserted
     t.elaborate()

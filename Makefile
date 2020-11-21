@@ -51,16 +51,15 @@ lint: ## check style with flake8
 	flake8 verilog_ml_benchmark_generator
 
 test: ## run tests quickly with the default Python
-	pytest
+	pytest -v -m "not full_simulations"
 
-test-all: ## run tests on every Python version with tox
-	tox
+regtest:
+	pytest
 
 coverage: ## check code coverage quickly with the default Python
 	coverage run --source verilog_ml_benchmark_generator -m pytest
 	coverage report -m
 	coverage html
-	$(BROWSER) htmlcov/index.html
 
 docs: ## generate Sphinx HTML documentation, including API docs
 	rm -f docs/verilog_ml_benchmark_generator.rst

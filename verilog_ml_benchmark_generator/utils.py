@@ -603,106 +603,108 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
     outer_ue = projection["outer_projection"]["UE"]["value"]
     outer_ub = projection["outer_projection"]["UB"]["value"]
     outer_ug = projection["outer_projection"]["UG"]["value"]
-    temp_ug = projection.get("temporal_projection",{}).get("UG",{}).get("value",obuf_len)
-    temp_un = projection.get("temporal_projection",{}).get("URN",{}).get("value",1)
+    temp_ug = projection.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    temp_ub = projection.get("temporal_projection",{}).get("UB",{}).get("value", obuf_len)
+    temp_un = projection.get("temporal_projection",{}).get("URN",{}).get("value", 1)
     mlb_count = get_mlb_count(projection["outer_projection"])
     mac_count = get_mlb_count(projection["inner_projection"])
-    for i in range(temp_ug):
+    for ugt in range(temp_ug):
         for ugo in range(outer_ug): 
             for ugi in range(inner_ug):
                 for ubo in range(outer_ub): 
                     for ubi in range(inner_ub):
-                        for ueo in range(outer_ue):
-                            for uei in range(inner_ue):
-                                correct_sum = 0
-                                for urno in range(outer_un):
-                                    for urni in range(inner_un):
-                                        for urnt in range(temp_un):
-                                            for urwo in range(outer_uw):
-                                                for urwi in range(inner_uw):
-                                                    urw = urwo*inner_uw + urwi
-                                                    mlb_inst = ugo*outer_ub*outer_ue*outer_un*outer_uw + \
-                                                               ubo*outer_ue*outer_un*outer_uw + \
-                                                               ueo*outer_un*outer_uw + \
-                                                               urno*outer_uw + \
-                                                               urwo
-                                                    mac_idx = mlb_inst*mac_count + \
-                                                              ugi*inner_ub*inner_ue*inner_uw*inner_un + \
-                                                              ubi*inner_ue*inner_uw*inner_un + \
-                                                              uei*inner_uw*inner_un + \
-                                                              urni*inner_uw + \
-                                                              urwi
-                                                    
-                                                    print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx))
-                                                    w_buf_inst_idx = 0
-                                                    buffer_idx = 0
-                                                    buffer_cnt = 0
-                                                    stream_width = inner_ug*inner_ue*inner_un*inner_uw
-                                                    bus_idx=0
-                                                    mlb_chain_len=1
-                                                    outer_chain_len=1
-                                                    
-                                                    if ("PRELOAD" in projection["inner_projection"]):
-                                                        mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
-                                                        w_buf_inst_idx = \
-                                                            ugi*inner_ue*inner_un*inner_uw + \
-                                                            uei*inner_un*inner_uw + \
-                                                            urni*inner_uw + \
-                                                            urwi
-                                                        stream_width = 1
-                                                    else:
-                                                        bus_idx = ugi*inner_ue*inner_un*inner_uw + \
-                                                                  uei*inner_un*inner_uw + \
+                        for ubt in range(temp_ub):
+                            for ueo in range(outer_ue):
+                                for uei in range(inner_ue):
+                                    correct_sum = 0
+                                    for urno in range(outer_un):
+                                        for urni in range(inner_un):
+                                            for urnt in range(temp_un):
+                                                for urwo in range(outer_uw):
+                                                    for urwi in range(inner_uw):
+                                                        urw = urwo*inner_uw + urwi
+                                                        mlb_inst = ugo*outer_ub*outer_ue*outer_un*outer_uw + \
+                                                                   ubo*outer_ue*outer_un*outer_uw + \
+                                                                   ueo*outer_un*outer_uw + \
+                                                                   urno*outer_uw + \
+                                                                   urwo
+                                                        mac_idx = mlb_inst*mac_count + \
+                                                                  ugi*inner_ub*inner_ue*inner_uw*inner_un + \
+                                                                  ubi*inner_ue*inner_uw*inner_un + \
+                                                                  uei*inner_uw*inner_un + \
                                                                   urni*inner_uw + \
                                                                   urwi
-                                                        stream_width=inner_ug*inner_ue*inner_un*inner_uw
-                                                    if ("PRELOAD" in projection["outer_projection"]):
-                                                        w_buf_inst_idx = \
-                                                            (ugo*outer_ue*outer_un*outer_uw + \
-                                                            ueo*outer_un*outer_uw + \
-                                                            urno*outer_uw + \
-                                                            urwo)*mlb_chain_len + \
-                                                            w_buf_inst_idx
-                                                        outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
-                                                    else:
-                                                        stream_idx = ugo*outer_ue*outer_un*outer_uw + \
-                                                            ueo*outer_un*outer_uw + \
-                                                            urno*outer_uw + \
-                                                            urwo
-                                                        streams_per_buffer = math.floor(len(wbuf[0][0]) / stream_width)
-                                                        buffer_cnt = math.floor(stream_idx / streams_per_buffer)
-                                                        bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
-                                                    buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)
-                                                    if (temp_un > 1):
-                                                        buffer_idx += i*temp_un
-                                                    
                                                         
-                                                    w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
-                                                    print("WBuffer[" + str(buffer_cnt) + "]["+str(buffer_idx+urnt)+"][" + str(bus_idx) + "] = " + str(w))
-                                                    if ((i - urw) >= 0) and \
-                                                       ((i - urw) < ibuf_len):
-                                                        i_stream_idx = (outer_ub*outer_un*ugo + \
-                                                                        ubo*outer_un + \
-                                                                        urno)
-                                                        i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
-                                                                      (inner_ub*inner_un*ugi + \
-                                                                       ubi*inner_un + \
-                                                                       urni)
-                                                        ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
-                                                        iv_idx = i_value_idx % ivalues_per_buf
-                                                        print("IBuffer[" + str(ibuf_idx) + "]["+str(i*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(i+urnt-urw)%ibuf_len][iv_idx]))
-                                                    
-                                                        correct_sum += (ibuf[ibuf_idx][(i*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
-                                out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
-                                              ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
-                                              ueo*inner_ug*inner_ub*inner_ue + \
-                                              ugi*inner_ub*inner_ue + \
-                                              ubi*inner_ue + \
-                                              uei
-                                obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
-                                os_idx = out_act_idx % ostreams_per_buf
-                                obuf[obuf_idx][i][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
-                                print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx) + " -> " + str(obuf[obuf_idx][i][os_idx]))
+                                                        print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx))
+                                                        w_buf_inst_idx = 0
+                                                        buffer_idx = 0
+                                                        buffer_cnt = 0
+                                                        stream_width = inner_ug*inner_ue*inner_un*inner_uw
+                                                        bus_idx=0
+                                                        mlb_chain_len=1
+                                                        outer_chain_len=1
+                                                        
+                                                        if ("PRELOAD" in projection["inner_projection"]):
+                                                            mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
+                                                            w_buf_inst_idx = \
+                                                                ugi*inner_ue*inner_un*inner_uw + \
+                                                                uei*inner_un*inner_uw + \
+                                                                urni*inner_uw + \
+                                                                urwi
+                                                            stream_width = 1
+                                                        else:
+                                                            bus_idx = ugi*inner_ue*inner_un*inner_uw + \
+                                                                      uei*inner_un*inner_uw + \
+                                                                      urni*inner_uw + \
+                                                                      urwi
+                                                            stream_width=inner_ug*inner_ue*inner_un*inner_uw
+                                                        if ("PRELOAD" in projection["outer_projection"]):
+                                                            w_buf_inst_idx = \
+                                                                (ugo*outer_ue*outer_un*outer_uw + \
+                                                                ueo*outer_un*outer_uw + \
+                                                                urno*outer_uw + \
+                                                                urwo)*mlb_chain_len + \
+                                                                w_buf_inst_idx
+                                                            outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
+                                                        else:
+                                                            stream_idx = ugo*outer_ue*outer_un*outer_uw + \
+                                                                ueo*outer_un*outer_uw + \
+                                                                urno*outer_uw + \
+                                                                urwo
+                                                            streams_per_buffer = math.floor(len(wbuf[0][0]) / stream_width)
+                                                            buffer_cnt = math.floor(stream_idx / streams_per_buffer)
+                                                            bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
+                                                        buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)
+                                                        if (temp_un > 1):
+                                                            buffer_idx += ugt*temp_un
+                                                        
+                                                            
+                                                        w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
+                                                        print("WBuffer[" + str(buffer_cnt) + "]["+str(buffer_idx+urnt)+"][" + str(bus_idx) + "] = " + str(w))
+                                                        if ((ubt - urw) >= 0) and \
+                                                           ((ubt - urw) < ibuf_len):
+                                                            i_stream_idx = (outer_ub*outer_un*ugo + \
+                                                                            ubo*outer_un + \
+                                                                            urno)
+                                                            i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
+                                                                          (inner_ub*inner_un*ugi + \
+                                                                           ubi*inner_un + \
+                                                                           urni)
+                                                            ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
+                                                            iv_idx = i_value_idx % ivalues_per_buf
+                                                            print("IBuffer[" + str(ibuf_idx) + "]["+str(ugt*temp_ub*temp_un+ubt*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(ugt*temp_ub+ubt+urnt-urw)%ibuf_len][iv_idx]))
+                                                        
+                                                            correct_sum += (ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
+                                    out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                                  ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                                  ueo*inner_ug*inner_ub*inner_ue + \
+                                                  ugi*inner_ub*inner_ue + \
+                                                  ubi*inner_ue + \
+                                                  uei
+                                    obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
+                                    os_idx = out_act_idx % ostreams_per_buf
+                                    obuf[obuf_idx][ugt*temp_ub+ubt][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
+                                    print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx) + " -> " + str(obuf[obuf_idx][ugt][os_idx]))
     return obuf
 
 

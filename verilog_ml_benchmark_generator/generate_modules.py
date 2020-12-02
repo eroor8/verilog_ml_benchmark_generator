@@ -348,7 +348,7 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
     
     if (emif_spec == {}):
         # Generate the outer module containing many MLBs
-        t = state_machine_classes.StateMachine(mlb_spec, wb_spec, ab_spec,
+        t = state_machine_classes.StateMachine_old(mlb_spec, wb_spec, ab_spec,
                                                ab_spec, projection)
     else:
         validate(instance=projection, schema=emif_spec)

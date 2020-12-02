@@ -91,7 +91,7 @@ def test_StateMachineSim():
         ]
     }
     
-    sm_testinst = state_machine_classes.StateMachine(
+    sm_testinst = state_machine_classes.StateMachine_old(
         mlb_spec=mlb_spec,
         wb_spec=wb_spec,
         ib_spec=ib_spec,

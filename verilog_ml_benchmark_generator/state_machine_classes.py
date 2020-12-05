@@ -153,6 +153,9 @@ class SM_WriteOffChip(Component):
                         s.state <<= LOAD
                         s.wen <<= 1
                         s.rdy <<= 0
+                    else:
+                        s.wen <<= 0
+                        s.address <<= 0
                 elif (s.state == LOAD):
                     if (s.address == (write_count-1)):
                         s.address <<= 0
@@ -475,6 +478,10 @@ class SM_IterateThruAddresses(Component):
                         s.rdy <<= 0
                         if (skip_n == 0):
                             s.wen <<= 1
+                        else:
+                            s.wen <<= 0
+                    else:
+                        s.wen <<= 0
                     s.incr <<= 0
                     s.skip_cnt <<= 1
                 elif (s.state == START_WAIT):
@@ -940,7 +947,6 @@ class SM_WriteOffChipEMIF(Component):
                                 s.state <<= INIT
                                 s.buf_count <<= 0
                                 s.emif_write <<= 0
-                                s.emif_address <<= 0
                             else:
                                 s.buf_count <<= s.buf_count + 1
                                 s.emif_address <<= s.emif_address + 1
@@ -1101,24 +1107,25 @@ class StateMachineEMIF(Component):
         skip_n = proj_spec.get("temporal_projection",{}).get("URN", {}).get("value",1)
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
         obuf_len = 2**addro_ports[0]["width"]
-        ugt = proj_spec.get("temporal_projection",{}).get("UG",{}).get("value",0)+1
-        ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len-1)+1
-        s.ugt_cnt = Wire(max(int(math.log(ubt,2)),addrw_ports[0]["width"])+1)
+        ugt = proj_spec.get("temporal_projection",{}).get("UG",{}).get("value",1)
+        ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len)
+        s.ugt_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+1)
         if (ws):
-            s.stream_inputs = SM_IterateThruAddresses(ubt*(skip_n), addri_ports[0]["width"])
+            assert skip_n == 1
+            s.stream_inputs = SM_IterateThruAddresses(ubt*(skip_n)+1, addri_ports[0]["width"])
             s.stream_inputs.start_address //= 0
-            s.stream_outputs = SM_IterateThruAddresses(ubt*(skip_n), addri_ports[0]["width"])
+            s.stream_outputs = SM_IterateThruAddresses(ubt*(skip_n)+1, addri_ports[0]["width"])
             s.stream_outputs.start_address //= 2**addri_ports[0]["width"]-1
-            s.stream_weights = SM_IterateThruAddresses(ubt*(skip_n), addrw_ports[0]["width"])
+            s.stream_weights = SM_IterateThruAddresses(ubt*(skip_n)+1, addrw_ports[0]["width"])
             s.stream_weights.start_address //= 0
         else:
-            s.stream_inputs = SM_IterateThruAddresses(ugt*(skip_n), addri_ports[0]["width"])
+            s.stream_inputs = SM_IterateThruAddresses(ubt*ugt*(skip_n)+1, addri_ports[0]["width"])
             s.stream_inputs.start_address //= 0
-            s.stream_outputs = SM_IterateThruAddresses(ugt, addri_ports[0]["width"],
+            s.stream_outputs = SM_IterateThruAddresses(ubt*ugt+1, addri_ports[0]["width"],
                                                        skip_n=(skip_n-1),
                                                        start_wait=0)
             s.stream_outputs.start_address //= 2**addri_ports[0]["width"]-1
-            s.stream_weights = SM_IterateThruAddresses(ugt*(skip_n), addrw_ports[0]["width"])
+            s.stream_weights = SM_IterateThruAddresses(ubt*ugt*(skip_n)+1, addrw_ports[0]["width"])
             s.stream_weights.start_address //= 0
         s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
         connected_ins += utils.connect_ports_by_name(s.stream_outputs,
@@ -1187,16 +1194,14 @@ class StateMachineEMIF(Component):
                     # and stream out outputs
                     if s.stream_inputs.rdy:
                         s.state <<= WRITE_OFFCHIP
-                elif (s.state == READ_OUT_OUTPUTS):
-                    # Unused RN
-                    if s.stream_outputs.rdy:
-                        if s.ugt_cnt == ugt:
-                            s.state <<= WRITE_OFFCHIP
                 elif (s.state == WRITE_OFFCHIP):
                     # Write outputs out to EMIF
                     if s.write_off_emif.rdy:
-                        s.state <<= DONE
-                        s.done <<= 1
+                        if ws & (s.ugt_cnt < ugt):
+                            s.state <<= LOADING_MLBS
+                        else:
+                            s.state <<= DONE
+                            s.done <<= 1
                 elif s.state == DONE:
                     s.done <<= 1
                 s.datapath.mlb_modules_acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen

@@ -675,8 +675,8 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                             buffer_cnt = math.floor(stream_idx / streams_per_buffer)
                                                             bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
                                                         buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)
-                                                        if (temp_un > 1):
-                                                            buffer_idx += ugt*temp_un
+                                                        #if (temp_un > 1):
+                                                        buffer_idx += ugt*temp_un
                                                         
                                                             
                                                         w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]

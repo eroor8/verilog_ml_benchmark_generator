@@ -215,6 +215,7 @@ def test_simulate_emif_statemachine(
                      for i in range(len(inner))) \
                           for outer in ibuf for inner in outer]
     emif_data = wbuf_flat + ibuf_flat
+    print(wbuf_flat)
     oaddr = len(emif_data)
     
     emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
@@ -237,6 +238,8 @@ def test_simulate_emif_statemachine(
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, wvalues_per_buf, iaddr,
         proj_yaml["stream_info"]["W"], 0)
+    print(emif_vals)
+    print(wbuf)
     for k in range(len(wbuf)):
         for j in range(len(wbuf[k])):
             for i in range(len(wbuf[k][j])):
@@ -306,6 +309,7 @@ def test_simulate_emif_statemachine_unit_ws_bc():
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
                                     "projection_spec_6.yaml", True, False)
+    #assert 1==0
     
 def test_simulate_emif_statemachine_unit_os_bc():
     test_simulate_emif_statemachine("mlb_spec_3.yaml",
@@ -313,6 +317,7 @@ def test_simulate_emif_statemachine_unit_os_bc():
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
                                "projection_spec_7.yaml", False, False)
+    #assert 1==0
     
 def test_simulate_random_emif_statemachine():
 

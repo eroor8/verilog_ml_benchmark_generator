@@ -406,15 +406,15 @@ class MAC(Component):
         @update
         def upblk0():
             if s.acc_en:
-                #print("SUM_REG <= " + str(s.sum_reg.output_data) + " + " + str(s.input_in_w * s.weight_in_w))
-                #print("    OUT <= " + str(s.sum_reg.output_data))
+                #print("ACC SUM_REG <= " + str(int(s.sum_reg.output_data)) + " + " + str(int(s.input_in_w)) + " * " + str(int(s.weight_in_w)) + "=" + str((s.weight_in_w*s.input_in_w)) )
+                #print("ACC    OUT <= " + str(int(s.sum_reg.output_data)))
                 s.sum_out @= s.sum_reg.output_data + \
                                     s.input_in_w * s.weight_in_w
                 s.sum_reg.input_data @= s.sum_reg.output_data + \
                                     s.input_in_w * s.weight_in_w
             else:
-                #print("SUM_REG <= " + str(s.input_in_w * s.weight_in_w))
-                #print("    OUT <= " + str(s.sum_in + s.input_out_w * s.weight_out_w))
+                #print("SUM_REG <= " + str(int(s.input_in_w)) + " * " +  str(int(s.weight_in_w)) + "=" + str(int((s.weight_in_w*s.input_in_w))%(2^4))  )
+                #print("    OUT <= " + str(int(s.sum_in + s.input_out_w * s.weight_out_w)))
                 s.sum_out @= s.sum_in + s.input_out_w * s.weight_out_w
                 s.sum_reg.input_data @= s.input_in_w * s.weight_in_w
 

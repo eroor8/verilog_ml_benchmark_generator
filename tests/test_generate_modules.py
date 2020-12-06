@@ -308,7 +308,7 @@ def test_simulate_emif_statemachine_unit_ws_bc():
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
                                     "projection_spec_6.yaml", True, False)
-   # assert 1==0
+    #assert 1==0
     
 def test_simulate_emif_statemachine_unit_os_bc():
     test_simulate_emif_statemachine("mlb_spec_3.yaml",

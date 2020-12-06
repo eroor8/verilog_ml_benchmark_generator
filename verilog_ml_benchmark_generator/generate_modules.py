@@ -266,6 +266,7 @@ def odinify(filename_in):
     filedata = filedata.replace('logic', 'wire') # so far this works...
     filedata = filedata.replace('always_comb', 'always@(*)')
     filedata = filedata.replace('always_ff', 'always')
+    filedata = filedata.replace('1\'d1', '2\'d1')
     filedata = filedata.replace('{}', 'empty')
     
     # Odin can't handle wide values

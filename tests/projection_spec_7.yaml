@@ -1,15 +1,15 @@
 name: "test_proj"
 inner_projection:
     URW: 
-        value: 1
+        value: 1 # Needs to be 1?
     URN: 
-        value: 1
+        value: 1 # Needs to be 1?
     UE: 
-        value: 1
+        value: 2
     UB: 
-        value: 1
+        value: 2
     UG: 
-        value: 1
+        value: 2
 outer_projection:
     URW: 
         value: 1
@@ -23,11 +23,11 @@ outer_projection:
         value: 1
 temporal_projection:
     URN: 
-        value: 1
+        value: 3
     UE: 
-        value: 1
+        value: 2
     UB: 
-        value: 1
+        value: 2
     UG: 
         value: 2
 activation_function: 'RELU'

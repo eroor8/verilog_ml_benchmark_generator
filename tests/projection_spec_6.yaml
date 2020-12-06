@@ -3,11 +3,11 @@ inner_projection:
     URW: 
         value: 1
     URN: 
-        value: 1
+        value: 2
     UE: 
-        value: 1
+        value: 2
     UB: 
-        value: 1
+        value: 2
     UG: 
         value: 1
 outer_projection:
@@ -25,11 +25,11 @@ temporal_projection:
     URN: 
         value: 1
     UE: 
-        value: 1
+        value: 2
     UB: 
-        value: 3
+        value: 2
     UG: 
-        value: 3
+        value: 2
 activation_function: 'RELU'
 stream_info:
     W: 4

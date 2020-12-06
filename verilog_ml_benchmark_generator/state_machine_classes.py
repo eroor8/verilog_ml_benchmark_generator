@@ -222,6 +222,7 @@ class SM_PreloadMLB(Component):
         INIT, LOAD = 0, 1
         @update
         def upblk_preload_comb():
+            #print("PRELOAD addr " + str(s.start_address) + " " + str(s.address))
             s.w_start_address[0:addr_width] @= s.start_address 
             s.addr_w @= s.index_within_inner_tile + s.inner_tile_index*inner_tile_size + \
                          s.outer_tile_index*outer_tile_size + s.w_start_address
@@ -427,7 +428,7 @@ class SM_IterateThruAddresses(Component):
     # On start, do nothing for start_wait cycles.
     # assert wen, and increment address from start_address write_count times.
     # If skip_n > 0, then periodically deassert wen for skip_n cycles, assert for one.
-    def construct(s, write_count, addr_width, skip_n=0, start_wait=0, debug_name=''):
+    def construct(s, write_count, addr_width, skip_n=0, start_wait=0, debug_name='', repeat_x=1, repeat_len=1):
         """ SM_IterateThruAddresses constructor 
             :param addr_width: Width of address port
             :type addr_width: int
@@ -442,20 +443,24 @@ class SM_IterateThruAddresses(Component):
         
         s.start = InPort(1)
         s.incr = OutPort(w_addr_width)
+        s.section_incr = Wire(w_addr_width)
         s.address = OutPort(addr_width)
         s.w_address = Wire(w_addr_width)
         s.address_offset = Wire(addr_width)
         s.start_address = InPort(addr_width)
+        s.start_address_w = Wire(w_addr_width)
+        s.start_address_w[0:addr_width] //= s.start_address
         s.rdy = OutPort(1)
         s.wen = OutPort(1)
         s.state = Wire(4)
         s.skip_cnt = Wire(w_addr_width)
+        s.repeat_count = Wire(repeat_x+1)
 
         @update
         def upblk_set_wenc():
-            #print("****" + debug_name + ":" + str(s.w_address))
+            #print("****" + debug_name + ":" + str(s.section_incr) + ", " + str(s.repeat_count) + ", " + str(s.w_address))
             if (s.wen):
-                s.w_address @= s.incr + s.start_address
+                s.w_address @= s.incr + s.section_incr + s.start_address_w
             else:
                 s.w_address @= 0
             s.address @= s.w_address[0:addr_width]
@@ -465,10 +470,12 @@ class SM_IterateThruAddresses(Component):
         def upblk_set_wen():
             if s.reset:
                 s.state <<= INIT
+                s.section_incr <<= 0
                 s.incr <<= 0
                 s.rdy <<= 1
                 s.wen <<= 0
                 s.skip_cnt <<= 0
+                s.repeat_count <<= 0
             else:
                 if (s.state == INIT):
                     if (s.start):
@@ -478,14 +485,13 @@ class SM_IterateThruAddresses(Component):
                         s.state <<= LOAD
                         s.rdy <<= 0
                         if ((skip_n == 0) & (start_wait == 0)):
-                            #print(debug_name + " WEN at addr " + str(s.start_address)) 
                             s.wen <<= 1
                         else:
-                            #print(debug_name + " Skip at addr " + str(s.start_address)) 
                             s.wen <<= 0
                     else:
                         s.wen <<= 0
                     s.incr <<= 0
+                    s.section_incr <<= 0
                     s.skip_cnt <<= 1
                 elif (s.state == START_WAIT):
                     if (s.skip_cnt >= start_wait - 1):
@@ -498,15 +504,24 @@ class SM_IterateThruAddresses(Component):
                     else:
                         s.skip_cnt <<= s.skip_cnt + 1
                 elif (s.state == LOAD):
-                    if (s.incr == (write_count-1)):
+                    if ((s.incr+s.section_incr) == (write_count-1)):
                         s.state <<= INIT
                         s.rdy <<= 1
                         s.wen <<= 0
                         s.incr <<= 0
+                        s.section_incr <<= 0
                     else:
                         if s.skip_cnt >= skip_n:
                             s.wen <<= 1
-                            s.incr <<= s.incr + 1
+                            if (s.incr == repeat_len-1):
+                                if (s.repeat_count >= (repeat_x - 1)):
+                                    s.section_incr <<= s.section_incr + repeat_len
+                                    s.repeat_count <<= 0
+                                else:
+                                    s.repeat_count <<= s.repeat_count + 1
+                                s.incr <<= 0
+                            else:
+                                s.incr <<= s.incr + 1
                         else:
                             s.wen <<= 0
                     if (s.skip_cnt >= skip_n):
@@ -1111,32 +1126,40 @@ class StateMachineEMIF(Component):
             inner_tile_repeat_x=inner_tile_repeat_x)
         
         ## Stream Inputs into MLB and read outputs into buffer
-        skip_n = proj_spec.get("temporal_projection",{}).get("URN", {}).get("value",1)
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'ADDRESS', ["in"]))
         obuf_len = 2**addro_ports[0]["width"]
+        unt = proj_spec.get("temporal_projection",{}).get("URN", {}).get("value",1)
+        uet = proj_spec.get("temporal_projection",{}).get("UE",{}).get("value",1)
         ugt = proj_spec.get("temporal_projection",{}).get("UG",{}).get("value",1)
         ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len)
         s.ugt_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
+        s.uet_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
         if (ws):
-            assert skip_n == 1
-            input_count = ubt*(skip_n)
-            output_count = ubt*(skip_n)
-            weight_count = ubt*(skip_n)
+            assert unt == 1
+            input_count = ubt*(unt)
+            output_count = ubt*(unt)
+            weight_count = ubt*(unt)
+            repeat_xi = 1
+            repeat_xo = 1
+            repeat_xw = 1
             s.stream_outputs = SM_IterateThruAddresses(output_count+1, addri_ports[0]["width"], start_wait=1, debug_name="out")
         else:
-            input_count = ubt*ugt*(skip_n)
-            output_count = ubt*(skip_n)
-            weight_count = ubt*ugt*(skip_n)
-            s.stream_outputs = SM_IterateThruAddresses(ubt*ugt+1, addri_ports[0]["width"],
-                                                       skip_n=(skip_n-1),
-                                                       start_wait=1, debug_name="out")
+            input_count = ubt*ugt*(unt)
+            output_count = uet*ubt*ugt
+            weight_count = uet*ugt*(unt)
+            repeat_xi = uet
+            repeat_xo = 1
+            repeat_xw = ubt
+            s.stream_outputs = SM_IterateThruAddresses(output_count+1, addri_ports[0]["width"],
+                                                       skip_n=(unt-1),
+                                                       start_wait=1, repeat_x=repeat_xo, debug_name="out")
             
-        s.stream_inputs = SM_IterateThruAddresses(input_count+1, addri_ports[0]["width"], debug_name="in")
-        s.istart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
+        s.stream_inputs = SM_IterateThruAddresses(input_count+1, addri_ports[0]["width"], repeat_x=repeat_xi, repeat_len=unt*ubt, debug_name="in")
+        s.istart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"]) + addri_ports[0]["width"]+1)
         s.stream_inputs.start_address //= s.istart_address_wide[0:addri_ports[0]["width"]]
-        s.ostart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
-        s.stream_outputs.start_address //= s.ostart_address_wide[0:addri_ports[0]["width"]] # 2**addri_ports[0]["width"]-1
-        s.stream_weights = SM_IterateThruAddresses(weight_count+1, addrw_ports[0]["width"], debug_name="weight")
+        s.ostart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"]) + addri_ports[0]["width"]+1)
+        s.stream_outputs.start_address //= s.ostart_address_wide[0:addri_ports[0]["width"]]
+        s.stream_weights = SM_IterateThruAddresses(weight_count+1, addrw_ports[0]["width"], repeat_x=repeat_xw, repeat_len=unt,debug_name="weight")
         s.stream_weights.start_address //= 0
         s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
         connected_ins += utils.connect_ports_by_name(s.stream_outputs,
@@ -1147,6 +1170,8 @@ class StateMachineEMIF(Component):
             s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
         else:
             s.datapath.mlb_modules_a_en_top //= s.stream_weights.wen     
+        s.pstart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
+        s.preload_weights.start_address //= s.pstart_address_wide[0:addrw_ports[0]["width"]]
        
         # Now read the outputs out to off-chip memory       
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA', ["out"]))
@@ -1173,7 +1198,6 @@ class StateMachineEMIF(Component):
             WRITE_OFFCHIP, DONE, READ_OUT_OUTPUTS = Bits5(1),Bits5(2),Bits5(3),Bits5(4),Bits5(5), \
                 Bits5(6),Bits5(7),Bits5(8)
         awidth = int(addrw_ports[0]["width"])
-        s.preload_weights.start_address //= s.ugt_cnt[0:awidth]
         initial_val = 2**addri_ports[0]["width"]-1
         @update_ff
         def connect_weight_address_ff():
@@ -1181,6 +1205,7 @@ class StateMachineEMIF(Component):
                 s.state <<= INIT
                 s.done <<= 0
                 s.ugt_cnt <<= 0
+                s.uet_cnt <<= 0
                 s.istart_address_wide <<= 0
                 s.ostart_address_wide <<= initial_val
             else:
@@ -1202,10 +1227,16 @@ class StateMachineEMIF(Component):
                         if s.preload_weights.rdy:
                             #print("************************STREAM MLBS!")
                             s.state <<= STREAMING_MLBS
-                            s.ugt_cnt <<= s.ugt_cnt + 1 
+                            if (s.uet_cnt < (uet-1)):
+                                s.uet_cnt <<= s.uet_cnt + 1
+                            else:
+                                s.uet_cnt <<= 0
+                                s.ugt_cnt <<= s.ugt_cnt + 1 
+                            
                     else:
                         s.state <<= STREAMING_MLBS        
                 elif (s.state == STREAMING_MLBS):
+                    #print("ACC: " + str(s.datapath.mlb_modules_acc_en_top))
                     # Stream inputs (and weights in OS flow) into MLBs
                     # and stream out outputs
                     #print("*")
@@ -1218,7 +1249,8 @@ class StateMachineEMIF(Component):
                             #print(str(int(output_count)))
                             #print(str(int(s.ostart_address_wide)))
                             s.state <<= LOADING_MLBS
-                            s.istart_address_wide <<= s.istart_address_wide + (input_count)
+                            if (s.uet_cnt == 0):
+                                s.istart_address_wide <<= s.istart_address_wide + (input_count)
                             s.ostart_address_wide <<= s.ostart_address_wide + (output_count)
                            # s.stream_inputs.start_address <<= new_start_address[0:addri_ports[0]["width"]]
                         else:
@@ -1231,7 +1263,10 @@ class StateMachineEMIF(Component):
                         s.done <<= 1
                 elif s.state == DONE:
                     s.done <<= 1
-                s.datapath.mlb_modules_acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_inputs.wen
+                if (ws):
+                    s.datapath.mlb_modules_acc_en_top <<= 0
+                else:
+                    s.datapath.mlb_modules_acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
                     
         @update
         def connect_weight_address():
@@ -1275,6 +1310,7 @@ class StateMachineEMIF(Component):
             s.load_ibufs_emif.emif_readdata @= s.emif_inst.readdata
             if (ws):
                 s.preload_weights.start @= ((s.state == LOADING_I_BUFFERS) & s.load_ibufs_emif.rdy) | ((s.state == STREAMING_MLBS) & s.stream_inputs.rdy & (s.ugt_cnt < ugt))
+                s.pstart_address_wide @= (s.ugt_cnt*uet + s.uet_cnt)*outer_tile_size
                 s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
                 s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
                 #s.datapath.mlb_modules_acc_en_top @= 0

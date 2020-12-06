@@ -48,8 +48,6 @@ def load_buffers_sm(testinst, datain_portname, buffer_values, dwidth, outertesti
             outertestinst.sim_tick()
             datain_port @= merge_bus(buffer_values[j][i], dwidth)
             testinst.sm_start @= 0
-            #print("SM: buf[{}] = {} ({})".format(int(j),int(datain_port),buffer_values[j][i]))
-            #print("ENs: w:{} i0:{} i1:{} i2:{} i3:{} i4:{}".format(testinst.datapath.weight_modules_portawe_0_top, testinst.datapath.input_act_modules_portawe_0_top, testinst.datapath.input_act_modules_portawe_1_top, testinst.datapath.input_act_modules_portawe_2_top, testinst.datapath.input_act_modules_portawe_3_top, testinst.datapath.input_act_modules_portawe_4_top))
     outertestinst.sim_tick()
 
 def check_buffers(testinst, outer_inst, inner_inst_name, buffer_values, dwidth, outertestinst=None):
@@ -81,7 +79,6 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                             proj_yaml["inner_projection"]["URW"]["value"]
         ubi = proj_yaml["inner_projection"]["UB"]["value"]
         buflen = len(buffer_values)
-        print("MLB: " + str(curr_mlb) + " MAC_count=" + str(mac_count))
         for r in range(mac_count-1,-1,-1):
             curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
             mac_idx = mac_count-r-1
@@ -89,12 +86,6 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
             # Calculate expected buffer value
             buffer_idxi = math.floor(mac_idx/(bi_chain_len*ubi))*bi_chain_len
             buf_item_idx = (mac_idx%bi_chain_len)
-            print(mlb_start_addr)
-            print(buf_item_idx)
-            print(buffer_idxi)
-            print((mlb_start_addr + buffer_idxi + buf_item_idx))
-            print(str(r) + " ==> " + str(int(curr_out)) + " vs " +
-                  str(int(buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])))
             assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])
     else:
         print(buffer_values)
@@ -105,13 +96,12 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                         for uwi in range(proj_yaml["inner_projection"]["URW"]["value"]):
                             mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UB': ubi, 'UG': ugi, 'UE': uei, 'URW':uwi})
-                            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(mac_idx))
+                            curr_out = getattr(curr_mlb.sim_model.mac_modules,
+                                               weight_out_name.format(mac_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UG': ugi, 'UE': uei, 'URW':uwi})
-                            print("Stream: " + str(stream_idx) + " -- B values ")
-                            print([mlb_start_addr, mlb_start_addr % len(buffer_values), i, stream_idx])
-                            print (str(curr_out) + " == " + str(buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx]))
-                            assert (curr_out == buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx])
+                            assert (curr_out ==
+                                    buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx])
     return True
 
 def check_mlb_chain_values(testinst,
@@ -135,9 +125,6 @@ def check_mlb_chain_values(testinst,
             buffer_idxi = buffer_idxi*bi_chain_len*ugi
             values_per_stream = utils.get_proj_stream_count(
                                 proj_yaml["inner_projection"], 'W')
-            print(buffer_idxo + buffer_idxi)
-            print("Check MLB " + str(curr_mlb))
-            
             all_good &= check_mac_weight_values(proj_yaml, curr_mlb,
                            weight_out_name, 
                            buffer_values,
@@ -156,9 +143,9 @@ def check_mlb_chain_values(testinst,
                 buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi))
                 buffer_idxi = buffer_idxi*bi_chain_len
                 buf_item_idx = (total_mac_idx%bi_chain_len)
-                print( str(int(curr_out)) + " vs " + str(int(buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])))
                 # weight index
-                all_good &= (curr_out == buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
+                all_good &= (curr_out ==
+                             buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
 
     return all_good
 

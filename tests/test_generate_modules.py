@@ -521,7 +521,7 @@ def test_simulate_layer(
     print(layer_outputs)
     print(outvals_yaml)
     assert actual_outputs == layer_outputs
-    assert 1==0
+  #  assert 1==0
 
     
 

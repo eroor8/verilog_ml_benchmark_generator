@@ -491,10 +491,9 @@ class SM_IterateThruAddresses(Component):
                         if (start_wait > 1):
                             s.state <<= START_WAIT
                         else:
-                            if (write_count > 0):
-                                s.state <<= LOAD
+                            s.state <<= LOAD
                         s.rdy <<= 0
-                        if (((skip_n == 0) | (skip_after == 1)) & (start_wait == 0) & (write_count > 0)):
+                        if (((skip_n == 0) | (skip_after == 1)) & (start_wait == 0)):
                             s.wen <<= 1
                         else:
                             s.wen <<= 0

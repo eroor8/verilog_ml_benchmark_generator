@@ -599,13 +599,14 @@ def compute_layer(inputs, weights, layer):
     ubx = layer["image_x"] 
     uby = layer["image_y"] 
     ug = layer["group"] 
-    stride = layer["stride"]
+    stridex = layer["stridex"]
+    stridey = layer["stridey"]
     
     #inputs[group][batch][inputchan][y][x]
     #weights[group][outputchan][inputchan][y][x]
     #outputs[group][batch][outchan][y][x]
-    outputs = [[[[[0 for k in range(ubx)]  # x
-                 for i in range(uby)]      # y    
+    outputs = [[[[[0 for k in range(int(ubx/stridex))]  # x
+                 for i in range(int(uby/stridey))]      # y    
                  for j in range(ue)]       # chans
                  for l in range(ub)]       # batch
                  for t in range(ug)]       # group
@@ -613,13 +614,13 @@ def compute_layer(inputs, weights, layer):
         for ubi in range(ub): # batch
             for uei in range(ue): # out chan
                 for urci in range(urc): # in chan
-                    for ubxi in range(urx-1, int(ubx/stride)): # px x
-                        for ubyi in range(ury-1, int(uby/stride)): # px y
+                    for ubxi in range(urx-1, ubx, stridex): # px x
+                        for ubyi in range(ury-1, uby, stridey): # px y
                             for urxi in range(urx): # filter x
                                 for uryi in range(ury): # filter y
-                                    inact = inputs[ugi][ubi][urci][ubyi*stride-uryi][ubxi*stride-urxi]
+                                    inact = inputs[ugi][ubi][urci][ubyi-uryi][ubxi-urxi]
                                     weight = weights[ugi][uei][urci][uryi][urxi]
-                                    outputs[ugi][ubi][uei][ubyi-ury+1][ubxi-urx+1] += inact*weight
+                                    outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)] += inact*weight
                                     print("OUT" + str(ubxi) + "+= " + str(inact)+"*" + str(weight))
     return outputs
 

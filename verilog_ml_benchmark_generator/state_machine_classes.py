@@ -428,7 +428,7 @@ class SM_IterateThruAddresses(Component):
     # On start, do nothing for start_wait cycles.
     # assert wen, and increment address from start_address write_count times.
     # If skip_n > 0, then periodically deassert wen for skip_n cycles, assert for one.
-    def construct(s, write_count, addr_width, skip_n=0, start_wait=0, debug_name='', repeat_x=1, repeat_len=1):
+    def construct(s, write_count, addr_width, stride=1, skip_n=0, skip_after=0, start_wait=0, debug_name='', repeat_x=1, repeat_len=1):
         """ SM_IterateThruAddresses constructor 
             :param addr_width: Width of address port
             :type addr_width: int
@@ -494,7 +494,7 @@ class SM_IterateThruAddresses(Component):
                             if (write_count > 0):
                                 s.state <<= LOAD
                         s.rdy <<= 0
-                        if ((skip_n == 0) & (start_wait == 0) & (write_count > 0)):
+                        if (((skip_n == 0) | (skip_after == 1)) & (start_wait == 0) & (write_count > 0)):
                             s.wen <<= 1
                         else:
                             s.wen <<= 0
@@ -505,17 +505,21 @@ class SM_IterateThruAddresses(Component):
                     s.section_incr <<= 0
                     s.skip_cnt <<= 1
                 elif (s.state == START_WAIT):
-                    if (s.skip_cnt >= swm):
+                    if (s.skip_cnt == swm):
                         s.state <<= LOAD
-                        s.skip_cnt <<= 1
                         if (skip_n == 0):
                             s.wen <<= 1
+                            s.skip_cnt <<= 1
+                        elif (skip_after == 1):
+                            s.wen <<= 1
+                            s.skip_cnt <<= 0
                         else:
+                            s.skip_cnt <<= 1
                             s.wen <<= 0
                     else:
                         s.skip_cnt <<= s.skip_cnt + 1
                 elif (s.state == LOAD):
-                    if ((s.incr+s.section_incr) == wcm):
+                    if ((s.incr+s.section_incr) >= wcm):
                         s.state <<= INIT
                         s.rdy <<= 1
                         s.wen <<= 0
@@ -524,7 +528,7 @@ class SM_IterateThruAddresses(Component):
                     else:
                         if s.skip_cnt >= skip_n:
                             s.wen <<= 1
-                            if (s.incr == repeat_len-1):
+                            if (s.incr >= repeat_len-1):
                                 if (s.repeat_count >= (repeat_x - 1)):
                                     s.section_incr <<= s.section_incr + repeat_len
                                     s.repeat_count <<= 0
@@ -1146,6 +1150,8 @@ class StateMachineEMIF(Component):
         ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len)
         s.ugt_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
         s.uet_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
+        stridex = proj_spec.get("stride",{}).get("x",1)
+        stridey = proj_spec.get("stride",{}).get("y",1)
         if (ws):
             assert unt == 1
             input_count = ubt*(unt)
@@ -1154,7 +1160,12 @@ class StateMachineEMIF(Component):
             repeat_xi = 1
             repeat_xo = 1
             repeat_xw = 1
-            s.stream_outputs = SM_IterateThruAddresses(output_count-(urw-1), addri_ports[0]["width"], start_wait=urw+1, debug_name="out")
+            s.stream_outputs = SM_IterateThruAddresses((output_count-(urw-1))/(stridex)+(stridex-1),
+                                                       addri_ports[0]["width"],
+                                                       start_wait=urw+1,
+                                                       debug_name="out", 
+                                                       skip_n=stridex-1,
+                                                       skip_after=1)
         else:
             input_count = ubt*ugt*(unt)
             output_count = uet*ubt*ugt
@@ -1165,7 +1176,6 @@ class StateMachineEMIF(Component):
             s.stream_outputs = SM_IterateThruAddresses(output_count+1, addri_ports[0]["width"],
                                                        skip_n=(unt-1),
                                                        start_wait=1, repeat_x=repeat_xo, debug_name="out")
-            
         s.stream_inputs = SM_IterateThruAddresses(input_count+1, addri_ports[0]["width"], repeat_x=repeat_xi, repeat_len=unt*ubt, debug_name="in")
         s.istart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"]) + addri_ports[0]["width"]+1)
         s.stream_inputs.start_address //= s.istart_address_wide[0:addri_ports[0]["width"]]
@@ -1213,6 +1223,9 @@ class StateMachineEMIF(Component):
         initial_val = 2**addri_ports[0]["width"]-1
         if (ws):
             initial_val = initial_val + 1
+            #if (stridex > 1):
+            #   initial_val = initial_val - 1
+                
         @update_ff
         def connect_weight_address_ff():
             if s.reset:

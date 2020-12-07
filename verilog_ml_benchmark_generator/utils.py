@@ -588,6 +588,40 @@ def read_out_stored_values_from_array(array,
     else:
         return buffer_values + [curr_buffer]
 
+    
+
+def compute_layer(inputs, weights, layer):
+    urx = layer["filter_x"]
+    ury = layer["filter_y"]
+    urc = layer["in_chans"]
+    ue = layer["out_chans"]
+    ub = layer["batches"]
+    ubx = layer["image_x"] 
+    uby = layer["image_y"] 
+    ug = layer["group"] 
+    stride = layer["stride"]
+    
+    #inputs[group][batch][inputchan][y][x]
+    #weights[group][outputchan][inputchan][y][x]
+    #outputs[group][batch][outchan][y][x]
+    outputs = [[[[[0 for k in range(ubx)]  # x
+                 for i in range(uby)]      # y    
+                 for j in range(ue)]       # chans
+                 for l in range(ub)]       # batch
+                 for t in range(ug)]       # group
+    for ugi in range(ug): # group
+        for ubi in range(ub): # batch
+            for uei in range(ue): # out chan
+                for urci in range(urc): # in chan
+                    for ubxi in range(urx-1, int(ubx/stride)): # px x
+                        for ubyi in range(ury-1, int(uby/stride)): # px y
+                            for urxi in range(urx): # filter x
+                                for uryi in range(ury): # filter y
+                                    inact = inputs[ugi][ubi][urci][ubyi*stride-uryi][ubxi*stride-urxi]
+                                    weight = weights[ugi][uei][urci][uryi][urxi]
+                                    outputs[ugi][ubi][uei][ubyi-ury+1][ubxi-urx+1] += inact*weight
+                                    print("OUT" + str(ubxi) + "+= " + str(inact)+"*" + str(weight))
+    return outputs
 
 def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
     obuf_len = len(obuf[0])
@@ -614,7 +648,7 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
             for ugi in range(inner_ug):
                 for ubo in range(outer_ub): 
                     for ubi in range(inner_ub):
-                        for ubt in range(temp_ub):
+                        for ubt in range(outer_uw*inner_uw-1,temp_ub):
                             for ueo in range(outer_ue):
                                 for uei in range(inner_ue):
                                     for uet in range(temp_ue):
@@ -682,20 +716,18 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                                 
                                                             w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
                                                             print("WBuffer[" + str(buffer_cnt) + "]["+str(buffer_idx+urnt)+"][" + str(bus_idx) + "] = " + str(w))
-                                                            if ((ubt - urw) >= 0) and \
-                                                               ((ubt - urw) < ibuf_len):
-                                                                i_stream_idx = (outer_ub*outer_un*ugo + \
-                                                                                ubo*outer_un + \
-                                                                                urno)
-                                                                i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
-                                                                              (inner_ub*inner_un*ugi + \
-                                                                               ubi*inner_un + \
-                                                                               urni)
-                                                                ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
-                                                                iv_idx = i_value_idx % ivalues_per_buf
-                                                                print("IBuffer[" + str(ibuf_idx) + "]["+str(ugt*temp_ub*temp_un+ubt*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(ugt*temp_ub+ubt+urnt-urw)%ibuf_len][iv_idx]))
+                                                            i_stream_idx = (outer_ub*outer_un*ugo + \
+                                                                            ubo*outer_un + \
+                                                                            urno)
+                                                            i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
+                                                                          (inner_ub*inner_un*ugi + \
+                                                                           ubi*inner_un + \
+                                                                           urni)
+                                                            ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
+                                                            iv_idx = i_value_idx % ivalues_per_buf
+                                                            print("IBuffer[" + str(ibuf_idx) + "]["+str(ugt*temp_ub*temp_un+ubt*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(ugt*temp_ub+ubt+urnt-urw)%ibuf_len][iv_idx]))
                                                             
-                                                                correct_sum += (ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
+                                                            correct_sum += (ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
                                         out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
                                                       ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
                                                       ueo*inner_ug*inner_ub*inner_ue + \
@@ -704,7 +736,7 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                       uei
                                         obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
                                         os_idx = out_act_idx % ostreams_per_buf
-                                        obuf[obuf_idx][ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
+                                        obuf[obuf_idx][ugt*temp_ub*temp_ue+uet*temp_ub+ubt-outer_uw*inner_uw+1][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
                                         print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx) + " -> " + str(obuf[obuf_idx][ugt][os_idx]))
     return obuf
 

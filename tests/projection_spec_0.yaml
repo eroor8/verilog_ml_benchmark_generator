@@ -35,7 +35,7 @@ temporal_projection:
     UE: 
         value: 1
     UB: 
-        value: 1
+        value: 5
     UG: 
         value: 1
 activation_function: 'RELU'

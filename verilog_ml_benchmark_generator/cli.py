@@ -39,8 +39,12 @@ def generate_full_datapath(module_name, mlb_definition,
     wb_yaml = yaml.safe_load(weight_buffer_definition)
     ab_yaml = yaml.safe_load(act_buffer_definition)
     proj_yaml = yaml.safe_load(projection_definition)
-    generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml,
+    if type(proj_yaml) == list:
+        generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml,
                                             ab_yaml, proj_yaml, True)
+    else:
+        generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml,
+                                            ab_yaml, [proj_yaml], True)
     print("Datapath generation was successful")
     return 0
 

@@ -141,7 +141,7 @@ def test_MLB():
                                        'UG':{'value':1},
                                        "PRELOAD":[{'dtype':'W','bus_count':1}]}
     }
-    testinst = module_helper_classes.MLB(proj_legal)
+    testinst = module_helper_classes.MLB([proj_legal])
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()

@@ -119,7 +119,7 @@ class HWB_Sim(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, proj={}, sim=True):
+    def construct(s, spec={}, projs={}, sim=True):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -189,7 +189,7 @@ class HWB_Sim(Component):
                             sim_model.wen)
             elif spec["simulation_model"] == "MLB" or \
                  spec["simulation_model"] == "ML_Block":
-                assert len(proj) > 0
+                assert len(projs) > 0
                 for req_port in ["W_in", "W_out", "I_in", "I_out",
                                  "O_in", "O_out"]:
                     assert req_port in ports_by_type, \
@@ -199,42 +199,48 @@ class HWB_Sim(Component):
                         "To run simulation, you need port of type " + req_port + \
                         " in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
-                s.sim_model = module_helper_classes.MLB(proj, sim=sim)
-                
+                s.sim_model = module_helper_classes.MLB(projs, sim=sim)
                 MAC_datatypes = ['W', 'I', 'O']
-                inner_proj = proj['inner_projection']
+                inner_projs = [proj['inner_projection'] for proj in projs]
                 inner_bus_counts = {
-                    dtype: utils.get_proj_stream_count(inner_proj, dtype)
+                    dtype: [utils.get_proj_stream_count(inner_proj, dtype)
+                            for inner_proj in inner_projs]
                     for dtype in MAC_datatypes}
-                inner_bus_widths = {dtype: inner_bus_counts[dtype] *
-                    proj['stream_info'][dtype] for dtype in MAC_datatypes}
+                inner_bus_widths = {dtype: [inner_bus_count *
+                                            proj['stream_info'][dtype]
+                                            for (proj, inner_bus_count) in zip(projs, inner_bus_counts[dtype])]
+                                    for dtype in MAC_datatypes}
                 assert(ports_by_type["I_out"][0][0]['width'] == ports_by_type["I_in"][0][0]['width']), \
                     "Input and output stream widths should be equal (MLB I ports)"
                 assert(ports_by_type["W_out"][0][0]['width'] == ports_by_type["W_in"][0][0]['width']), \
                     "Input and output stream widths should be equal (MLB W ports)"
                 assert(ports_by_type["O_out"][0][0]['width'] == ports_by_type["O_in"][0][0]['width']), \
                     "Input and output stream widths should be equal (MLB O ports)"
-                assert(inner_bus_widths['W'] <= ports_by_type["W_in"][0][0]['width']),\
+                assert(max(inner_bus_widths['W']) <= ports_by_type["W_in"][0][0]['width']),\
                     "Specified MLB port width not wide enough for desired unrolling scheme"
-                assert(inner_bus_widths['I'] <= ports_by_type["I_in"][0][0]['width']), \
+                assert(max(inner_bus_widths['I']) <= ports_by_type["I_in"][0][0]['width']), \
                     "Specified MLB port width not wide enough for desired unrolling scheme"
-                assert(inner_bus_widths['O'] <= ports_by_type["O_in"][0][0]['width']), \
+                assert(max(inner_bus_widths['O']) <= ports_by_type["O_in"][0][0]['width']), \
                     "Specified MLB port width not wide enough for desired unrolling scheme"
-                connect(ports_by_type["W_in"][0][1][0:inner_bus_widths['W']],
+                connect(ports_by_type["W_in"][0][1][0:max(inner_bus_widths['W'])],
                         s.sim_model.W_IN)
                 connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
-                connect(ports_by_type["W_out"][0][1][0:inner_bus_widths['W']],
+                connect(ports_by_type["W_out"][0][1][0:max(inner_bus_widths['W'])],
                         s.sim_model.W_OUT)
-                connect(ports_by_type["I_in"][0][1][0:inner_bus_widths['I']],
+                connect(ports_by_type["I_in"][0][1][0:max(inner_bus_widths['I'])],
                         s.sim_model.I_IN)
                 connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
-                connect(ports_by_type["I_out"][0][1][0:inner_bus_widths['I']],
+                connect(ports_by_type["I_out"][0][1][0:max(inner_bus_widths['I'])],
                         s.sim_model.I_OUT)
-                connect(ports_by_type["O_in"][0][1][0:inner_bus_widths['O']],
+                connect(ports_by_type["O_in"][0][1][0:max(inner_bus_widths['O'])],
                         s.sim_model.O_IN)
                 connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
-                connect(ports_by_type["O_out"][0][1][0:inner_bus_widths['O']],
+                connect(ports_by_type["O_out"][0][1][0:max(inner_bus_widths['O'])],
                         s.sim_model.O_OUT)
+                if ("MODE_in" in ports_by_type):
+                    connect(ports_by_type["MODE_in"][0][1], s.sim_model.sel)
+                else:
+                    s.sim_model.sel //= 0
             elif spec["simulation_model"] == "EMIF":
                 for req_port in ["AVALON_ADDRESS_in", "AVALON_READDATA_out",
                                  "AVALON_WRITEDATA_in",
@@ -277,7 +283,7 @@ class HWB_Wrapper(Component):
          each instance on the top level, and named
          <instance_port_name>_<instance>. Clock and reset are common.
     """
-    def construct(s, spec={}, count=1, name="_v1", projection={}):
+    def construct(s, spec={}, count=1, name="_v1", projections={}):
         """ Constructor for HWB_Wrapper
 
          :param spec: Dictionary describing hardware block ports and
@@ -291,15 +297,17 @@ class HWB_Wrapper(Component):
         """
         # Add ports shared between instances to the top level
         for i in range(count):
-            curr_inst = HWB_Sim(spec, projection, sim=True)
+            curr_inst = HWB_Sim(spec, projections, sim=True)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
             for port in spec['ports']:
                 if ((port['type'] == 'C' or port['type'] == 'ADDRESS' or
                      port['type'] == 'W_EN' or port['type'] == 'I_EN' or
-                     port['type'] == 'ACC_EN')
+                     port['type'] == 'ACC_EN' or port['type'] == 'MODE')
                         and port["direction"] == "in"):
                     instport = getattr(curr_inst, port["name"])
+                    #if (port['type'] == 'MODE'):
+                    #    instport //= 1
                     instport //= utils.AddInPort(s,  port['width'], port["name"])
                 elif port['type'] not in ('CLK', 'RESET'):
                     if (port['direction'] == "in"):
@@ -342,16 +350,17 @@ class MergeBusses(Component):
         if (ins_per_out == 0):
             ins_per_out = math.floor(out_width/in_width)
         assert ins_per_out > 0
-        assert ins_per_out*num_outs >= num_ins, "Merge busses: Ins/out: " + \
-            str(ins_per_out) + " num_outs:" + str(num_outs) + ", num_ins:" + \
-            str(num_ins)
+        #assert ins_per_out*num_outs >= num_ins, "Merge busses: Ins/out: " + \
+        #    str(ins_per_out) + " num_outs:" + str(num_outs) + ", num_ins:" + \
+        #    str(num_ins)
+        num_ins_used = min(ins_per_out*num_outs, num_ins)
 
         # Add outputs to activation functions
         utils.add_n_inputs(s, num_ins, in_width, "input_")
         utils.add_n_outputs(s, num_outs, out_width, "output_")
 
         # Add input and output ports from each MLB
-        for inp in range(num_ins):
+        for inp in range(num_ins_used):
             bus_idx = math.floor(inp/ins_per_out)
             bus_start = (inp % ins_per_out) * in_width
             bus_end = ((inp % ins_per_out)+1) * in_width
@@ -361,7 +370,7 @@ class MergeBusses(Component):
 
         for i in range(num_outs):
             output_bus = getattr(s, "output_" + str(i))
-            if (i > math.floor(num_ins / ins_per_out)):
+            if (i > math.floor(num_ins_used / ins_per_out)):
                 output_bus //= 0
             elif ((ins_per_out*in_width < out_width)):
                 output_bus[ins_per_out * in_width:out_width] //= 0
@@ -394,7 +403,8 @@ class WeightInterconnect(Component):
          :type outputs_to_next_<i>: Outputs of chains of weights
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
-                  num_buffers=1, num_mlbs=1, projection={}, sim=False):
+                  num_buffers=1, num_mlbs=1, projection={}, sim=False,
+                  num_mlbs_used=-1):
         """ Constructor for WeightInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -421,7 +431,9 @@ class WeightInterconnect(Component):
         assert num_mlbs >= utils.get_var_product(
             projection, ['UG', 'UE', 'UB', 'URN', 'URW']), \
             "Insufficient number of MLBs"
-        
+        if (num_mlbs_used < 0):
+            num_mlbs_used = num_mlbs
+            
         preload = False
         preload_bus_count = 0
         if "PRELOAD" in projection:
@@ -443,10 +455,10 @@ class WeightInterconnect(Component):
                 num_buffers * buffer_width
             # It doesn't matter in which order they are connected if things
             # are preloaded - just connect them in chains.
-            chain_len = math.ceil(num_mlbs / num_buffers)
+            chain_len = math.ceil(num_mlbs_used / num_buffers)
             for chain in range(num_buffers):
                 start_idx = chain*chain_len
-                end_idx = min(num_mlbs-1, start_idx + chain_len - 1)
+                end_idx = min(num_mlbs_used-1, start_idx + chain_len - 1)
                 newout, newin = utils.chain_ports(s, start_idx,
                             end_idx, "inputs_from_mlb_{}",
                             "outputs_to_mlb_{}", mlb_width)
@@ -564,12 +576,20 @@ class InputInterconnect(Component):
         """
         if mlb_width < 0:
             mlb_width = mlb_width_used
+        print("Starting...")
+        print(buffer_width)
+        print(mlb_width_used)
         streams_per_buffer = math.floor(buffer_width/mlb_width_used)
         assert mlb_width_used <= mlb_width
         assert streams_per_buffer > 0, "Insufficiently wide input buffer"
         assert num_mlbs >= utils.get_var_product(projection, ['UG', 'UE', 'UB',
                                                               'URN', 'URW']), \
             "Insufficient number of MLBs"
+        print(num_buffers)
+        print(utils.get_var_product(projection, ['UG', 'UB', 'URN']) /
+                                  streams_per_buffer)
+        print(projection)
+        print(streams_per_buffer)
         assert num_buffers >= math.ceil(
             utils.get_var_product(projection, ['UG', 'UB', 'URN']) /
                                   streams_per_buffer), \
@@ -688,11 +708,12 @@ class OutputPSInterconnect(Component):
             "Insufficient number of activation functions"
 
         # Add outputs to activation functions
-        utils.add_n_outputs(s, num_afs, af_width, "outputs_to_afs_")
+        outs_to_afs = utils.add_n_outputs(s, num_afs, af_width, "outputs_to_afs_")
         if (num_input_bufs > 0):
             utils.add_n_inputs(s, num_input_bufs, input_buf_width, "ps_inputs_from_buffer_")
 
         # Add input and output ports from each MLB
+        connected_outs = []
         for ug in range(projection['UG']['value']):
             for ue in range(projection['UE']['value']):
                 for ub in range(projection['UB']['value']):
@@ -728,6 +749,7 @@ class OutputPSInterconnect(Component):
                     for out_part in range(acts_per_stream):
                         output_bus = getattr(s, "outputs_to_afs_" +
                                              str(output_bus_idx + out_part))
+                        connected_outs += [output_bus]
                         output_bus_start = out_part * af_width
                         output_bus_end = (out_part + 1) * af_width
                         connect(output_bus, newin[output_bus_start:
@@ -741,6 +763,10 @@ class OutputPSInterconnect(Component):
                 newout //= 0
             newin = utils.AddInPort(s, mlb_width, "inputs_from_mlb_" +
                                     str(i))
+        # Tie disconnected outs to 0
+        for out in outs_to_afs:
+            if (out not in connected_outs):
+                out //= 0
         utils.tie_off_clk_reset(s)
 
 
@@ -767,7 +793,7 @@ class Datapath(Component):
          :type output_interconnect: MargeBusses Component
     """
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
-                  proj_spec={}):
+                  proj_specs=[]):
         """ Constructor for Datapath
 
          :param af_width: Bit-width of activation function input
@@ -792,172 +818,229 @@ class Datapath(Component):
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
 
         # Calculate required MLB interface widths and print information
-        inner_proj = proj_spec['inner_projection']
-        MAC_count = utils.get_mlb_count(inner_proj)
-        inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
-                                                               dtype)
+        inner_projs = [proj_spec['inner_projection'] for proj_spec in proj_specs]
+        MAC_counts = [utils.get_mlb_count(inner_proj) for inner_proj in inner_projs]
+        inner_bus_counts = {dtype: [utils.get_proj_stream_count(inner_proj,
+                                 dtype) for inner_proj in inner_projs]
                             for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: proj_spec['stream_info'][dtype]
+        inner_data_widths = {dtype: [proj_spec['stream_info'][dtype] for proj_spec in proj_specs]
                              for dtype in MAC_datatypes}
-        inner_bus_widths = {dtype: inner_bus_counts[dtype] *
-                            inner_data_widths[dtype]
-                            for dtype in MAC_datatypes}
-        print(utils.print_table("ML Block Details, Projection " +
-                                proj_spec.get("name", "unnamed"),
-                                [["Num MACs", MAC_count,
-                                  "(MACs within each MLB)"],
-                                 ["bandwidth by type", inner_bus_counts,
-                                  "(number of in and output values per MLB)"],
-                                 ["data widths by type", inner_data_widths,
-                                  "(bit-width of each value)"],
-                                 ["total bus width, by type", inner_bus_widths,
-                                  "(bit-width of MLB interface)"]], il) + "\n")
+        inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
+                                 for (inner_bus_count,inner_data_width) in zip(inner_bus_counts[dtype],inner_data_widths[dtype])]
+                                 for dtype in MAC_datatypes} 
+        for (proj_spec, MAC_count, inner_bus_count, inner_data_width, inner_bus_width) in zip(proj_specs, MAC_counts, inner_bus_counts, inner_data_widths, inner_bus_widths):
+            print(utils.print_table("ML Block Details, Projection " +
+                                    proj_spec.get("name", "unnamed"),
+                                    [["Num MACs", MAC_count,
+                                      "(MACs within each MLB)"],
+                                     ["bandwidth by type", inner_bus_count,
+                                      "(number of in and output values per MLB)"],
+                                     ["data widths by type", inner_data_width,
+                                      "(bit-width of each value)"],
+                                     ["total bus width, by type", inner_bus_width,
+                                      "(bit-width of MLB interface)"]], il) + "\n")
 
         # Check that this configuration is supported by the hardware model
         assert MAC_count <= mlb_spec['MAC_info']['num_units']
         for dtype in MAC_datatypes:
-            assert inner_bus_widths[dtype] <= \
-                utils.get_sum_datatype_width(mlb_spec, dtype)
-            assert inner_data_widths[dtype] <= \
-                mlb_spec['MAC_info']['data_widths'][dtype]
+            for i in range(len(inner_bus_widths[dtype])):
+                assert inner_bus_widths[dtype][i] <= \
+                    utils.get_sum_datatype_width(mlb_spec, dtype)
+                assert inner_data_widths[dtype][i] <= \
+                    mlb_spec['MAC_info']['data_widths'][dtype]
 
         # Calculate required number of MLBs, IO streams, activations
-        outer_proj = proj_spec['outer_projection']
-        MLB_count = utils.get_mlb_count(outer_proj)
-        outer_bus_counts = {dtype: utils.get_proj_stream_count(outer_proj,
+        outer_projs = [proj_spec['outer_projection'] for proj_spec in proj_specs]
+        MLB_counts = [utils.get_mlb_count(outer_proj) for outer_proj in outer_projs]
+        outer_bus_counts = {dtype: [utils.get_proj_stream_count(outer_proj,
                                                                dtype)
+                                for outer_proj in outer_projs] for dtype in MAC_datatypes} 
+        outer_bus_widths = {dtype: [outer_bus_count * inner_bus_width
+                                 for (outer_bus_count,inner_bus_width) in zip(outer_bus_counts[dtype], inner_bus_widths[dtype])]
+                                for dtype in MAC_datatypes}
+        total_bus_counts = {dtype: [outer_bus_count * inner_bus_count
+                            for (outer_bus_count,inner_bus_count) in zip(outer_bus_counts[dtype], inner_bus_counts[dtype])]
                             for dtype in MAC_datatypes}
-        outer_bus_widths = {dtype: outer_bus_counts[dtype] *
-                            inner_bus_widths[dtype]
-                            for dtype in MAC_datatypes}
-        total_bus_counts = {dtype: outer_bus_counts[dtype] *
-                            inner_bus_counts[dtype]
-                            for dtype in MAC_datatypes}
-        buffer_counts = {dtype: utils.get_num_buffers_reqd(buffer_specs[dtype],
-                         outer_bus_counts[dtype], inner_bus_widths[dtype])
-                         for dtype in ['I', 'W']}
-        buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
-                                                        outer_bus_counts['O'] *
-                                                        inner_bus_counts['O'],
-                                                        inner_data_widths['I'])
-        print(utils.print_table("Dataflow Details, Projection " +
+        buffer_counts = {dtype: [utils.get_num_buffers_reqd(buffer_specs[dtype],
+                         outer_bus_count, inner_bus_width)
+                         for (outer_bus_count,inner_bus_width) in zip(outer_bus_counts[dtype], inner_bus_widths[dtype])] for dtype in ['I', 'W']} 
+        print(buffer_counts['I'])
+        buffer_counts['O'] = [utils.get_num_buffers_reqd(buffer_specs['O'],
+                                                        outer_bus_counto *
+                                                        inner_bus_counto,
+                                                        inner_data_widthi)
+                              for (outer_bus_counto, inner_bus_counto, inner_data_widthi) in zip(outer_bus_counts["O"],
+                                                                                                 inner_bus_counts["O"],
+                                                                                                 inner_data_widths["I"])]
+        for (proj_spec, MAC_count, outer_bus_width, total_bus_count) in zip(proj_specs, MAC_counts, outer_bus_widths, total_bus_counts):
+            print(utils.print_table("Dataflow Details, Projection " +
                                 proj_spec.get("name", "unnamed"),
                                 [["Num MLBs", MAC_count,
                                   "(Number of MLBs required for projection)"],
                                  ["total data widths by type",
-                                  outer_bus_widths,
+                                  outer_bus_width,
                                   "(total data width from buffers)"],
-                                 ["bandwidth, by type", total_bus_counts,
+                                 ["bandwidth, by type", total_bus_count,
                                   "(total # values from buffers)"],
-                                 ["# buffers, by type", buffer_counts]],
+                                 ],#["# buffers, by type", buffer_counts]],
                                   il) + "\n")
 
         # Instantiate MLBs, buffers
-        s.mlb_modules = HWB_Wrapper(mlb_spec, MLB_count,
-                                    projection=proj_spec)
+        s.sel = InPort(int(math.log(max(len(proj_specs),2),2)))
+        utils.tie_off_port(s, s.sel)
+        s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
+                                    projections=proj_specs)
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
-                                       buffer_counts['W'])
+                                       max(buffer_counts['W']))
         s.input_act_modules = HWB_Wrapper(buffer_specs['I'],
-                                          buffer_counts['I'])
+                                          max(buffer_counts['I']))
         s.output_act_modules = HWB_Wrapper(buffer_specs['O'],
-                                           buffer_counts['O'],
+                                           max(buffer_counts['O']),
                                            name='_v2')
-        s.activation_function_modules = ActivationWrapper(
-            count=total_bus_counts['O'],
-            function=utils.get_activation_function_name(proj_spec),
-            input_width=inner_data_widths['O'],
-            output_width=inner_data_widths['I'],
-            registered=False)
+        activation_function_modules = []
+        for i in range(len(proj_specs)):
+            new_act_modules = ActivationWrapper(
+                count=max(total_bus_counts['O']),
+                function=utils.get_activation_function_name(proj_specs[i]),
+                input_width=max(inner_data_widths['O']),
+                output_width=max(inner_data_widths['I']),
+                registered=False)
+            if (i > 0):
+                newname = proj_specs[i].get("name",i)
+            else:
+                newname = ""
+            activation_function_modules += [new_act_modules]
+            setattr(s,"activation_function_modules"+newname, new_act_modules)
 
         # Instantiate interconnects
-        s.weight_interconnect = WeightInterconnect(
-            buffer_width=utils.get_sum_datatype_width(buffer_specs['W'],
-                                                      'DATA', ["in"]),
-            mlb_width=utils.get_sum_datatype_width(mlb_spec, 'W', ["in"]),
-            mlb_width_used=inner_bus_widths['W'],
-            num_buffers=buffer_counts['W'],
-            num_mlbs=MLB_count,
-            projection=outer_proj)
-        s.input_interconnect = InputInterconnect(
-            buffer_width=utils.get_sum_datatype_width(buffer_specs['I'],
-                                                      'DATA', ["in"]),
-            mlb_width=utils.get_sum_datatype_width(mlb_spec, 'I', ["in"]),
-            mlb_width_used=inner_bus_widths['I'],
-            num_buffers=buffer_counts['I'],
-            num_mlbs=MLB_count,
-            projection=outer_proj)
-        s.output_ps_interconnect = OutputPSInterconnect(
-            af_width=inner_data_widths['O'],
-            mlb_width=utils.get_sum_datatype_width(mlb_spec, 'O', ["in"]),
-            mlb_width_used=inner_bus_widths['O'],
-            num_afs=total_bus_counts['O'],
-            num_mlbs=MLB_count,
-            projection=outer_proj)
-        s.output_interconnect = MergeBusses(in_width=inner_data_widths['I'],
-                                            num_ins=total_bus_counts['O'],
+        weight_interconnects = []
+        input_interconnects = []
+        output_ps_interconnects = []
+        output_interconnects = []
+        for i in range(len(proj_specs)):
+            if (i > 0):
+                newname = proj_specs[i].get("name",i)
+            else:
+                newname = ""
+            weight_interconnect = WeightInterconnect(
+                buffer_width=utils.get_sum_datatype_width(buffer_specs['W'],
+                                                          'DATA', ["in"]),
+                mlb_width=utils.get_sum_datatype_width(mlb_spec, 'W', ["in"]),
+                mlb_width_used=inner_bus_widths['W'][i],
+                num_buffers=max(buffer_counts['W']),
+                num_mlbs=max(MLB_counts),
+                projection=outer_projs[i])
+            weight_interconnects += [weight_interconnect]
+            setattr(s,"weight_interconnect"+newname, weight_interconnect)
+            input_interconnect = InputInterconnect(
+                buffer_width=utils.get_sum_datatype_width(buffer_specs['I'],
+                                                          'DATA', ["in"]),
+                mlb_width=utils.get_sum_datatype_width(mlb_spec, 'I', ["in"]),
+                mlb_width_used=inner_bus_widths['I'][i],
+                num_buffers=max(buffer_counts['I']),
+                num_mlbs=max(MLB_counts),
+                projection=outer_projs[i])
+            setattr(s,"input_interconnect"+newname, input_interconnect)
+            input_interconnects += [input_interconnect]
+            output_ps_interconnect = OutputPSInterconnect(
+                af_width=inner_data_widths['O'][i],
+                mlb_width=utils.get_sum_datatype_width(mlb_spec, 'O', ["in"]),
+                mlb_width_used=inner_bus_widths['O'][i],
+                num_afs=max(total_bus_counts['O']),
+                num_mlbs=max(MLB_counts),
+                projection=outer_projs[i])
+            output_ps_interconnects += [output_ps_interconnect]
+            setattr(s,"output_ps_interconnect"+newname, output_ps_interconnect)
+            output_interconnect = MergeBusses(in_width=inner_data_widths['I'][i],
+                                            num_ins=max(total_bus_counts['O']),
                                             out_width=utils.
                                             get_sum_datatype_width(
                                                 buffer_specs['O'], 'DATA', ["in"]),
-                                            num_outs=buffer_counts['O'])
+                                            num_outs=max(buffer_counts['O']))
+            output_interconnects += [output_interconnect]
+            setattr(s,"output_interconnect"+newname, output_interconnect)
 
-        # Connect weight interconnect
+        # Connect MLB sel
+        modeports = list(utils.get_ports_of_type(mlb_spec, 'MODE', ["in"]))
         connected_ins = []
+        if (len(modeports) > 0):
+            mlb_sel_port = getattr(s.mlb_modules, modeports[0]["name"])
+            connected_ins += [mlb_sel_port]
+            mlb_sel_port //= s.sel
+        print(len(modeports))
+        
+        # Connect weight interconnect
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["out"]):
-            connected_ins += utils.connect_ports_by_name(s.mlb_modules,
+            for i in range(len(proj_specs)):
+                weight_interconnect = weight_interconnects[i]
+                connected_ins += utils.connect_ports_by_name(s.mlb_modules,
                                                          portname["name"]+"_(\d+)",
-                                                         s.weight_interconnect,
+                                                         weight_interconnect,
                                                          "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["in"]):
-            connected_ins += utils.connect_ports_by_name(
-                s.weight_interconnect, "outputs_to_mlb_(\d+)", s.mlb_modules,
-                portname["name"]+"_(\d+)")
+            connected_ins += utils.mux_ports_by_name(s,
+                weight_interconnects, "outputs_to_mlb_(\d+)", s.mlb_modules,
+                                                     portname["name"]+"_(\d+)", insel=s.sel)
         for portname in utils.get_ports_of_type(buffer_specs['W'], 'DATA',
                                                 ["out"]):
-            connected_ins += utils.connect_ports_by_name(s.weight_modules,
+            for i in range(len(proj_specs)):
+                weight_interconnect = weight_interconnects[i]
+                connected_ins += utils.connect_ports_by_name(s.weight_modules,
                                                          portname["name"]+"_(\d+)",
-                                                         s.weight_interconnect,
+                                                         weight_interconnect,
                                                          "inputs_from_buffer_(\d+)")
 
         # Connect input interconnect
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["out"]):
-            connected_ins += utils.connect_ports_by_name(s.mlb_modules,
+            for i in range(len(proj_specs)):
+                input_interconnect = input_interconnects[i]
+                connected_ins += utils.connect_ports_by_name(s.mlb_modules,
                                                          portname["name"]+"_(\d+)",
-                                                         s.input_interconnect,
+                                                         input_interconnect,
                                                          "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["in"]):
-            connected_ins += utils.connect_ports_by_name(s.input_interconnect,
+            connected_ins += utils.mux_ports_by_name(s, input_interconnects,
                                                          "outputs_to_mlb_(\d+)",
                                                          s.mlb_modules,
-                                                         portname["name"]+"_(\d+)")
+                                                         portname["name"]+"_(\d+)", insel=s.sel)
+        
         for portname in utils.get_ports_of_type(buffer_specs['I'], 'DATA',
                                                 ["out"]):
-            connected_ins += utils.connect_ports_by_name(s.input_act_modules,
+            for i in range(len(proj_specs)):
+                input_interconnect = input_interconnects[i]
+                connected_ins += utils.connect_ports_by_name(s.input_act_modules,
                                                          portname["name"]+"_(\d+)",
-                                                         s.input_interconnect,
+                                                         input_interconnect,
                                                          "inputs_from_buffer_(\d+)")
 
         # Connect partial sum interconnect
-        for portname in utils.get_ports_of_type(mlb_spec, 'O', ["out"]):
-            connected_ins += utils.connect_ports_by_name(s.mlb_modules,
-                portname["name"]+"_(\d+)", s.output_ps_interconnect,
-                "inputs_from_mlb_(\d+)")
+        for portname in utils.get_ports_of_type(mlb_spec, 'O', ["out"]): 
+            for i in range(len(proj_specs)):
+                output_ps_interconnect = output_ps_interconnects[i]
+                connected_ins += utils.connect_ports_by_name(s.mlb_modules,
+                    portname["name"]+"_(\d+)", output_ps_interconnect,
+                    "inputs_from_mlb_(\d+)")
         for portname in utils.get_ports_of_type(mlb_spec, 'O', ["in"]):
+            connected_ins += utils.mux_ports_by_name(s,
+                output_ps_interconnects, "outputs_to_mlb_(\d+)",
+                s.mlb_modules, portname["name"]+"_(\d+)", insel=s.sel)
+    
+        for i in range(len(proj_specs)):
+            output_ps_interconnect = output_ps_interconnects[i]
+            output_interconnect = output_interconnects[i]
+            activation_functions = activation_function_modules[i]
             connected_ins += utils.connect_ports_by_name(
-                s.output_ps_interconnect, "outputs_to_mlb_(\d+)",
-                s.mlb_modules, portname["name"]+"_(\d+)")
-        connected_ins += utils.connect_ports_by_name(
-            s.output_ps_interconnect, "outputs_to_afs_(\d+)",
-            s.activation_function_modules, "activation_function_in_(\d+)")
-
-        # Connect output activations
-        connected_ins += utils.connect_ports_by_name(
-            s.activation_function_modules, "activation_function_out_(\d+)",
-            s.output_interconnect, "input_(\d+)")
+                output_ps_interconnect, "outputs_to_afs_(\d+)",
+                activation_functions, "activation_function_in_(\d+)")
+            connected_ins += utils.connect_ports_by_name(
+                activation_functions, "activation_function_out_(\d+)",
+                output_interconnect, "input_(\d+)")
+            
         for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["in"]):
-            connected_ins += utils.connect_ports_by_name(
-                s.output_interconnect, "output_(\d+)", s.output_act_modules,
-                portname["name"]+"_(\d+)")
+            connected_ins += utils.mux_ports_by_name(s,
+                output_interconnects, "output_(\d+)", s.output_act_modules,
+                portname["name"]+"_(\d+)", insel=s.sel)
 
         # Connect output buffers to top
         for port in s.output_act_modules.get_output_value_ports():
@@ -981,6 +1064,7 @@ class Datapath(Component):
                                                               port["name"])
     
         # Connect all inputs not otherwise connected to top
+        print(connected_ins)
         for inst in [s.activation_function_modules, s.mlb_modules,
                      s.mlb_modules, s.output_act_modules, s.input_act_modules,
                      s.weight_interconnect, s.output_ps_interconnect,

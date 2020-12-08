@@ -171,7 +171,7 @@ def test_StateMachineSim():
              for i in range(ovalues_per_buf)]
              for i in range(obuf_len)]
              for j in range (obuf_count)]
-    obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
+    obuf = utils.get_expected_outputs_old(obuf, ovalues_per_buf,
                                 wbuf,
                                 ibuf, ivalues_per_buf,
                                 projection)

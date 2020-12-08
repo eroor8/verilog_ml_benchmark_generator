@@ -834,7 +834,7 @@ def test_odinify():
         proj_yaml = yaml.safe_load(stream)
     outtxt = generate_modules.generate_full_datapath("test_odin", 
                                             mlb_yaml, wb_yaml,
-                                                     ab_yaml, proj_yaml, True)
+                                                     ab_yaml, [proj_yaml], True)
     with open(outfile, 'w') as file:
         file.write(outtxt[1])
     command = [VTR_FLOW_PATH, outfile, archfile,

@@ -291,13 +291,13 @@ def odinify(filename_in):
     filedata =  '\n'.join(line_list)
     
     # replace HW block component names with actual names
-    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__proj_\S*)(\s+)(.*)", r"\2\4\5",
+    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)", r"\2\4\5",
                       filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
 def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
-                           projection, write_to_file):
+                           projections, write_to_file):
     """ Validate input specifications, generate the datapath and then write
         resulting verilog to file ``module_name``.v
 
@@ -310,17 +310,18 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec, \
     :param ab_spec: Hardware definition of input buffer
     :type ab_spec: dict
     :param projection: Projection information
-    :type projection: dict
+    :type projection: list
     :param write_to_file: Whether or not to write resulting verilog to file.
     :type  write_to_file: bool
     """
     validate(instance=wb_spec, schema=buffer_spec_schema)
     validate(instance=ab_spec, schema=buffer_spec_schema)
     validate(instance=mlb_spec, schema=mlb_spec_schema)
-    validate(instance=projection, schema=proj_schema)
+    for proj in projections:
+        validate(instance=proj, schema=proj_schema)
     
     # Generate the outer module containing many MLBs
-    t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, ab_spec, projection)
+    t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, ab_spec, projections)
     return elab_and_write(t, write_to_file, module_name)
 
 def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \

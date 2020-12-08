@@ -609,7 +609,7 @@ class StateMachine_old(Component):
         connected_ins = []
         # Instantiate MLBs, buffers
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
-                                             ob_spec, proj_spec)
+                                             ob_spec, [proj_spec])
         
         # Load data into weight buffers
         s.sm_start = InPort(1)
@@ -1061,7 +1061,7 @@ class StateMachineEMIF(Component):
         
         # Instantiate MLBs, buffers, EMIF
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
-                                             ob_spec, proj_spec)
+                                             ob_spec, [proj_spec])
         s.emif_inst = module_classes.HWB_Sim(emif_spec, proj_spec, sim=True)
         connected_ins = [s.emif_inst.read, s.emif_inst.write, s.emif_inst.writedata,
                          s.emif_inst.address]

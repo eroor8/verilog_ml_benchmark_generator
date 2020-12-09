@@ -573,16 +573,16 @@ def test_multiple_Datapaths():
         ]
     }
     
+    testinst = module_classes.Datapath(
+        mlb_spec=mlb_spec,
+        wb_spec=wb_spec,
+        ib_spec=ib_spec,
+        ob_spec=ob_spec,
+        proj_specs=projections)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
     for n in [0,1]:
-        testinst = module_classes.Datapath(
-            mlb_spec=mlb_spec,
-            wb_spec=wb_spec,
-            ib_spec=ib_spec,
-            ob_spec=ob_spec,
-            proj_specs=projections)
-        testinst.elaborate()
         projection = projections[n]
-        testinst.apply(DefaultPassGroup())
         testinst.sim_reset()
         testinst.sel @= n
         

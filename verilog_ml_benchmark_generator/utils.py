@@ -452,7 +452,7 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel=
     match_dict = {}
     connected_ins = []
     connected_outs = []
-    common = None
+    common_ports = []
     for src in srcs:
         for port in src.get_output_value_ports():
             port1name = port._dsl.my_name
@@ -464,21 +464,24 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel=
                     else:
                         match_dict[str(int(foundname1.group(1))*factor1)] = [port]
                 except:
-                    common = port
+                    common_ports += [port]
                 
-    assert (len(match_dict) > 0) or common, \
+    assert (len(match_dict) > 0) or (len(common_ports) == len(srcs)), \
         "Should have found outputs with name " + \
-        name1 + " in " + str(srcs[0].get_output_value_ports()) + " and " + str(common)
+        name1 + " in " + str(srcs[0].get_output_value_ports()) + " and " + str(common_ports)
 
     for port in inst2.get_input_value_ports():
         port2name = port._dsl.my_name
         foundname2 = re.search("^" + name2+r"$", port2name)
         if foundname2:
-            assert (str(int(foundname2.group(1))*factor2) in match_dict) or common, \
-                "Should have found output with name " + name2 + " in " + \
-                str(match_dict)
-            name_to_get = str(int(foundname2.group(1))*factor2)
-            inports = match_dict.get(name_to_get, common)
+            try:
+                name_to_get = str(int(foundname2.group(1))*factor2)
+            except:
+                name_to_get = -1
+            #assert (str(int(foundname2.group(1))*factor2) in match_dict) or common, \
+            #    "Should have found output with name " + name2 + " in " + \
+            #    str(match_dict)
+            inports = match_dict.get(name_to_get, common_ports)
             muxn_inst = module_helper_classes.MUXN(port._dsl.Type.nbits, len(inports), sim=sim)
             setattr(s, port2name+"mux", muxn_inst)
             if (len(inports) < 2):
@@ -492,8 +495,8 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel=
             connect(connectport, port)
             connected_ins += [port]
             connected_outs += [connectport]
-            if (str(int(foundname2.group(1))*factor2) in match_dict):
-                del match_dict[str(int(foundname2.group(1))*factor2)]
+            if (name_to_get in match_dict):
+                del match_dict[name_to_get]
     assert len(match_dict) == 0, "Missing matches for ports " + \
         str(match_dict) + " in list " + str(inst2.get_input_value_ports())
     return connected_ins + connected_outs
@@ -543,7 +546,7 @@ def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
                 str(match_dict)
             name_to_get = str(int(foundname2.group(1))*factor2)
             connectport = match_dict.get(name_to_get, common)
-            connect(connectport, port)
+            connectport //= port
             connected_ins += [port]
             connected_outs += [connectport]
             if (str(int(foundname2.group(1))*factor2) in match_dict):
@@ -553,7 +556,7 @@ def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
     return connected_ins + connected_outs
 
 def connect_inst_ports_by_name(parent, namep, inst, namei, \
-                               factor1=1, factor2=1):
+                               factor1=1, factor2=1, parent_in=1):
     """ Connect ports named ``namei``_<#*``factor1``> on ``inst``
         to ports named ``name2``_<#*``factor2``> on the top level.
 
@@ -587,8 +590,18 @@ def connect_inst_ports_by_name(parent, namep, inst, namei, \
                                      foundname1.group(1) )
             elif namep in parent.__dict__.keys():
                 parentport = getattr(parent, namep)
-            assert(parentport)
-            connect(parentport[0:port._dsl.Type.nbits], port)
+            #assert(parentport)
+            if not (parentport):
+                if (parent_in):
+                    parentport = AddInPort(parent, port._dsl.Type.nbits, namep + "_" + \
+                                     foundname1.group(1))
+                else:
+                    parentport = AddOutPort(parent, port._dsl.Type.nbits, namep + "_" + \
+                                     foundname1.group(1))
+            if (port._dsl.Type.nbits > 1):
+                connect(parentport[0:port._dsl.Type.nbits], port)
+            else:
+                connect(parentport, port)
             connected_ins += [port]
     assert foundport, "Port " + namei + " not found in " + str(instports)
     return connected_ins
@@ -599,7 +612,6 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
     match_dict = {}
     connected_ins = []
     connected_outs = []
-    common = None
     for src in srcs:
         for port in src.get_output_value_ports():
             port1name = port._dsl.my_name
@@ -611,17 +623,17 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
                     else:
                         match_dict[str(int(foundname1.group(1))*factor1)] = [port]
                 except:
-                    common = port
+                    if "c" in match_dict:
+                        match_dict["c"] += [port]
+                    else:
+                        match_dict["c"] = [port]
                 
-    assert (len(match_dict) > 0) or common, \
+    assert (len(match_dict) > 0), \
         "Should have found outputs with name " + \
-        name1 + " in " + str(srcs[0].get_output_value_ports()) + " and " + str(common)
+        name1 + " in " + str(srcs[0].get_output_value_ports())
 
     for port in match_dict:
         parentname = name2+"_"+port
-        print(port)
-        print(name2)
-        print(parentname)
         parentport = None
         print(inst2.__dict__.keys())
         if parentname in inst2.__dict__.keys():
@@ -630,7 +642,6 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
         elif name2 in inst2.__dict__.keys():
             parentport = getattr(inst2, name2)
         assert(parentport)
-        
         inports = match_dict[port]
         muxn_inst = module_helper_classes.MUXN(parentport._dsl.Type.nbits, len(inports), sim)
         setattr(inst2, parentname+"mux", muxn_inst)

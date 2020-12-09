@@ -250,6 +250,30 @@ def remove_parameter_references(line_list):
 
     return line_list
 
+def remove_width_0_ranges(line_list):
+    """ Replace all references to parameters with their values
+        
+    :param line_list: Original file
+    :type  line_list: array of strings
+    """
+    lineidx = 0
+    localparams ={}
+    while lineidx < len(line_list):
+        line_list[lineidx] = re.sub(r"\[0:0\]",
+                                    "",
+                                    line_list[lineidx])
+        foundlp = re.search(r"\S\[(\d):(\d)\]",
+                            line_list[lineidx])
+        if foundlp:
+            if (foundlp.group(1)==foundlp.group(2)):
+                line_list[lineidx] = re.sub(r"\[" + str(foundlp.group(1)) +":" +
+                                            str(foundlp.group(1)) + "\]",
+                                    "["+ str(foundlp.group(1)) + "]",
+                                    line_list[lineidx])
+        lineidx+= 1
+
+    return line_list
+
 def odinify(filename_in):
     """ Make verilog file compatible with odin. 
         This is a bit of a hack, but necessary to run VTR
@@ -287,7 +311,8 @@ def odinify(filename_in):
     line_list = move_ios_into_module_body(line_list) 
     line_list = remove_sim_block_defs(line_list, ["sim_True"]) 
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
-    line_list = remove_parameter_references(line_list)         
+    line_list = remove_parameter_references(line_list)   
+    line_list = remove_width_0_ranges(line_list)              
     filedata =  '\n'.join(line_list)
     
     # replace HW block component names with actual names
@@ -354,7 +379,7 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, \
                                                ab_spec, projection)
     else:
         validate(instance=projection, schema=emif_spec)
-        t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
+        t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                    ab_spec, emif_spec,
                                                    projection, waddr, iaddr, oaddr, ws)
     return elab_and_write(t, write_to_file, module_name)
@@ -428,7 +453,7 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
         
     # Generate the statemachine
     utils.print_heading("Generating pyMTL model of network and statemachine",1)
-    t = state_machine_classes.StateMachineEMIF(mlb_spec, wb_spec, ab_spec,
+    t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                ab_spec, emif_spec, projection,
                                                w_address=0, i_address=iaddr, o_address=oaddr, ws=ws)
     
@@ -468,6 +493,132 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
     obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
         wbuf,
         ibuf, ivalues_per_buf, projection)
+    
+    if (validate_output):
+        utils.print_heading("Comparing final off-chip buffer contents with expected results",3)
+        print("Expected " + str(obuf))
+        print("Actual " + str(emif_vals))
+        for bufi in range(obuf_count):
+            for olen in range(min(obuf_len,ibuf_len)-1):
+                assert obuf[bufi][olen] == emif_vals[bufi*min(obuf_len,ibuf_len) + olen]  
+        print("Simulation outputs were correct.")
+            
+    return emif_vals, t
+
+def simulate_multiple_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
+                           projections, write_to_file, randomize=True,
+                                   oaddr=0, iaddr=0, waddr=0, ws=True, validate_output=True, layer_sel=0):
+    """
+    Generate a Statemachine with an EMIF interface
+    Fill the off-chip memory with random data (or assume initial data is
+    included in the spec).
+    """
+    emif_spec["simulation_model"] = "EMIF"
+    wb_spec["simulation_model"] = "Buffer"
+    ab_spec["simulation_model"] = "Buffer"
+    mlb_spec["simulation_model"] = "MLB"
+    if "inner_projection" in projections:
+        projections = [projections]
+    validate(instance=wb_spec, schema=buffer_spec_schema)
+    validate(instance=ab_spec, schema=buffer_spec_schema)
+    validate(instance=mlb_spec, schema=mlb_spec_schema)
+    for projection in projections:
+        validate(instance=projection, schema=proj_schema)
+    n = layer_sel
+    
+    # Calculate buffer counts and dimensions
+    wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
+        wb_spec, projections[n], 'W')
+    ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
+        ab_spec, projections[n], 'I')
+    ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
+        ab_spec, projections[n])
+
+    if (randomize):
+        # Fill EMIF with random data
+        utils.print_heading("Generating random data to initialize off-chip memory",0)
+        wbuf = [[[random.randint(0,(2**projections[n]["stream_info"]["W"])-1)
+                for k in range(wvalues_per_buf)]    
+                for i in range(wbuf_len)]           
+                for j in range(wbuf_count)]         
+        wbuf_flat = [sum((lambda i: inner[i] * \
+                          (2**(i*projections[n]["stream_info"]["W"])))(i)
+                         for i in range(len(inner))) 
+                     for outer in wbuf for inner in outer]
+        iaddr = len(wbuf_flat)
+        ibuf = [[[random.randint(0,(2**projections[n]["stream_info"]["I"])-1)
+                 for k in range(ivalues_per_buf)]            
+                 for i in range(ibuf_len)]                   
+                 for j in range (ibuf_count)]                
+        ibuf_flat = [sum((lambda i: inner[i] * \
+                          (2**(i*projections[n]["stream_info"]["I"])))(i)
+                         for i in range(len(inner))) 
+                     for outer in ibuf for inner in outer]
+        emif_data = wbuf_flat + ibuf_flat
+        print("\tGenerated Data: " + str(emif_data))
+        emif_spec["parameters"]["fill"] = emif_data
+        oaddr = len(emif_data)
+    else:
+        wbuf = utils.read_out_stored_values_from_array(
+            emif_spec["parameters"]["fill"],
+            wvalues_per_buf,
+            wbuf_len*wbuf_count,
+            projections[n]["stream_info"]["W"],
+            waddr,
+            wbuf_len
+            )
+        ibuf = utils.read_out_stored_values_from_array(
+            emif_spec["parameters"]["fill"],
+            ivalues_per_buf,
+            ibuf_len*ibuf_count,
+            projections[n]["stream_info"]["I"],
+            iaddr,
+            ibuf_len
+            )
+        
+    # Generate the statemachine
+    utils.print_heading("Generating pyMTL model of network and statemachine",1)
+    t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
+                                               ab_spec, emif_spec, projections,
+                                               w_address=0, i_address=iaddr, o_address=oaddr, ws=ws)
+    
+    # Start simulation and wait for done to be asserted
+    t.elaborate()
+    t.apply(DefaultPassGroup())
+    
+    utils.print_heading("Begin cycle accurate simulation",2)
+    t.sim_reset()
+    t.sel @= n
+    t.sm_start @= 1
+    t.sim_tick()
+    t.sm_start @= 0
+    for i in range(2000):
+        if (t.done):
+            print("Simulation complete (done asserted)")
+            break
+        t.sim_tick()
+    t.sim_tick()
+    assert(t.done)
+    
+    for i in range(20): # Just make sure that the EMIF finishes reading in data...
+        t.sim_tick()
+
+    emif_vals = utils.read_out_stored_values_from_emif(t.emif_inst.sim_model.buf,
+                                                 ovalues_per_buf,
+                                                 min(obuf_len,ibuf_len)*obuf_count,
+                                                 projections[n]["stream_info"]["I"],
+                                                 oaddr)
+    if (write_to_file):
+        with open("final_offchip_data_contents.yaml", 'w') as file:
+            yaml.dump(emif_vals, file, default_flow_style=False)
+
+    # Check that the outputs are right!
+    obuf = [[[0 for i in range(ovalues_per_buf)]
+         for i in range(obuf_len)]
+         for j in range (obuf_count)]
+    obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
+        wbuf,
+                                      ibuf, ivalues_per_buf, projections[n])
     
     if (validate_output):
         utils.print_heading("Comparing final off-chip buffer contents with expected results",3)

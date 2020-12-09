@@ -18,55 +18,6 @@ import utils
 import module_classes
 import random
 
-#class MUXN(Component):
-#    def construct(s, input_widths):
-#        assert(len(input_widths)>0)
-#        for i in range(len(input_widths)):
-#            utils.AddInPort(s, input_widths[i], "in"+str(i))
-#        utils.AddOutPort(s, max(input_widths), "out")
-#        if (len(input_widths) > 1):
-#            utils.AddInPort(s, math.log(len(input_widths),2), "sel")
-#            @update
-#            def upblk_set_wen0():
-#                if (s.sel == 0):
-#                    s.vout @= s.cv
-#                else:
-#                    s.vout @= s.vin
-#        else:
-#            @update
-#            def upblk_set_wen1():
-#                s.out @= s.in0
-#        utils.AddOutPort(s, 1, "we") 
-#        utils.tie_off_clk_reset(s)
-#        for wb in range(buffer_count):
-#            new_sel = SM_InputSel(datawidth, int(math.log(buffer_count,2)), wb)
-#            setattr(s, "insel{}".format(wb), new_sel)
-#            if (buffer_count > 1):
-#                new_sel.buffer_count //= s.buf_count
-#            new_sel.cv //= getattr(s, "datain_{}".format(wb))
-#            if (wb == 0):
-#                new_sel.vin //= 0
-#            else:
-#                last_sel = getattr(s, "insel{}".format(wb-1))
-#                new_sel.vin //= last_sel.vout
-#            if (wb == buffer_count - 1):
-#                s.dataout //= new_sel.vout
-#
-class MUX2(Component):
-    def construct(s, input_width, sim=False):
-        assert(len(input_widths)==2)
-        utils.AddInPort(s, input_width, "in0")
-        utils.AddInPort(s, input_width, "in1")
-        utils.AddOutPort(s, max(input_widths), "out")
-        utils.AddInPort(s, 1, "sel")
-        @update
-        def upblk_set_wen0():
-            if (s.sel == 0):
-                s.out @= s.in0
-            else:
-                s.out @= s.in1
-        utils.tie_off_clk_reset(s)
-
 class MUXN(Component):
     def construct(s, input_width, input_count, sim=False):
         assert(input_width>0)

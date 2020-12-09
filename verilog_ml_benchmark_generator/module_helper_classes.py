@@ -482,10 +482,11 @@ class MLB(Component):
         """
         if ["inner_projection"] in proj_specs:
             proj_specs = [proj_specs]
-        proj_spec = proj_specs[0]
+        #proj_spec = proj_specs[0]
         MAC_datatypes = ['W', 'I', 'O']
 
         # Calculate required MLB interface widths and print information
+        #proj_specs = [proj_specs[1],proj_specs[1]]
         projs = [proj_spec["inner_projection"] for proj_spec in proj_specs]
         MAC_counts = [utils.get_mlb_count(proj) for proj in projs]
         bus_counts = {dtype: [utils.get_proj_stream_count(proj, dtype)

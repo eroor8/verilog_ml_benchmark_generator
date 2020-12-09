@@ -11,6 +11,10 @@ ports:
         width: 1
         direction: "in"
         type: "W_EN"
+    -   name: config_in
+        width: 1
+        direction: "in"
+        type: "MODE"
     -   name: b_en
         width: 1
         direction: "in"

@@ -22,7 +22,7 @@ supported_activations=["RELU"]
 datatype_mlb = ["I","O","W","C","CLK","RESET", "I_EN", "W_EN", "ACC_EN", "WEN"]
 datatype_emif = ["AVALON_ADDRESS", "AVALON_READ", "AVALON_WRITE",
                  "AVALON_READDATA", "AVALON_WRITEDATA", "AVALON_READDATAVALID",
-                 "AVALON_WAITREQUEST"]
+                 "AVALON_WAITREQUEST", "MODE"]
 datatype_buffer = ["ADDRESS", "DATA"]
 datatype_any = datatype_mlb+datatype_buffer+datatype_emif
 port_schema = {
@@ -507,7 +507,7 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
 
 def simulate_multiple_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
                            projections, write_to_file, randomize=True,
-                                   oaddr=0, iaddr=0, waddr=0, ws=True, validate_output=True, layer_sel=0):
+                                   oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True, validate_output=True, layer_sel=[]):
     """
     Generate a Statemachine with an EMIF interface
     Fill the off-chip memory with random data (or assume initial data is
@@ -524,109 +524,111 @@ def simulate_multiple_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif
     validate(instance=mlb_spec, schema=mlb_spec_schema)
     for projection in projections:
         validate(instance=projection, schema=proj_schema)
-    n = layer_sel
-    
-    # Calculate buffer counts and dimensions
-    wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
-        wb_spec, projections[n], 'W')
-    ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
-        ab_spec, projections[n], 'I')
-    ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
-        ab_spec, projections[n])
 
-    if (randomize):
-        # Fill EMIF with random data
-        utils.print_heading("Generating random data to initialize off-chip memory",0)
-        wbuf = [[[random.randint(0,(2**projections[n]["stream_info"]["W"])-1)
-                for k in range(wvalues_per_buf)]    
-                for i in range(wbuf_len)]           
-                for j in range(wbuf_count)]         
-        wbuf_flat = [sum((lambda i: inner[i] * \
-                          (2**(i*projections[n]["stream_info"]["W"])))(i)
-                         for i in range(len(inner))) 
-                     for outer in wbuf for inner in outer]
-        iaddr = len(wbuf_flat)
-        ibuf = [[[random.randint(0,(2**projections[n]["stream_info"]["I"])-1)
-                 for k in range(ivalues_per_buf)]            
-                 for i in range(ibuf_len)]                   
-                 for j in range (ibuf_count)]                
-        ibuf_flat = [sum((lambda i: inner[i] * \
-                          (2**(i*projections[n]["stream_info"]["I"])))(i)
-                         for i in range(len(inner))) 
-                     for outer in ibuf for inner in outer]
-        emif_data = wbuf_flat + ibuf_flat
-        print("\tGenerated Data: " + str(emif_data))
-        emif_spec["parameters"]["fill"] = emif_data
-        oaddr = len(emif_data)
-    else:
-        wbuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"],
-            wvalues_per_buf,
-            wbuf_len*wbuf_count,
-            projections[n]["stream_info"]["W"],
-            waddr,
-            wbuf_len
-            )
-        ibuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"],
-            ivalues_per_buf,
-            ibuf_len*ibuf_count,
-            projections[n]["stream_info"]["I"],
-            iaddr,
-            ibuf_len
-            )
-        
     # Generate the statemachine
     utils.print_heading("Generating pyMTL model of network and statemachine",1)
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                ab_spec, emif_spec, projections,
-                                               w_address=0, i_address=iaddr, o_address=oaddr, ws=ws)
-    
-    # Start simulation and wait for done to be asserted
+                                               w_address=waddrs, i_address=iaddrs, o_address=oaddrs, ws=ws)
     t.elaborate()
     t.apply(DefaultPassGroup())
+    output_vals = [[] for l in range(max(layer_sel)+1)]
+    for n in layer_sel:
+        # Calculate buffer counts and dimensions
+        wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
+            wb_spec, projections[n], 'W')
+        ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
+            ab_spec, projections[n], 'I')
+        ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
+            ab_spec, projections[n])
+        
+        if (randomize):
+            assert(len(layer_sel)==1)
+            # Fill EMIF with random data
+            utils.print_heading("Generating random data to initialize off-chip memory",0)
+            wbuf = [[[random.randint(0,(2**projections[n]["stream_info"]["W"])-1)
+                    for k in range(wvalues_per_buf)]    
+                    for i in range(wbuf_len)]           
+                    for j in range(wbuf_count)]         
+            wbuf_flat = [sum((lambda i: inner[i] * \
+                              (2**(i*projections[n]["stream_info"]["W"])))(i)
+                             for i in range(len(inner))) 
+                         for outer in wbuf for inner in outer]
+            iaddr = len(wbuf_flat)
+            ibuf = [[[random.randint(0,(2**projections[n]["stream_info"]["I"])-1)
+                     for k in range(ivalues_per_buf)]            
+                     for i in range(ibuf_len)]                   
+                     for j in range (ibuf_count)]                
+            ibuf_flat = [sum((lambda i: inner[i] * \
+                              (2**(i*projections[n]["stream_info"]["I"])))(i)
+                             for i in range(len(inner))) 
+                         for outer in ibuf for inner in outer]
+            emif_data = wbuf_flat + ibuf_flat
+            print("\tGenerated Data: " + str(emif_data))
+            emif_spec["parameters"]["fill"] = emif_data
+            oaddr = len(emif_data)
+        else:
+            wbuf = utils.read_out_stored_values_from_array(
+                emif_spec["parameters"]["fill"],
+                wvalues_per_buf,
+                wbuf_len*wbuf_count,
+                projections[n]["stream_info"]["W"],
+                waddrs[n],
+                wbuf_len
+                )
+            ibuf = utils.read_out_stored_values_from_array(
+                emif_spec["parameters"]["fill"],
+                ivalues_per_buf,
+                ibuf_len*ibuf_count,
+                projections[n]["stream_info"]["I"],
+                iaddrs[n],
+                ibuf_len
+                )
     
-    utils.print_heading("Begin cycle accurate simulation",2)
-    t.sim_reset()
-    t.sel @= n
-    t.sm_start @= 1
-    t.sim_tick()
-    t.sm_start @= 0
-    for i in range(2000):
-        if (t.done):
-            print("Simulation complete (done asserted)")
-            break
+        # Start simulation and wait for done to be asserted
+        utils.print_heading("Begin cycle accurate simulation",2)
+        t.sim_reset()
+        t.sel @= n
+        t.sm_start @= 1
         t.sim_tick()
-    t.sim_tick()
-    assert(t.done)
+        t.sm_start @= 0
+        for i in range(2000):
+            if (t.done):
+                print("Simulation complete (done asserted)")
+                break
+            t.sim_tick()
+        t.sim_tick()
+        assert(t.done)
     
-    for i in range(20): # Just make sure that the EMIF finishes reading in data...
-        t.sim_tick()
+        for i in range(20): # Just make sure that the EMIF finishes reading in data...
+            t.sim_tick()
 
-    emif_vals = utils.read_out_stored_values_from_emif(t.emif_inst.sim_model.buf,
+        emif_vals = utils.read_out_stored_values_from_emif(t.emif_inst.sim_model.buf,
                                                  ovalues_per_buf,
                                                  min(obuf_len,ibuf_len)*obuf_count,
                                                  projections[n]["stream_info"]["I"],
-                                                 oaddr)
+                                                 oaddrs[n])
+        output_vals[n] = emif_vals
+        # Check that the outputs are right!
+        obuf = [[[0 for i in range(ovalues_per_buf)]
+             for i in range(obuf_len)]
+             for j in range (obuf_count)]
+        obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
+            wbuf,
+                                          ibuf, ivalues_per_buf, projections[n])
+        if (validate_output):
+            utils.print_heading("Comparing final off-chip buffer contents with expected results",3)
+            print("Expected " + str(obuf))
+            print("Actual " + str(emif_vals))
+            for bufi in range(obuf_count):
+                for olen in range(min(obuf_len,ibuf_len)-1):
+                    assert obuf[bufi][olen] == emif_vals[bufi*min(obuf_len,ibuf_len) + olen]  
+            print("Simulation outputs were correct.")
+        
     if (write_to_file):
         with open("final_offchip_data_contents.yaml", 'w') as file:
-            yaml.dump(emif_vals, file, default_flow_style=False)
+            yaml.dump(output_vals, file, default_flow_style=False)
 
-    # Check that the outputs are right!
-    obuf = [[[0 for i in range(ovalues_per_buf)]
-         for i in range(obuf_len)]
-         for j in range (obuf_count)]
-    obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
-        wbuf,
-                                      ibuf, ivalues_per_buf, projections[n])
     
-    if (validate_output):
-        utils.print_heading("Comparing final off-chip buffer contents with expected results",3)
-        print("Expected " + str(obuf))
-        print("Actual " + str(emif_vals))
-        for bufi in range(obuf_count):
-            for olen in range(min(obuf_len,ibuf_len)-1):
-                assert obuf[bufi][olen] == emif_vals[bufi*min(obuf_len,ibuf_len) + olen]  
-        print("Simulation outputs were correct.")
             
-    return emif_vals, t
+    return output_vals, t

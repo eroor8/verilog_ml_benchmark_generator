@@ -576,20 +576,12 @@ class InputInterconnect(Component):
         """
         if mlb_width < 0:
             mlb_width = mlb_width_used
-        print("Starting...")
-        print(buffer_width)
-        print(mlb_width_used)
         streams_per_buffer = math.floor(buffer_width/mlb_width_used)
         assert mlb_width_used <= mlb_width
         assert streams_per_buffer > 0, "Insufficiently wide input buffer"
         assert num_mlbs >= utils.get_var_product(projection, ['UG', 'UE', 'UB',
                                                               'URN', 'URW']), \
             "Insufficient number of MLBs"
-        print(num_buffers)
-        print(utils.get_var_product(projection, ['UG', 'UB', 'URN']) /
-                                  streams_per_buffer)
-        print(projection)
-        print(streams_per_buffer)
         assert num_buffers >= math.ceil(
             utils.get_var_product(projection, ['UG', 'UB', 'URN']) /
                                   streams_per_buffer), \
@@ -864,7 +856,6 @@ class Datapath(Component):
         buffer_counts = {dtype: [utils.get_num_buffers_reqd(buffer_specs[dtype],
                          outer_bus_count, inner_bus_width)
                          for (outer_bus_count,inner_bus_width) in zip(outer_bus_counts[dtype], inner_bus_widths[dtype])] for dtype in ['I', 'W']} 
-        print(buffer_counts['I'])
         buffer_counts['O'] = [utils.get_num_buffers_reqd(buffer_specs['O'],
                                                         outer_bus_counto *
                                                         inner_bus_counto,
@@ -872,6 +863,7 @@ class Datapath(Component):
                               for (outer_bus_counto, inner_bus_counto, inner_data_widthi) in zip(outer_bus_counts["O"],
                                                                                                  inner_bus_counts["O"],
                                                                                                  inner_data_widths["I"])]
+        
         for (proj_spec, MAC_count, outer_bus_width, total_bus_count) in zip(proj_specs, MAC_counts, outer_bus_widths, total_bus_counts):
             print(utils.print_table("Dataflow Details, Projection " +
                                 proj_spec.get("name", "unnamed"),
@@ -967,7 +959,6 @@ class Datapath(Component):
             mlb_sel_port = getattr(s.mlb_modules, modeports[0]["name"])
             connected_ins += [mlb_sel_port]
             mlb_sel_port //= s.sel
-        print(len(modeports))
         
         # Connect weight interconnect
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["out"]):
@@ -1064,7 +1055,6 @@ class Datapath(Component):
                                                               port["name"])
     
         # Connect all inputs not otherwise connected to top
-        print(connected_ins)
         for inst in [s.activation_function_modules, s.mlb_modules,
                      s.mlb_modules, s.output_act_modules, s.input_act_modules,
                      s.weight_interconnect, s.output_ps_interconnect,

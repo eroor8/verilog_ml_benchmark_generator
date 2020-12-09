@@ -1,8 +1,8 @@
 -   name: "test4"
     inner_projection:
         URW: 
-            value: 2
-            x: 2
+            value: 1
+            x: 1
             y: 1
         URN: 
             value: 1
@@ -10,12 +10,12 @@
             y: 1
             chans: 1
         UE: 
-            value: 2
-        UB: 
             value: 1
+        UB: 
+            value: 3
             x: 1
             y: 1
-            batches: 1
+            batches: 3
         UG: 
             value: 1
     outer_projection:
@@ -31,12 +31,12 @@
         UE: 
             value: 1
         UB: 
-            value: 1
+            value: 3
             x: 1
             y: 1
-            batches: 1
+            batches: 3
         UG: 
-            value: 2
+            value: 1
     temporal_projection:
         URN: # 0 for ws
             value: 1
@@ -44,7 +44,7 @@
             y: 1
             chans: 1
         UE: 
-            value: 1
+            value: 2
         UB: 
             value: 4
             x: 4
@@ -63,8 +63,8 @@
 -   name: "test2"
     inner_projection:
         URW: 
-            value: 1
-            x: 1
+            value: 2
+            x: 2
             y: 1
         URN: 
             value: 1
@@ -72,24 +72,24 @@
             y: 1
             chans: 1
         UE: 
-            value: 1
+            value: 2
         UB: 
             value: 1
             x: 1
             y: 1
             batches: 1
         UG: 
-            value: 1
+            value: 2
     outer_projection:
         URW: 
             value: 1
             x: 1
             y: 1
         URN: 
-            value: 1
+            value: 2
             x: 1
             y: 1
-            chans: 1
+            chans: 2
         UE: 
             value: 1
         UB: 

@@ -501,13 +501,13 @@ def test_multiple_Datapaths():
                   "stream_info": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'value':1},'URW':{'value':4},
-                                       'UB':{'value':2},'UE':{'value':1},
+                  "inner_projection": {'URN':{'value':1},'URW':{'value':1},
+                                       'UB':{'value':1},'UE':{'value':1},
                                        'UG':{'value':1},
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':2},'URW':{'value':1},
+                  "outer_projection": {'URN':{'value':1},'URW':{'value':1},
                                        'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':2},
+                                       'UG':{'value':1},
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]
                   }
                   },
@@ -517,11 +517,11 @@ def test_multiple_Datapaths():
                                   "I": 4,
                                   "O": 16},
                   "inner_projection": {'URN':{'value':1},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':3},
+                                       'UB':{'value':1},'UE':{'value':2},
                                        'UG':{'value':2},
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':3},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':2},
+                  "outer_projection": {'URN':{'value':1},'URW':{'value':1},
+                                       'UB':{'value':1},'UE':{'value':1},
                                        'UG':{'value':1},
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
                   }]
@@ -705,4 +705,4 @@ def test_multiple_Datapaths():
         for bufi in range(obuf_count):
             for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1): 
                 assert obuf[bufi][olen] == obuf_results[bufi][olen]
-    #assert(1==0)
+#    assert(1==0)

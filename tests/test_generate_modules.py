@@ -190,10 +190,15 @@ def test_simulate_multiple_layers(
     wbufs_flat=[]
     wbufs=[]
     ibufs_flat=[]
+    obufs_flat=[]
     ibufs=[]
     layer_outputs=[]
     waddrs = []
     iaddrs = []
+    oaddrs = []
+    weights = []
+    inputs = []
+    #proj_yamls = [proj_yamls[1], proj_yamls[0]]
     for py_i in range(len(proj_yamls)):
         proj_yaml=proj_yamls[py_i]
         # Calculate buffer dimensions info
@@ -270,19 +275,19 @@ def test_simulate_multiple_layers(
         print(layer)
         
         # Create random input data arrays to load into EMIF
-        weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+        weights += [[[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
                        for k in range(layer["filter_x"])]    # x
                        for i in range(layer["filter_y"])]    # y    
                        for j in range(layer["in_chans"])]    # ichans
                        for l in range(layer["out_chans"])]   # ochans
-                       for t in range(layer["group"])]       # group
-        inputs = [[[[[random.randint(0,4) #(2**proj_yaml["stream_info"]["I"])-1)
+                       for t in range(layer["group"])]]       # group
+        inputs += [[[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["I"])-1)
                        for k in range(layer["image_x"])]     # x
                        for i in range(layer["image_y"])]     # y    
                        for j in range(layer["in_chans"])]    # chans
                        for l in range(layer["batches"])]     # batch
-                       for t in range(layer["group"])]       # group
-        layer_outputs_i = utils.compute_layer(inputs, weights, layer)
+                       for t in range(layer["group"])]]       # group
+        layer_outputs_i = utils.compute_layer(inputs[py_i], weights[py_i], layer)
         layer_outputs_i = [[[[[layer_outputs_i[t][l][j][i][k]%(2**proj_yaml["stream_info"]["I"])
                              for k in range(len(layer_outputs_i[t][l][j][i]))]  # x
                              for i in range(len(layer_outputs_i[t][l][j]))]      # y    
@@ -318,7 +323,7 @@ def test_simulate_multiple_layers(
                                                                                     urno = urnox*outer_uny + urnoy + urnoc*outer_unx*outer_uny
                                                                                     urni = urnix*inner_uny + urniy + urnic*inner_unx*inner_uny 
                                                                                     urnt = urntx*temp_uny  + urnty + urntc*temp_unx*temp_uny
-                                                                                    w = weights[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                    w = weights[py_i][ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                                                [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
                                                                                                [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
                                                                                                [urwoy*inner_uwy+urwiy]\
@@ -384,7 +389,7 @@ def test_simulate_multiple_layers(
                                                         for urnoc in range(outer_unc):
                                                             for urnic in range(inner_unc):
                                                                 for urntc in range(temp_unc):
-                                                                    i = inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                    i = inputs[py_i][ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                               [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
                                                                               [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
                                                                               [ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy]\
@@ -419,13 +424,44 @@ def test_simulate_multiple_layers(
                     (2**(i*proj_yaml["stream_info"]["I"])))(i) \
                          for i in range(len(inner))) \
                               for outer in ibuf for inner in outer]
+        oaddrs += [len(obufs_flat)]
+        obuf =  [[[0 for k in range(ivalues_per_buf)] 
+                 for i in range(ibuf_len)]                  
+                 for j in range (ibuf_count)]  
+        obufs_flat += [sum((lambda i: inner[i] * \
+                    (2**(i*proj_yaml["stream_info"]["I"])))(i) \
+                         for i in range(len(inner))) \
+                              for outer in obuf for inner in outer]            
         
     waddrs += [len(wbufs_flat)]
     iaddrs += [len(ibufs_flat)]
     for i in range(len(iaddrs)):
         iaddrs[i] += len(wbufs_flat)
+    for i in range(len(oaddrs)):
+        oaddrs[i] += len(ibufs_flat) + len(wbufs_flat)
     emif_data = wbufs_flat + ibufs_flat
     oaddr = len(emif_data)
+    emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
+    print(waddrs)
+    print(iaddrs)
+    print(oaddrs)
+    print("start sim")
+    outvals, testinst = generate_modules.simulate_multiple_statemachine(
+        module_name="test_odin_emif_sm", 
+        mlb_spec=mlb_yaml,
+        wb_spec=wb_yaml,
+        ab_spec=ab_yaml,
+        emif_spec=emif_yaml,
+        projections=proj_yamls,
+        write_to_file=True,
+        randomize=False,
+        waddrs=waddrs,
+        iaddrs=iaddrs,
+        oaddrs=oaddrs,
+        ws=ws,
+        validate_output=v,
+        layer_sel=range(len(proj_yamls)))
+    print("done simulating") 
     
     for py_i in range(len(proj_yamls)):
         proj_yaml=proj_yamls[py_i]
@@ -488,23 +524,6 @@ def test_simulate_multiple_layers(
         stridex = proj_yaml.get("stride",{}).get("x",1)
         stridey = proj_yaml.get("stride",{}).get("y",1)
         
-        emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
-        outvals, testinst = generate_modules.simulate_multiple_statemachine(
-            module_name="test_odin_emif_sm", 
-            mlb_spec=mlb_yaml,
-            wb_spec=wb_yaml,
-            ab_spec=ab_yaml,
-            emif_spec=emif_yaml,
-            projections=proj_yamls,
-            write_to_file=True,
-            randomize=False,
-            waddr=waddrs[py_i],
-            iaddr=iaddrs[py_i],
-            oaddr=oaddr,
-            ws=ws,
-            validate_output=v,
-            layer_sel=py_i)
-        print("done simulating") 
         emif_vals = utils.read_out_stored_values_from_emif(
             testinst.emif_inst.sim_model.buf, wvalues_per_buf, waddrs[py_i+1]-waddrs[py_i],
             proj_yaml["stream_info"]["W"], waddrs[py_i])
@@ -515,7 +534,7 @@ def test_simulate_multiple_layers(
                     assert emif_vals[k*len(wbufs[py_i][k])+j][i] == wbufs[py_i][k][j][i]
                     
         emif_vals = utils.read_out_stored_values_from_emif(
-            testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddr-iaddrs[py_i],
+            testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddrs[py_i]-iaddrs[py_i],
             proj_yaml["stream_info"]["I"], iaddrs[py_i])
         print("\n\nCOMPARE")
         print(emif_vals)
@@ -569,10 +588,13 @@ def test_simulate_multiple_layers(
                                                                     max_ubx = outer_ubx*inner_ubx*temp_ubx
                                                                     max_un = inner_uwx*outer_uwx*inner_unx*outer_unx*temp_unx*inner_uwy*outer_uwy*inner_unx*outer_unx*temp_uny
                                                                     if (ubx <= (max_ubx - max_un)/stridex):
-                                                                        print("ACTUAL_OUTPUTS")
-                                                                        print(layer_outputs)
+                                                                        print("ACTUAL_OUTPUTS" + str(py_i))
+                                                                        print(outvals_yaml)
                                                                         print(actual_outputs)
-                                                                        correct_val = outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]                                                           
+                                                                        print(outvals_yaml[py_i])
+                                                                        print(outvals_yaml[py_i][obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt])
+                                                                        print(outvals_yaml[py_i][obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]    )
+                                                                        correct_val = outvals_yaml[py_i][obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]                                                           
                                                                         actual_outputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                             [ubb]\
                                                                             [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
@@ -583,19 +605,25 @@ def test_simulate_multiple_layers(
         #                                                            print("->" + str(outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]))
         print(layer)
         print("Weights")
-        print(weights)
-        print(wbufs)
+        print(weights[py_i])
+        print(wbufs[py_i])
         print("Inputs")
-        print(inputs)
-        print(ibufs)
+        print(inputs[py_i])
+        print(ibufs[py_i])
         print(layer_outputs[py_i])
         print(actual_outputs)
         print(layer_outputs[py_i])
         print(outvals_yaml)
-        assert actual_outputs == layer_outputs[py_i]
+        print("LAYER" + str(py_i))
+        print(waddrs)
+        print(iaddrs)
+        print(oaddrs)
         print(layer_outputs)
-        if (py_i == 1):
-            assert 1==0
+        print("OUTVALS")
+        print(outvals_yaml)
+        assert actual_outputs == layer_outputs[py_i]
+        #if (py_i == 1):
+        #    assert 1==0
   
 @pytest.mark.parametrize(
     "mlb_file,ab_file,wb_file,emif_file,proj_file,ws", filesets
@@ -701,7 +729,7 @@ def test_simulate_layer(
     print(layer)
 
     # Create random input data arrays to load into EMIF
-    weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+    weights = [[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans

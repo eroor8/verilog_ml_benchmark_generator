@@ -742,7 +742,6 @@ class StateMachine_old(Component):
             s.stream_inputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy
             s.stream_outputs.start @= (s.state == LOADING_MLBS) & s.preload_weights.rdy 
             s.write_off.start @= (s.state == STREAMING_MLBS) & s.stream_outputs.rdy
-        printi(il,connected_ins)
         
         # Connect all inputs not otherwise connected to top
         for inst in [s.datapath]:
@@ -863,7 +862,7 @@ class SM_LoadBufsEMIF(Component):
                         if (s.emif_address < (startaddr+write_count*buffer_count-1)):
                             s.emif_address <<= s.emif_address + 1
                         else:
-                            s.emif_address <<= 0
+                            s.emif_address <<= startaddr
                             s.emif_read <<= 0
                     if (s.emif_readdatavalid == 1):
                         s.buf_writedata <<= s.emif_readdata[0:datawidth]
@@ -1647,7 +1646,6 @@ class StateMachineEMIFSeparate(Component):
                     s.acc_en_top <<= 0
                 else:
                     s.acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
-                    
         @update
         def connect_weight_address():
             if (s.state == LOADING_MLBS):
@@ -1706,7 +1704,7 @@ class StateMachineEMIFSeparate(Component):
         
 class MultipleLayerSystem(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
-                  proj_specs=[], w_address=0, i_address=0, o_address=0, ws=True):
+                  proj_specs=[], w_address=[0], i_address=[0], o_address=[0], ws=True):
         """ Constructor
         """
         printi(il, "{:=^60}".format("> Constructing Multiple Statemachine System with MLB block " +
@@ -1714,8 +1712,11 @@ class MultipleLayerSystem(Component):
                                    " <")))
         if "inner_projection" in proj_specs:
             proj_specs = [proj_specs]
-
-            
+            w_address = [w_address]
+            i_address = [i_address]
+            o_address = [o_address]
+   
+        #proj_specs2 = [proj_specs[0], proj_specs[1]] 
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs)
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
@@ -1731,7 +1732,7 @@ class MultipleLayerSystem(Component):
             else:
                 newname = ""
             statemachine = StateMachineEMIFSeparate(mlb_spec, wb_spec, ib_spec, ob_spec, emif_spec,
-                      proj_specs[i], w_address, i_address, o_address, ws)
+                      proj_specs[i], w_address[i], i_address[i], o_address[i], ws)
             setattr(s,"statemachine"+newname, statemachine)
             statemachines += [statemachine]
             statemachine.emif_waitrequest //= s.emif_inst.waitrequest

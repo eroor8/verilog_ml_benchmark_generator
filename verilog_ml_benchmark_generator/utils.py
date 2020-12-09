@@ -635,7 +635,6 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
     for port in match_dict:
         parentname = name2+"_"+port
         parentport = None
-        print(inst2.__dict__.keys())
         if parentname in inst2.__dict__.keys():
             parentport = getattr(inst2, name2 + "_" + \
                                      foundname1.group(1) )
@@ -757,7 +756,6 @@ def compute_layer(inputs, weights, layer):
                                     inact = inputs[ugi][ubi][urci][ubyi-uryi][ubxi-urxi]
                                     weight = weights[ugi][uei][urci][uryi][urxi]
                                     outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)] += inact*weight
-                                    print("OUT" + str(ubxi) + "+= " + str(inact)+"*" + str(weight))
     return outputs
 
 def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
@@ -807,8 +805,6 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                                       uei*inner_uw*inner_un + \
                                                                       urni*inner_uw + \
                                                                       urwi
-                                                            
-                                                            print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx))
                                                             w_buf_inst_idx = 0
                                                             buffer_idx = 0
                                                             buffer_cnt = 0
@@ -852,7 +848,6 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                             
                                                                 
                                                             w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
-                                                            print("WBuffer[" + str(buffer_cnt) + "]["+str(buffer_idx+urnt)+"][" + str(bus_idx) + "] = " + str(w))
                                                             i_stream_idx = (outer_ub*outer_un*ugo + \
                                                                             ubo*outer_un + \
                                                                             urno)
@@ -862,7 +857,6 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                                            urni)
                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                             iv_idx = i_value_idx % ivalues_per_buf
-                                                            print("IBuffer[" + str(ibuf_idx) + "]["+str(ugt*temp_ub*temp_un+ubt*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(ugt*temp_ub+ubt+urnt-urw)%ibuf_len][iv_idx]))
                                                             
                                                             correct_sum += (ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
                                         out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
@@ -874,7 +868,6 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                         obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
                                         os_idx = out_act_idx % ostreams_per_buf
                                         obuf[obuf_idx][ugt*temp_ub*temp_ue+uet*temp_ub+ubt-outer_uw*inner_uw+1][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
-                                        print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx) + " -> " + str(obuf[obuf_idx][ugt][os_idx]))
     return obuf
 
 def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
@@ -924,8 +917,6 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf
                                                                       uei*inner_uw*inner_un + \
                                                                       urni*inner_uw + \
                                                                       urwi
-                                                            
-                                                            print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx))
                                                             w_buf_inst_idx = 0
                                                             buffer_idx = 0
                                                             buffer_cnt = 0
@@ -969,7 +960,6 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf
                                                             
                                                                 
                                                             w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
-                                                            print("WBuffer[" + str(buffer_cnt) + "]["+str(buffer_idx+urnt)+"][" + str(bus_idx) + "] = " + str(w))
                                                             if ((ubt - urw) >= 0) and ((ubt - urw) < ibuf_len):
                                                                 i_stream_idx = (outer_ub*outer_un*ugo + \
                                                                                 ubo*outer_un + \
@@ -980,7 +970,6 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf
                                                                                urni)
                                                                 ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                 iv_idx = i_value_idx % ivalues_per_buf
-                                                                print("IBuffer[" + str(ibuf_idx) + "]["+str(ugt*temp_ub*temp_un+ubt*temp_un+urnt-urw)+"][" + str(iv_idx) + "] = " + str(ibuf[ibuf_idx][(ugt*temp_ub+ubt+urnt-urw)%ibuf_len][iv_idx]))
                                                                 
                                                                 correct_sum += (ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt - urw)%ibuf_len][iv_idx] * w)
                                         out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
@@ -992,7 +981,6 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf
                                         obuf_idx = math.floor(out_act_idx/ostreams_per_buf)
                                         os_idx = out_act_idx % ostreams_per_buf
                                         obuf[obuf_idx][ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx] = correct_sum%(2**projection["stream_info"]["I"])
-                                        print("MLB:"+ str(mlb_inst) + "  and mac:" + str(mac_idx) + " -> " + str(obuf[obuf_idx][ugt][os_idx]))
     return obuf
 
 

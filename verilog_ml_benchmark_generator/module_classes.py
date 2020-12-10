@@ -556,7 +556,8 @@ class InputInterconnect(Component):
          :type outputs_to_mlb_<i>: Component class
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
-                  num_buffers=1, num_mlbs=1, projection={}, mux_urn=False, sim=False):
+                  num_buffers=1, num_mlbs=1, projection={},
+                  inner_projection={}, inner_width=1, mux_urn=False, sim=False):
         """ Constructor for InputInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -589,33 +590,49 @@ class InputInterconnect(Component):
 
         # Add inputs from buffers
         utils.add_n_inputs(s, num_buffers, buffer_width, "inputs_from_buffer_")
-        mux_size = projection['UB'].get('y',1)*projection['URN'].get('y',1)
-        s.urn_sel = InPort(math.ceil(math.log(max(mux_size,2),2)))
-
+        print(inner_projection)
+        total_urn=inner_projection.get('URN',{}).get('y',1)*projection['URN'].get('y',1)
+        mux_size = projection['UB'].get('y',1)*inner_projection.get('UB',{}).get('y',1)*total_urn
+        max_ubbi = int(inner_projection.get('UB',{}).get('value',1)/inner_projection.get('UB',{}).get('y',1))
+        max_unci = int(inner_projection.get('URN',{}).get('value',1)/inner_projection.get('URN',{}).get('y',1))
+        if (total_urn == 1):
+            mux_size = 1
+            max_unci = 1
+            max_ubbi = 1
+        if (mux_urn):
+            s.urn_sel = InPort(math.ceil(math.log(max(mux_size,2),2)))
+            utils.tie_off_port(s, s.urn_sel)
+        
         # Add input and output ports from each MLB
         mux_count = 0
         for ug in range(projection['UG']['value']):
             for ue in range(projection['UE']['value']):
                 for ubb in range(int(projection['UB']['value']/projection['UB'].get('y',1))):
                     for urnc in range(int(projection['URN']['value']/projection['URN'].get('y',1))):
-                        if mux_urn and (mux_size > 1):
-                            newmux = module_helper_classes.MUX_NXN(mlb_width_used, projection['UB'].get('y',1)*projection['URN'].get('y',1))
-                            setattr(s, "mux" + str(mux_count), newmux)
-                            newmux.sel //= s.urn_sel
-                            mux_count += 1
-                        incount = 0
+                        muxs = []
+                        if (mux_size > 1) and mux_urn:
+                            for mi in range(inner_projection['UG']['value'] *
+                                             max_ubbi*max_unci):
+                                newmux = module_helper_classes.MUX_NXN(
+                                    inner_width, mux_size)
+                                muxs += [newmux]
+                                setattr(s, "mux" + str(mux_count), newmux)
+                                newmux.sel //= s.urn_sel
+                                mux_count += 1  
+                                                            
+                        incounto = 0
                         for uby in range(projection['UB'].get('y',1)):
-                            for urny in range(projection['URN'].get('y',1)):
+                            for urny in range(projection['URN'].get('y',1)):   
                                 ub = ubb*projection['UB'].get('y',1) + uby
-                                urn = urnc*projection['URN'].get('y',1) + urny
+                                urn = urnc*projection['URN'].get('y',1) + urny 
                                 chain_idx = utils.get_overall_idx(projection,
                                     {'URN': urn, 'UB': ub, 'UG': ug, 'UE': ue})
                                 start_idx = chain_idx * projection['URW']['value']
                                 end_idx = start_idx + projection['URW']['value'] - 1
                                 newout, newin = utils.chain_ports(s, start_idx,
                                     end_idx, "inputs_from_mlb_{}",
-                                    "outputs_to_mlb_{}", mlb_width)
-                                
+                                    "outputs_to_mlb_{}", mlb_width) 
+                                        
                                 # Connect the chain's input
                                 stream_idx = utils.get_overall_idx(projection,
                                                                    {'URN': urn,
@@ -628,20 +645,36 @@ class InputInterconnect(Component):
                                 section_idx = stream_idx % streams_per_buffer
                                 input_bus_start = section_idx * mlb_width_used
                                 input_bus_end = (section_idx + 1) * \
-                                    mlb_width_used
-                                
+                                    mlb_width_used           
+
                                 if mux_urn and (mux_size > 1):
-                                    muxin = getattr(newmux, "in" + str(incount))
-                                    muxout = getattr(newmux, "out" + str(incount))
-                                    connect(input_bus[input_bus_start:
-                                                      input_bus_end], muxin)
-                                    connect(muxout, newout[0:mlb_width_used])
-                                    incount += 1
+                                    # For each separate input image connected to this MLB...
+                                    for ugi in range(inner_projection['UG']['value']):
+                                        for ubbi in range(max_ubbi):
+                                            for unci in range(max_unci):
+                                                # For each different input from that image,
+                                                # Connect it to the mux.
+                                                currmux = muxs[ubbi*max_unci+unci]                        
+                                                incounti = 0
+                                                for ubyi in range(inner_projection['UB'].get('y',1)):
+                                                    for unyi in range(inner_projection['URN'].get('y',1)):
+                                                        ubi = ubbi*inner_projection['UB'].get('y',1) + ubyi
+                                                        uni = unci*inner_projection['URN'].get('y',1) + unyi
+                                                        mlb_in_idx = utils.get_overall_idx(inner_projection,
+                                                               {'URN': uni, 'UB': ubi, 'UG': ugi})
+                                                        muxin = getattr(currmux, "in" + str(incounto+incounti))
+                                                        muxout = getattr(currmux, "out" + str(incounto+incounti))
+                                                        total_idx = input_bus_start+mlb_in_idx*inner_width
+                                                        connect(input_bus[total_idx:total_idx+inner_width], muxin)
+                                                        connect(muxout, newout[mlb_in_idx*inner_width:
+                                                                               (mlb_in_idx+1)*inner_width])
+                                                        incounti += 1
+                                                incounto += incounti
                                 else:
                                     connect(newout[0:mlb_width_used],
                                             input_bus[input_bus_start:
                                                   input_bus_end])
-                        
+                                
                                 # And one of the outputs
                                 if (ue == 0):
                                     output_bus = utils.AddOutPort(s, buffer_width,
@@ -953,7 +986,10 @@ class Datapath(Component):
                 mlb_width_used=inner_bus_widths['I'][i],
                 num_buffers=max(buffer_counts['I']),
                 num_mlbs=max(MLB_counts),
-                projection=outer_projs[i], mux_urn=True)
+                projection=outer_projs[i],
+                inner_projection=inner_projs[i],
+                inner_width=inner_data_widths['I'][i],
+                mux_urn=True)
             setattr(s,"input_interconnect"+newname, input_interconnect)
             input_interconnects += [input_interconnect]
             output_ps_interconnect = OutputPSInterconnect(
@@ -1075,9 +1111,6 @@ class Datapath(Component):
             connected_ins += utils.connect_inst_ports_by_name(s, "weight_datain",
                                                               s.weight_modules,
                                                               port["name"])
-        #s.input_interconnect.urn_sel //= 1
-        #connected_ins += [s.input_interconnect.urn_sel]
-        # Connect all inputs not otherwise connected to top
         for inst in [s.activation_function_modules, s.mlb_modules,
                      s.mlb_modules, s.output_act_modules, s.input_act_modules,
                      s.weight_interconnect, s.output_ps_interconnect,

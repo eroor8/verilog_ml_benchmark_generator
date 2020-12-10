@@ -1588,6 +1588,15 @@ class StateMachineEMIFSeparate(Component):
                                                                 "AVALON_WRITEDATA", "in"))
         s.emif_readdata = InPort(utils.get_sum_datatype_width(emif_spec,
                                                                 "AVALON_READDATA", "out"))
+        mux_size = 1
+        if (proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
+            proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)) > 1:
+            mux_size = proj_spec.get("outer_projection",{}).get('UB',{}).get('y',1) * \
+                   proj_spec.get("inner_projection",{}).get('UB',{}).get('y',1) * \
+                   proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
+                   proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)
+        s.urn_sel = OutPort(math.ceil(math.log(max(mux_size,2),2)))
+        s.urn_sel //= 1
         @update_ff
         def connect_weight_address_ff():
             if s.reset:
@@ -1719,13 +1728,12 @@ class MultipleLayerSystem(Component):
         #proj_specs2 = [proj_specs[0], proj_specs[1]] 
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs)
-        s.datapath.input_interconnect_urn_sel_top //= 0
         #for port in (s.datapath.get_input_value_ports()):
         #    printi(il,port._dsl.my_name)
         #assert 1==0
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
         statemachines=[]
-        connected_ins = [s.datapath.input_interconnect_urn_sel_top]
+        connected_ins = []
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         s.datapath.sel //= s.sel 
         s.sm_start = InPort(1)
@@ -1767,8 +1775,9 @@ class MultipleLayerSystem(Component):
                          s.emif_inst.readdata,
                          s.emif_inst.waitrequest,
                          s.datapath.sel]
-        
     
+        connected_ins += utils.mux_ports_by_name(s,statemachines, "urn_sel", s.datapath,
+            "input_interconnect_urn_sel_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "output_addr_top", s.datapath,
             "output_act_modules_portaaddr_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "input_addr_top", s.datapath,

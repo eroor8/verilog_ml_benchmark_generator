@@ -1004,6 +1004,7 @@ def test_simulate_layer_urn():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_9.yaml", True, False)
+    assert 1==0
     
 def test_simulate_multiple_layer_ws_bc():
     test_simulate_multiple_layers("mlb_spec_3.yaml",

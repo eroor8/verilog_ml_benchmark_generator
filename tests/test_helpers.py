@@ -600,7 +600,12 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                 max_ubx = outer_ubx*inner_ubx*temp_ubx
                                                                 max_uby = outer_uby*inner_uby*temp_uby
                                                                 max_unx = inner_uwx*outer_uwx*outer_unx*temp_unx*inner_unx*outer_unx
-                                                                max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny*outer_uny
+                                                                max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny
+                                                                print("Add?")
+                                                                print(uby)
+                                                                print(max_uby)
+                                                                print(max_uny)
+                                                                print((max_uby - max_uny))
                                                                 if ((ubx <= (max_ubx - max_unx)/stridex) and ((uby <= (max_uby - max_uny)/stridey))):
                                                                     outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                         [ubb]\

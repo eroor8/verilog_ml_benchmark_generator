@@ -387,9 +387,6 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                                       [(uby+uny)%len(inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                                       [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
                                                                                       [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic])][ubx]
-                                                                            print("Value: " + str(i))
-                                                                            print("ub: " + str(ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy))
-                                                                            print("uy: " + str(uby-uny))
                                                                             ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
                                                                             ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
                                                                             ubt = ubtb*temp_ubx*temp_uby + ubty*temp_ubx + ubtx

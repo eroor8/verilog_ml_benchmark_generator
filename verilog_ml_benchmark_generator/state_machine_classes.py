@@ -610,7 +610,7 @@ class StateMachine_old(Component):
         # Instantiate MLBs, buffers
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, [proj_spec])
-        
+
         # Load data into weight buffers
         s.sm_start = InPort(1)
         addrw_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'ADDRESS', ["in"]))
@@ -1719,9 +1719,13 @@ class MultipleLayerSystem(Component):
         #proj_specs2 = [proj_specs[0], proj_specs[1]] 
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs)
+        s.datapath.input_interconnect_urn_sel_top //= 0
+        #for port in (s.datapath.get_input_value_ports()):
+        #    printi(il,port._dsl.my_name)
+        #assert 1==0
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
         statemachines=[]
-        connected_ins = []
+        connected_ins = [s.datapath.input_interconnect_urn_sel_top]
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         s.datapath.sel //= s.sel 
         s.sm_start = InPort(1)

@@ -737,9 +737,6 @@ def compute_layer(inputs, weights, layer):
     stridex = layer["stridex"]
     stridey = layer["stridey"]
     
-    #inputs[group][batch][inputchan][y][x]
-    #weights[group][outputchan][inputchan][y][x]
-    #outputs[group][batch][outchan][y][x]
     outputs = [[[[[0 for k in range(int(ubx/stridex))]  # x
                  for i in range(int(uby/stridey))]      # y    
                  for j in range(ue)]       # chans
@@ -753,8 +750,9 @@ def compute_layer(inputs, weights, layer):
                         for ubyi in range(ury-1, uby, stridey): # px y
                             for urxi in range(urx): # filter x
                                 for uryi in range(ury): # filter y
-                                    inact = inputs[ugi][ubi][urci][ubyi-uryi][ubxi-urxi]
+                                    inact = inputs[ugi][ubi][urci][ubyi+1-ury+uryi][ubxi-urxi]
                                     weight = weights[ugi][uei][urci][uryi][urxi]
+                                    #print("OUT ["  +str(ubi) + "," +str(int((ubxi-urx+1)/stridex)) + "] = "+ str(outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)]) + " += IN *" + str(inact) + " OUT" + str(weight))
                                     outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)] += inact*weight
     return outputs
 

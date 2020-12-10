@@ -18,6 +18,24 @@ import utils
 import module_classes
 import random
 
+class MUX_NXN(Component):
+    def construct(s, input_width, input_count, sim=False):
+        assert(input_width>0)
+        assert(input_count>0)
+        utils.add_n_inputs(s, input_count, input_width, "in")
+        s.sel = InPort(math.ceil(math.log(max(input_count,2),2)))
+        for i in range(input_count):
+            newout = utils.AddOutPort(s, input_width, "out"+str(i))
+            newmux = MUXN(input_width, input_count)
+            setattr(s, "mux" + str(i), newmux)
+            newmux.sel //= s.sel
+            newout //= newmux.out
+            for j in range(input_count):
+                inport = getattr(s, "in" + str((j+i)%input_count))
+                inportm = getattr(newmux, "in" + str(j))
+                inportm //= inport
+        utils.tie_off_clk_reset(s)
+
 class MUXN(Component):
     def construct(s, input_width, input_count, sim=False):
         assert(input_width>0)
@@ -27,9 +45,9 @@ class MUXN(Component):
             newin = utils.AddInPort(s, input_width, "in"+str(i))
             s.long_input[i*input_width:(i+1)*input_width] //= newin 
         utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, int(math.log(max(input_count,2),2)), "sel")
-        s.w_sel = Wire(int(math.log(max(input_width,2),2))+2)
-        s.w_sel[0:int(math.log(max(input_count,2),2))] //= s.sel
+        utils.AddInPort(s, math.ceil(math.log(max(input_count,2),2)), "sel")
+        s.w_sel = Wire(math.ceil(math.log(max(input_width,2),2))+2)
+        s.w_sel[0:math.ceil(math.log(max(input_count,2),2))] //= s.sel
         if (input_count > 1):
             @update
             def upblk_set_wen0():
@@ -519,7 +537,7 @@ class MLB(Component):
         input_interconnects = []
         output_ps_interconnects = []
         output_interconnects = []
-        s.sel = InPort(int(math.log(max(len(proj_specs),2),2)))
+        s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         utils.tie_off_port(s, s.sel)
         for i in range(len(proj_specs)):
             if (i > 0):

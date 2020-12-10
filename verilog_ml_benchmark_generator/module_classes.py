@@ -878,7 +878,7 @@ class Datapath(Component):
                                   il) + "\n")
 
         # Instantiate MLBs, buffers
-        s.sel = InPort(int(math.log(max(len(proj_specs),2),2)))
+        s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         utils.tie_off_port(s, s.sel)
         s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
                                     projections=proj_specs)
@@ -1064,7 +1064,7 @@ class Datapath(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_top")
-                    printi(il,inst._dsl.my_name + "_" +
-                                            port._dsl.my_name + "_top")
+                    #printi(il,inst._dsl.my_name + "_" +
+                    #                        port._dsl.my_name + "_top")
 
 

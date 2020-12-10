@@ -125,7 +125,7 @@ class SM_WriteOffChip(Component):
         datain_inputs = utils.add_n_wires(s, buffer_count, datawidth, "sel_cin")
         
         for wb in range(buffer_count):
-            new_sel = SM_InputSel(datawidth, int(math.log(buffer_count,2)), wb)
+            new_sel = SM_InputSel(datawidth, math.ceil(math.log(buffer_count,2)), wb)
             setattr(s, "insel{}".format(wb), new_sel)
             if (buffer_count > 1):
                 new_sel.buffer_count //= s.buf_count
@@ -750,17 +750,17 @@ class StateMachine_old(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    printi(il,inst._dsl.my_name + "_" +
-                                            port._dsl.my_name + "_sm")
+                    #printi(il,inst._dsl.my_name + "_" +
+                    #                        port._dsl.my_name + "_sm")
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    printi(il,inst._dsl.my_name + "_" +
-                                            port._dsl.my_name + "_sm")
+                    #printi(il,inst._dsl.my_name + "_" +
+                    #                        port._dsl.my_name + "_sm")
 
-        printi(il,s.__dict__)
+        #printi(il,s.__dict__)
 
                       
 class SM_LoadBufsEMIF(Component):
@@ -942,7 +942,7 @@ class SM_WriteOffChipEMIF(Component):
         datain_inputs = utils.add_n_wires(s, buffer_count, datawidth, "sel_cin")
         
         for wb in range(buffer_count):
-            new_sel = SM_InputSel(datawidth, int(math.log(buffer_count,2)), wb)
+            new_sel = SM_InputSel(datawidth, math.ceil(math.log(buffer_count,2)), wb)
             setattr(s, "insel{}".format(wb), new_sel)
             if (buffer_count > 1):
                 new_sel.buffer_count //= s.buf_count
@@ -1353,17 +1353,17 @@ class StateMachineEMIF(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    printi(il,inst._dsl.my_name + "_" +
-                                            port._dsl.my_name + "_sm")
+                    #printi(il,inst._dsl.my_name + "_" +
+                    #                        port._dsl.my_name + "_sm")
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    printi(il,inst._dsl.my_name + "_" +
-                                            port._dsl.my_name + "_sm")
+                    #printi(il,inst._dsl.my_name + "_" +
+                    #                        port._dsl.my_name + "_sm")
 
-        printi(il,s.__dict__)
+        #printi(il,s.__dict__)
   
 class StateMachineEMIFSeparate(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
@@ -1699,7 +1699,7 @@ class StateMachineEMIFSeparate(Component):
             s.write_off_emif.emif_waitrequest @= s.emif_waitrequest
             s.write_off_emif.start @= (s.state == STREAMING_MLBS) & s.stream_inputs.rdy & ((ws==0) | (s.ugt_cnt == ugt))
 
-        printi(il,s.__dict__)
+        #printi(il,s.__dict__)
 
         
 class MultipleLayerSystem(Component):
@@ -1722,7 +1722,7 @@ class MultipleLayerSystem(Component):
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
         statemachines=[]
         connected_ins = []
-        s.sel = InPort(int(math.log(max(len(proj_specs),2),2)))
+        s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         s.datapath.sel //= s.sel 
         s.sm_start = InPort(1)
         
@@ -1817,11 +1817,11 @@ class MultipleLayerSystem(Component):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, port._dsl.my_name)
-                    printi(il,port._dsl.my_name)
+                    #printi(il,port._dsl.my_name)
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, port._dsl.my_name)
-                    printi(il,port._dsl.my_name)
+                    #printi(il,port._dsl.my_name)
 
-        printi(il,s.__dict__)
+        #printi(il,s.__dict__)

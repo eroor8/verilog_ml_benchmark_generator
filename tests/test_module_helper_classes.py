@@ -12,6 +12,56 @@ from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import module_helper_classes
 from verilog_ml_benchmark_generator import cli
 
+def test_MUXN():
+    """Test Component class MUXN"""
+    testinst = module_helper_classes.MUXN(4,3)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    
+def test_MUX_NXN():
+    """Test Component class MUXN"""
+    testinst = module_helper_classes.MUX_NXN(4,3)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 3
+    testinst.in1 @= 4
+    testinst.in2 @= 5
+    testinst.sel @= 0
+    testinst.sim_tick()
+    print(testinst.out0)
+    print(testinst.out1)
+    print(testinst.out2)
+    assert testinst.out0 == 3
+    assert testinst.out1 == 4
+    assert testinst.out2 == 5
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out0 == 4
+    assert testinst.out1 == 5
+    assert testinst.out2 == 3
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out0 == 5
+    assert testinst.out1 == 3
+    assert testinst.out2 == 4
+    
 def test_Register():
     """Test Component class Register"""
     testinst = module_helper_classes.Register(8)

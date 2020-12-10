@@ -321,3 +321,293 @@ def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None
     print("EXPECTED_VALUES")
     print(buffer_values)
     assert (new_buf == buffer_values), "Invalid contents for buffer " + str(inner_inst)
+   
+def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
+    ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
+        ab_yaml, proj_yaml, 'I')
+    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
+    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    
+    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
+    inner_ubb = proj_yaml["inner_projection"]["UB"]["batches"]
+    inner_ubx = proj_yaml["inner_projection"]["UB"]["x"]
+    inner_uby = proj_yaml["inner_projection"]["UB"]["y"]
+    outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
+    outer_ubb = proj_yaml["outer_projection"]["UB"]["batches"]
+    outer_ubx = proj_yaml["outer_projection"]["UB"]["x"]
+    outer_uby = proj_yaml["outer_projection"]["UB"]["y"]
+    temp_ub = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("value", obuf_len)
+    temp_ubb = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("batches", 1)
+    temp_ubx = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("x", obuf_len)
+    temp_uby = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("y", 1)
+
+    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
+    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
+    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
+    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
+    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
+    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
+    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
+    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
+    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
+    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
+    
+    ibuf = [[[0 for k in range(ivalues_per_buf)]
+             for i in range(ibuf_len)]           
+             for j in range (ibuf_count)]
+    print(inputs)
+    for ugt in range(temp_ug):
+        for ugo in range(outer_ug): 
+            for ugi in range(inner_ug):
+                for ubox in range(outer_ubx):
+                    for ubix in range(inner_ubx):
+                        for ubtx in range(temp_ubx):
+                            for uboy in range(outer_uby):
+                                for ubiy in range(inner_uby):
+                                    for ubty in range(temp_uby):
+                                        for ubob in range(outer_ubb):
+                                            for ubib in range(inner_ubb):
+                                                for ubtb in range(temp_ubb):
+                                                    for urnoc in range(outer_unc):
+                                                        for urnic in range(inner_unc):
+                                                            for urntc in range(temp_unc):
+                                                                for urnoy in range(outer_uny):
+                                                                    for urniy in range(inner_uny):
+                                                                        for urnty in range(temp_uny):
+                                                                            uby = ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy
+                                                                            uny = urnty*outer_uny*inner_uny+urnoy*inner_uny+urniy
+                                                                            uy = inner_uny*outer_uny*temp_uny
+                                                                            ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
+                                                                            i = inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                      [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
+                                                                                      [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
+                                                                                      [(uby+uny)%len(inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                      [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
+                                                                                      [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic])][ubx]
+                                                                            print("Value: " + str(i))
+                                                                            print("ub: " + str(ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy))
+                                                                            print("uy: " + str(uby-uny))
+                                                                            ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
+                                                                            ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
+                                                                            ubt = ubtb*temp_ubx*temp_uby + ubty*temp_ubx + ubtx
+                                                                            urno = urnoc*outer_unx*outer_uny + urnoy*outer_unx 
+                                                                            urni = urnic*inner_unx*inner_uny + urniy*inner_unx 
+                                                                            urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
+                                                                            i_stream_idx = (outer_ub*outer_un*ugo + \
+                                                                                            ubo*outer_un + \
+                                                                                            urno)
+                                                                            i_value_idx = i_stream_idx*utils.get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
+                                                                                          (inner_ub*inner_un*ugi + \
+                                                                                           ubi*inner_un + \
+                                                                                           urni)
+                                                                            ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
+                                                                            iv_idx = i_value_idx % ivalues_per_buf
+                                                                            print("idx: " + str(i_value_idx))
+                                                                            ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt)%ibuf_len][iv_idx] = i
+    print(ibuf)
+    return ibuf
+
+
+def reorder_weight_array(weights, proj_yaml, wb_yaml):
+    
+    wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
+        wb_yaml, proj_yaml, 'W')
+    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
+    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    inner_ue = proj_yaml["inner_projection"]["UE"]["value"]
+    outer_ue = proj_yaml["outer_projection"]["UE"]["value"]
+    temp_ue = proj_yaml.get("temporal_projection",{}).get("UE",{}).get("value", 1)
+    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
+    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
+    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
+    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
+    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
+    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
+    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
+    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
+    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
+    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
+    inner_uw = proj_yaml["inner_projection"]["URW"]["value"]
+    inner_uwx = proj_yaml["inner_projection"]["URW"]["x"]
+    inner_uwy = proj_yaml["inner_projection"]["URW"]["y"]
+    outer_uw = proj_yaml["outer_projection"]["URW"]["value"]
+    outer_uwx = proj_yaml["outer_projection"]["URW"]["x"]
+    outer_uwy = proj_yaml["outer_projection"]["URW"]["y"]  
+
+    # Move the weights and inputs into the EMIF in the expected order
+    wbuf = [[[0 for k in range(wvalues_per_buf)] 
+            for i in range(wbuf_len)]              
+            for j in range(wbuf_count)]
+    print(weights)
+    for ugt in range(temp_ug):
+        for ugo in range(outer_ug): 
+            for ugi in range(inner_ug):
+                for ueo in range(outer_ue):
+                    for uei in range(inner_ue):
+                        for uet in range(temp_ue):
+                            for urnoc in range(outer_unc):
+                                for urnic in range(inner_unc):
+                                    for urntc in range(temp_unc):
+                                        for urnox in range(outer_unx):
+                                            for urnix in range(inner_unx):
+                                                for urntx in range(temp_unx):
+                                                    for urnoy in range(outer_uny):
+                                                        for urniy in range(inner_uny):
+                                                            for urnty in range(temp_uny):
+                                                                for urwox in range(outer_uwx):
+                                                                    for urwix in range(inner_uwx):
+                                                                        for urwoy in range(outer_uwy):
+                                                                            for urwiy in range(inner_uwy):
+                                                                                urno = urnox*outer_uny + urnoy + urnoc*outer_unx*outer_uny
+                                                                                urni = urnix*inner_uny + urniy + urnic*inner_unx*inner_uny 
+                                                                                urnt = urntx*temp_uny  + urnty + urntc*temp_unx*temp_uny
+                                                                                ury = urwoy*inner_uwy+urwiy + urnoy*inner_uny+urniy
+                                                                                w = weights[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                           [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
+                                                                                           [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
+                                                                                           [ury]\
+                                                                                           [urwox*inner_uwx+urwix]
+                                                                                print("Value: " + str(w))
+                                                                                print("ug: " + str(ugt*outer_ug*inner_ug+ugo*inner_ug+ugi))
+                                                                                print("ue: " + str(uet*outer_ue*inner_ue+ueo*inner_ue+uei))
+                                                                                print("uc: " + str(urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic))
+                                                                                print("ury: " + str(urwoy*inner_uwy+urwiy))
+                                                                                print("urx: " + str(urwox*inner_uwx+urwix))
+                                                                                urwo = max(urwox,urwoy)
+                                                                                urwi = max(urwix,urwiy)
+                                                                                w_buf_inst_idx = 0
+                                                                                buffer_cnt = 0
+                                                                                stream_width = inner_ug*inner_ue*inner_un*inner_uw
+                                                                                bus_idx=0
+                                                                                mlb_chain_len=1
+                                                                                outer_chain_len=1
+                                                                                if ("PRELOAD" in proj_yaml["inner_projection"]):
+                                                                                    mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
+                                                                                    w_buf_inst_idx = \
+                                                                                        ugi*inner_ue*inner_un*inner_uw + \
+                                                                                        uei*inner_un*inner_uw + \
+                                                                                        urni*inner_uw + \
+                                                                                        urwi
+                                                                                    stream_width = 1
+                                                                                else:
+                                                                                    bus_idx = ugi*inner_ue*inner_un*inner_uw + \
+                                                                                              uei*inner_un*inner_uw + \
+                                                                                              urni*inner_uw + \
+                                                                                              urwi
+                                                                                    stream_width=inner_ug*inner_ue*inner_un*inner_uw
+                                                                                if ("PRELOAD" in proj_yaml["outer_projection"]):
+                                                                                    w_buf_inst_idx = \
+                                                                                        (ugo*outer_ue*outer_un*outer_uw + \
+                                                                                        ueo*outer_un*outer_uw + \
+                                                                                        urno*outer_uw + \
+                                                                                        urwo)*mlb_chain_len + \
+                                                                                        w_buf_inst_idx
+                                                                                    outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
+                                                                                else:
+                                                                                    stream_idx = ugo*outer_ue*outer_un*outer_uw + \
+                                                                                        ueo*outer_un*outer_uw + \
+                                                                                        urno*outer_uw + \
+                                                                                        urwo
+                                                                                    streams_per_buffer = math.floor(len(wbuf[0][0]) / stream_width)
+                                                                                    buffer_cnt = math.floor(stream_idx / streams_per_buffer)
+                                                                                    bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
+                                                                                buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)
+                                                                                buffer_idx += ugt*temp_ue*temp_un + uet*temp_un
+                                                                                wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx] = w
+    return wbuf
+
+
+
+def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):    
+    ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
+        ab_yaml, proj_yaml)
+    
+    inner_uw = proj_yaml["inner_projection"]["URW"]["value"]
+    inner_uwx = proj_yaml["inner_projection"]["URW"]["x"]
+    inner_uwy = proj_yaml["inner_projection"]["URW"]["y"]
+    outer_uw = proj_yaml["outer_projection"]["URW"]["value"]
+    outer_uwx = proj_yaml["outer_projection"]["URW"]["x"]
+    outer_uwy = proj_yaml["outer_projection"]["URW"]["y"]
+    
+    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
+    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
+    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
+    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
+    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
+    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
+    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
+    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
+    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
+    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
+    
+    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
+    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    stridex = proj_yaml.get("stride",{}).get("x",1)
+    stridey = proj_yaml.get("stride",{}).get("y",1)
+    
+    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
+    inner_ubb = proj_yaml["inner_projection"]["UB"]["batches"]
+    inner_ubx = proj_yaml["inner_projection"]["UB"]["x"]
+    inner_uby = proj_yaml["inner_projection"]["UB"]["y"]
+    outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
+    outer_ubb = proj_yaml["outer_projection"]["UB"]["batches"]
+    outer_ubx = proj_yaml["outer_projection"]["UB"]["x"]
+    outer_uby = proj_yaml["outer_projection"]["UB"]["y"]
+    temp_ub = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("value", obuf_len)
+    temp_ubb = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("batches", 1)
+    temp_ubx = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("x", obuf_len)
+    temp_uby = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("y", 1)
+    
+    inner_ue = proj_yaml["inner_projection"]["UE"]["value"]
+    outer_ue = proj_yaml["outer_projection"]["UE"]["value"]
+    temp_ue = proj_yaml.get("temporal_projection",{}).get("UE",{}).get("value", 1)
+    
+    for ugt in range(temp_ug):
+        for ugo in range(outer_ug): 
+            for ugi in range(inner_ug):
+                for ubox in range(outer_ubx):
+                    for ubix in range(inner_ubx):
+                        for ubtx in range(int(temp_ubx/stridex)):
+                            for uboy in range(outer_uby):
+                                for ubiy in range(inner_uby):
+                                    for ubty in range(int(temp_uby/stridey)):
+                                        for ubob in range(outer_ubb):
+                                            for ubib in range(inner_ubb):
+                                                for ubtb in range(temp_ubb):
+                                                    for ueo in range(outer_ue):
+                                                        for uei in range(inner_ue):
+                                                            for uet in range(temp_ue):
+                                                                ubo = ubox*outer_uby + uboy + ubob*outer_ubx*outer_uby
+                                                                ubi = ubix*inner_uby + ubiy + ubib*inner_ubx*inner_uby 
+                                                                ubt = ubty*int(temp_ubx/stridex) + ubtx + ubtb*int(temp_ubx/stridex)*int(temp_uby/stridey)
+                                                                
+                                                                out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                                                              ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
+                                                                              ueo*inner_ug*inner_ub*inner_ue + \
+                                                                              ugi*inner_ub*inner_ue + \
+                                                                              ubi*inner_ue + uei
+                                                                obuf_idx = math.floor(out_act_idx/ovalues_per_buf)
+                                                                os_idx = out_act_idx % ovalues_per_buf
+                                                                ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
+                                                                uby = ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy
+                                                                ubb = ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib
+                                                                max_ubx = outer_ubx*inner_ubx*temp_ubx
+                                                                max_uby = outer_uby*inner_uby*temp_uby
+                                                                max_unx = inner_uwx*outer_uwx*outer_unx*temp_unx*inner_unx*outer_unx
+                                                                max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny*outer_uny
+                                                                if ((ubx <= (max_ubx - max_unx)/stridex) and ((uby <= (max_uby - max_uny)/stridey))):
+                                                                    outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                        [ubb]\
+                                                                        [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
+                                                                        [uby][ubx] = \
+                                                                        outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]
+    return outarray

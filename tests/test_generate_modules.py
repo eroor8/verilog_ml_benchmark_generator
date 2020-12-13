@@ -711,6 +711,8 @@ def test_simulate_layer(
     inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
     outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
     temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    dilx = proj_yaml.get("dilation",{}).get("x",1)
+    dily = proj_yaml.get("dilation",{}).get("y",1)
     stridex = proj_yaml.get("stride",{}).get("x",1)
     stridey = proj_yaml.get("stride",{}).get("y",1)
     
@@ -724,13 +726,15 @@ def test_simulate_layer(
              "filter_x": inner_uwx*outer_uwx*inner_unx*outer_unx*temp_unx,
              "filter_y": inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny,
              "stridex": stridex,
-             "stridey": stridey
+             "stridey": stridey,
+             "dilx": dilx,
+             "dily": dily
     }
     print("==> Layer information:")
     print(layer)
 
     # Create random input data arrays to load into EMIF
-    weights = [[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+    weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans
@@ -751,7 +755,7 @@ def test_simulate_layer(
                          for t in range(len(layer_outputs))]       # group o%(2**proj_yaml["stream_info"]["I"])
     
     # Move the weights and inputs into the EMIF in the expected order
-    wbuf = reorder_weight_array(weights,proj_yaml, wb_yaml)                                     
+    wbuf = reorder_weight_array(weights,proj_yaml, wb_yaml)
     ibuf = reorder_input_array(inputs,proj_yaml, ab_yaml, obuf_len)
     wbuf_flat = [sum((lambda i: inner[i] * \
                       (2**(i*proj_yaml["stream_info"]["W"])))(i) \
@@ -1000,11 +1004,11 @@ def test_simulate_layer_ws_bc():
     
 def test_simulate_layer_urn():
     test_simulate_layer("mlb_spec_3.yaml",
-                        "input_spec_1.yaml",
+                        "input_spec_2.yaml",
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_9.yaml", True, False)
-    assert 1==0
+    #assert 1==0
     
 def test_simulate_multiple_layer_ws_bc():
     test_simulate_multiple_layers("mlb_spec_3.yaml",
@@ -1046,12 +1050,14 @@ def test_simulate_random_emif_statemachine():
         proj_yaml = yaml.safe_load(stream)
     with open(emif_spec) as stream:
         emif_yaml = yaml.safe_load(stream)
-        
+  
     # Calculate buffer dimensions info
     wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
         wb_yaml, proj_yaml, 'W')
     ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
         ab_yaml, proj_yaml, 'I')
+    #print(ibuf_count)
+    #assert(ibuf_count == 80)      
     ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
         ab_yaml, proj_yaml)
 

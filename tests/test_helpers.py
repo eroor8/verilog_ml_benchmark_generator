@@ -11,6 +11,7 @@ from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import module_classes
 from verilog_ml_benchmark_generator import cli
 
+
 def merge_bus(v,width):
     sum = 0
     for i in range(len(v)):
@@ -325,6 +326,7 @@ def check_buffer(testinst, inner_inst, buffer_values, dwidth, outertestinst=None
 def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
     ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
         ab_yaml, proj_yaml, 'I')
+    #assert(ibuf_count == 2)
     inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
     outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
     temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
@@ -359,6 +361,7 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
              for i in range(ibuf_len)]           
              for j in range (ibuf_count)]
     print(inputs)
+    div_factor = (outer_uny*inner_uny)
     for ugt in range(temp_ug):
         for ugo in range(outer_ug): 
             for ugi in range(inner_ug):
@@ -367,7 +370,7 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                         for ubtx in range(temp_ubx):
                             for uboy in range(outer_uby):
                                 for ubiy in range(inner_uby):
-                                    for ubty in range(temp_uby):
+                                    for ubty in range(0,temp_uby,div_factor):
                                         for ubob in range(outer_ubb):
                                             for ubib in range(inner_ubb):
                                                 for ubtb in range(temp_ubb):
@@ -377,29 +380,43 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                 for urnoy in range(outer_uny):
                                                                     for urniy in range(inner_uny):
                                                                         for urnty in range(temp_uny):
+                                                                            groups = ugt*outer_ug*inner_ug+ugo*inner_ug+ugi
+                                                                            batches = ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib
+                                                                            channels = urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic
                                                                             uby = ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy
                                                                             uny = urnty*outer_uny*inner_uny+urnoy*inner_uny+urniy
                                                                             uy = inner_uny*outer_uny*temp_uny
                                                                             ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
-                                                                            i = inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
-                                                                                      [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
-                                                                                      [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
-                                                                                      [(uby+uny)%len(inputs[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
-                                                                                      [ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib]\
-                                                                                      [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic])][ubx]
+                                                                            
+                                                                            print(inputs[groups][batches][channels]\
+                                                                                      [(uby+uny)%len(inputs[groups]\
+                                                                                      [batches][channels])][ubx]
+                                                                            )
+                                                                            i = inputs[groups][batches][channels]\
+                                                                                      [(uby+uny)%len(inputs[groups]\
+                                                                                      [batches][channels])][ubx]
+                                                                            print("Ok try to place value " + str(i))
+                                                                            print("group: " + str(groups) + " batches:" + str(batches) + " channels:" + str(channels) + " uby:" + str(uby) + " uny:"+str(uny) + " width:" + str(len(inputs[groups]\
+                                                                                      [batches][channels])))
+                                                                            
                                                                             ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
                                                                             ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
-                                                                            ubt = ubtb*temp_ubx*temp_uby + ubty*temp_ubx + ubtx
+                                                                            ubt = ubtb*temp_ubx*temp_uby + int(ubty/div_factor)*temp_ubx + ubtx
                                                                             urno = urnoc*outer_unx*outer_uny + urnoy*outer_unx 
                                                                             urni = urnic*inner_unx*inner_uny + urniy*inner_unx 
                                                                             urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
-                                                                            i_stream_idx = (outer_ub*outer_un*ugo + \
-                                                                                            ubo*outer_un + \
-                                                                                            urno)
+                                                                        
+                                                                            i_stream_idx = utils.get_overall_idx_new(proj_yaml["outer_projection"],
+                                                                                                               {'URN': {'y':urnoy, 'chans':urnoc},
+                                                                                                                'UB': {'y':uboy, 'batches':ubob},
+                                                                                                                'UG': {'value': ugo}},
+                                                                                 order=utils.input_order, default=['batches','chans'])
                                                                             i_value_idx = i_stream_idx*utils.get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
-                                                                                          (inner_ub*inner_un*ugi + \
-                                                                                           ubi*inner_un + \
-                                                                                           urni)
+                                                                                          utils.get_overall_idx_new(proj_yaml["inner_projection"],
+                                                                                                               {'URN': {'y':urniy, 'chans':urnic},
+                                                                                                                'UB': {'y':ubiy, 'batches':ubib},
+                                                                                                                'UG': {'value': ugi}},
+                                                                                 order=utils.input_order, default=['batches','chans'])
                                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                             iv_idx = i_value_idx % ivalues_per_buf
                                                                             print("idx: " + str(i_value_idx))
@@ -601,11 +618,11 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                 max_uby = outer_uby*inner_uby*temp_uby
                                                                 max_unx = inner_uwx*outer_uwx*outer_unx*temp_unx*inner_unx*outer_unx
                                                                 max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny
-                                                                print("Add?")
-                                                                print(uby)
-                                                                print(max_uby)
-                                                                print(max_uny)
-                                                                print((max_uby - max_uny))
+                                                                #print("Add?")
+                                                                #print(uby)
+                                                                #print(max_uby)
+                                                                #print(max_uny)
+                                                                #print((max_uby - max_uny))
                                                                 if ((ubx <= (max_ubx - max_unx)/stridex) and ((uby <= (max_uby - max_uny)/stridey))):
                                                                     outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                         [ubb]\

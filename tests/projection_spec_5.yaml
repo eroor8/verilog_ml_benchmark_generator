@@ -4,10 +4,16 @@ inner_projection:
         value: 1
     URN: 
         value: 2
+        x: 1
+        y: 1
+        chans: 2
     UE: 
         value: 2
     UB: 
         value: 2
+        x: 1
+        y: 1
+        batches: 2
     UG: 
         value: 2
     PRELOAD:
@@ -18,10 +24,16 @@ outer_projection:
         value: 1
     URN: 
         value: 1
+        x: 1
+        y: 1
+        chans: 1
     UE: 
         value: 2
     UB: 
         value: 1
+        x: 1
+        y: 1
+        batches: 1
     UG: 
         value: 1
     PRELOAD:

@@ -25,6 +25,7 @@ class SM_BufferWen(Component):
         # else we = 0
         utils.AddInPort(s, 1, "we_in")
         if (buf_count_width > 0):
+            assert(curr_buffer_count < 2**buf_count_width)
             utils.AddInPort(s, buf_count_width, "buffer_count")
             @update
             def upblk_set_wen0():
@@ -222,7 +223,6 @@ class SM_PreloadMLB(Component):
         INIT, LOAD = 0, 1
         @update
         def upblk_preload_comb():
-            #print("PRELOAD addr " + str(s.start_address) + " " + str(s.address))
             s.w_start_address[0:addr_width] @= s.start_address 
             s.addr_w @= s.index_within_inner_tile + s.inner_tile_index*inner_tile_size + \
                          s.outer_tile_index*outer_tile_size + s.w_start_address
@@ -428,7 +428,7 @@ class SM_IterateThruAddresses(Component):
     # On start, do nothing for start_wait cycles.
     # assert wen, and increment address from start_address write_count times.
     # If skip_n > 0, then periodically deassert wen for skip_n cycles, assert for one.
-    def construct(s, write_count, addr_width, stride=1, skip_n=0, skip_after=0, start_wait=0, debug_name='', repeat_x=1, repeat_len=1):
+    def construct(s, write_count, addr_width, stride=1, skip_n=0, skip_after=0, start_wait=0, debug_name='', repeat_x=1, repeat_len=1, addr_b_offset=1, sel_count=1):
         """ SM_IterateThruAddresses constructor 
             :param addr_width: Width of address port
             :type addr_width: int
@@ -443,11 +443,14 @@ class SM_IterateThruAddresses(Component):
             w_addr_width = addr_width+4
         else:
             w_addr_width = max(int(math.ceil(math.log(write_count,2))),addr_width)+4
-        
+        write_count = int(write_count)
         s.start = InPort(1)
+        s.inner_incr = Wire(w_addr_width)
         s.incr = OutPort(w_addr_width)
         s.section_incr = Wire(w_addr_width)
+        s.total_incr = Wire(w_addr_width)
         s.address = OutPort(addr_width)
+        s.address_b = OutPort(addr_width)
         s.w_address = Wire(w_addr_width)
         s.address_offset = Wire(addr_width)
         s.start_address = InPort(addr_width)
@@ -458,21 +461,21 @@ class SM_IterateThruAddresses(Component):
         s.state = Wire(4)
         s.skip_cnt = Wire(w_addr_width)
         s.repeat_count = Wire(repeat_x+1)
-        wcm = 0
-        if (write_count > 0):
-            wcm = write_count - 1
+        sel_width = math.ceil(math.log(max(sel_count,2),2))
+        s.urn_sel = OutPort(sel_width)
         swm = 0
         if (start_wait > 0):
             swm = start_wait - 1
 
         @update
         def upblk_set_wenc():
-            #print("****" + debug_name + ":" + str(s.section_incr) + ", " + str(s.repeat_count) + ", " + str(s.w_address))
             if (s.wen):
-                s.w_address @= s.incr + s.section_incr + s.start_address_w
+                s.w_address @= s.incr + s.inner_incr + s.section_incr + s.start_address_w
             else:
                 s.w_address @= 0
             s.address @= s.w_address[0:addr_width]
+            s.address_b @= s.w_address[0:addr_width] + addr_b_offset
+            s.total_incr @= s.incr + s.inner_incr + s.section_incr
             
         INIT, LOAD, START_WAIT = 0, 1, 2
         @update_ff
@@ -481,10 +484,12 @@ class SM_IterateThruAddresses(Component):
                 s.state <<= INIT
                 s.section_incr <<= 0
                 s.incr <<= 0
+                s.inner_incr <<= 0
                 s.rdy <<= 1
                 s.wen <<= 0
                 s.skip_cnt <<= 0
                 s.repeat_count <<= 0
+                s.urn_sel <<= 0
             else:
                 if (s.state == INIT):
                     if (s.start):
@@ -501,6 +506,7 @@ class SM_IterateThruAddresses(Component):
                         s.wen <<= 0
                         s.rdy <<= 1
                     s.incr <<= 0
+                    s.inner_incr <<= 0
                     s.section_incr <<= 0
                     s.skip_cnt <<= 1
                 elif (s.state == START_WAIT):
@@ -518,11 +524,17 @@ class SM_IterateThruAddresses(Component):
                     else:
                         s.skip_cnt <<= s.skip_cnt + 1
                 elif (s.state == LOAD):
-                    if ((s.incr+s.section_incr) >= wcm):
+                    if (s.inner_incr + 1 >= addr_b_offset):
+                        if (s.urn_sel >= sel_count - stride):
+                            s.urn_sel <<= s.urn_sel - sel_count + stride
+                        else:
+                            s.urn_sel <<= s.urn_sel + stride
+                    if ((s.total_incr + 1) >= write_count):
                         s.state <<= INIT
                         s.rdy <<= 1
                         s.wen <<= 0
                         s.incr <<= 0
+                        s.inner_incr <<= 0
                         s.section_incr <<= 0
                     else:
                         if s.skip_cnt >= skip_n:
@@ -534,8 +546,14 @@ class SM_IterateThruAddresses(Component):
                                 else:
                                     s.repeat_count <<= s.repeat_count + 1
                                 s.incr <<= 0
+                                s.inner_incr <<= 0
                             else:
-                                s.incr <<= s.incr + 1
+                                if (s.inner_incr+1 >= addr_b_offset):
+                                    s.inner_incr <<= 0
+                                    if (s.urn_sel >= sel_count - stride):
+                                        s.incr <<= s.incr + addr_b_offset
+                                else:
+                                    s.inner_incr <<= s.inner_incr + 1
                         else:
                             s.wen <<= 0
                     if (s.skip_cnt >= skip_n):
@@ -599,9 +617,12 @@ class StateMachine_old(Component):
         total_bus_counts = {dtype: outer_bus_counts[dtype] *
                             inner_bus_counts[dtype]
                             for dtype in MAC_datatypes}
-        buffer_counts = {dtype: utils.get_num_buffers_reqd(buffer_specs[dtype],
-                         outer_bus_counts[dtype], inner_bus_widths[dtype])
-                         for dtype in ['I', 'W']}
+        max_input_buf_width = utils.get_max_input_bus_width(utils.get_sum_datatype_width(buffer_specs['I'], "DATA", ["in"]), proj_spec, 'I')
+        buffer_counts = {}
+        buffer_counts['W'] = utils.get_num_buffers_reqd(buffer_specs['W'],
+                         outer_bus_counts['W'], inner_bus_widths['W'])
+        buffer_counts['I'] = utils.get_num_buffers_reqd(buffer_specs['I'],
+                         outer_bus_counts['I'], inner_bus_widths['I'], max_input_buf_width)
         buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
                                                         outer_bus_counts['O'] *
                                                         inner_bus_counts['O'],
@@ -760,8 +781,6 @@ class StateMachine_old(Component):
                     #printi(il,inst._dsl.my_name + "_" +
                     #                        port._dsl.my_name + "_sm")
 
-        #printi(il,s.__dict__)
-
                       
 class SM_LoadBufsEMIF(Component):
     # Load on-chip buffers from the EMIF
@@ -803,7 +822,7 @@ class SM_LoadBufsEMIF(Component):
         assert(emif_addr_width>0)
         assert(emif_data_width>0)
         s.start = InPort(1)
-        s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
+        s.buf_count = Wire(max(math.ceil(math.log(buffer_count,2)),1))
         s.buf_address = OutPort(addr_width)
         s.buf_writedata = OutPort(datawidth)
         s.buf_wen = Wire(1)
@@ -824,7 +843,8 @@ class SM_LoadBufsEMIF(Component):
         s.state = Wire(2)
         
         for wb in range(buffer_count):
-            new_wen = SM_BufferWen(int(math.log(buffer_count,2)), wb)
+            assert(wb < 2**math.ceil(math.log(buffer_count,2)))
+            new_wen = SM_BufferWen(math.ceil(math.log(buffer_count,2)), wb)
             setattr(s, "buf_wen{}".format(wb), new_wen)
             if (buffer_count > 1):
                 new_wen.buffer_count //= s.buf_count
@@ -844,9 +864,7 @@ class SM_LoadBufsEMIF(Component):
                 s.rdy <<= 1
                 s.buf_wen <<= 0
             else:
-                #printi(il,"***WEN: " + str(s.buf_wen))
                 if (s.state == INIT):
-                    #printi(il,"***INIT: " + str(s.buf_address))
                     s.buf_wen <<= 0
                     if (s.start):
                         s.state <<= LOAD
@@ -1048,9 +1066,12 @@ class StateMachineEMIF(Component):
         total_bus_counts = {dtype: outer_bus_counts[dtype] *
                             inner_bus_counts[dtype]
                             for dtype in MAC_datatypes}
-        buffer_counts = {dtype: utils.get_num_buffers_reqd(buffer_specs[dtype],
-                         outer_bus_counts[dtype], inner_bus_widths[dtype])
-                         for dtype in ['I', 'W']}
+        max_input_buf_width = utils.get_max_input_bus_width(utils.get_sum_datatype_width(buffer_specs['I'], "DATA", ["in"]), proj_spec, 'I')
+        buffer_counts = {}
+        buffer_counts['W'] = utils.get_num_buffers_reqd(buffer_specs['W'],
+                         outer_bus_counts['W'], inner_bus_widths['W'])
+        buffer_counts['I'] = utils.get_num_buffers_reqd(buffer_specs['I'],
+                         outer_bus_counts['I'], inner_bus_widths['I'], max_input_buf_width)
         buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
                                                         outer_bus_counts['O'] *
                                                         inner_bus_counts['O'],
@@ -1246,7 +1267,6 @@ class StateMachineEMIF(Component):
                 elif (s.state == LOADING_MLBS):
                     if (ws):
                         # Pre-load weights into the MLBs
-                        #print("*")
                         if s.preload_weights.rdy:
                             #print("************************STREAM MLBS!")
                             s.state <<= STREAMING_MLBS
@@ -1259,18 +1279,12 @@ class StateMachineEMIF(Component):
                     else:
                         s.state <<= STREAMING_MLBS        
                 elif (s.state == STREAMING_MLBS):
-                    #print("ACC: " + str(s.datapath.mlb_modules_acc_en_top))
                     # Stream inputs (and weights in OS flow) into MLBs
                     # and stream out outputs
-                    #print("*")
                     if s.stream_inputs.rdy:
                         #print("************************WRITE OFF!")
                         #s.state <<= WRITE_OFFCHIP
                         if ws & (s.ugt_cnt < ugt):
-                            #print("************************RE-LOAD MLBS!")
-                            #print(str(int(s.ugt_cnt)))
-                            #print(str(int(output_count)))
-                            #print(str(int(s.ostart_address_wide)))
                             s.state <<= LOADING_MLBS
                             if (s.uet_cnt == 0):
                                 s.istart_address_wide <<= s.istart_address_wide + (input_count)
@@ -1353,18 +1367,12 @@ class StateMachineEMIF(Component):
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    #printi(il,inst._dsl.my_name + "_" +
-                    #                        port._dsl.my_name + "_sm")
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, inst._dsl.my_name + "_" +
                                             port._dsl.my_name + "_sm")
-                    #printi(il,inst._dsl.my_name + "_" +
-                    #                        port._dsl.my_name + "_sm")
 
-        #printi(il,s.__dict__)
-  
 class StateMachineEMIFSeparate(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
                   proj_spec={}, w_address=0, i_address=0, o_address=0, ws=True):
@@ -1424,9 +1432,12 @@ class StateMachineEMIFSeparate(Component):
         total_bus_counts = {dtype: outer_bus_counts[dtype] *
                             inner_bus_counts[dtype]
                             for dtype in MAC_datatypes}
-        buffer_counts = {dtype: utils.get_num_buffers_reqd(buffer_specs[dtype],
-                         outer_bus_counts[dtype], inner_bus_widths[dtype])
-                         for dtype in ['I', 'W']}
+        max_input_buf_width = utils.get_max_input_bus_width(utils.get_sum_datatype_width(buffer_specs['I'], "DATA", ["in"]), proj_spec, 'I')
+        buffer_counts = {}
+        buffer_counts['W'] = utils.get_num_buffers_reqd(buffer_specs['W'],
+                         outer_bus_counts['W'], inner_bus_widths['W'])
+        buffer_counts['I'] = utils.get_num_buffers_reqd(buffer_specs['I'],
+             outer_bus_counts['I'], inner_bus_widths['I'], max_input_buf_width)
         buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
                                                         outer_bus_counts['O'] *
                                                         inner_bus_counts['O'],
@@ -1453,6 +1464,7 @@ class StateMachineEMIFSeparate(Component):
         # Load data into input buffers
         addri_ports = list(utils.get_ports_of_type(buffer_specs['I'], 'ADDRESS', ["in"]))
         datai_ports = list(utils.get_ports_of_type(buffer_specs['I'], 'DATA', ["out"]))
+        
         s.load_ibufs_emif = SM_LoadBufsEMIF(
             buffer_counts['I'], 2**addri_ports[0]["width"],
             addri_ports[0]["width"], datai_ports[0]["width"],
@@ -1502,10 +1514,18 @@ class StateMachineEMIFSeparate(Component):
         uet = proj_spec.get("temporal_projection",{}).get("UE",{}).get("value",1)
         ugt = proj_spec.get("temporal_projection",{}).get("UG",{}).get("value",1)
         ubt = proj_spec.get("temporal_projection",{}).get("UB",{}).get("value",obuf_len)
+        ubx = proj_spec.get("temporal_projection",{}).get("UB",{}).get("x",1)
         s.ugt_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
         s.uet_cnt = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
         stridex = proj_spec.get("stride",{}).get("x",1)
         stridey = proj_spec.get("stride",{}).get("y",1)
+        mux_size = 1
+        if (proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
+            proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)) > 1:
+            mux_size = proj_spec.get("outer_projection",{}).get('UB',{}).get('y',1) * \
+                   proj_spec.get("inner_projection",{}).get('UB',{}).get('y',1) * \
+                   proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
+                   proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)
         if (ws):
             assert unt == 1
             input_count = ubt*(unt)
@@ -1530,7 +1550,15 @@ class StateMachineEMIFSeparate(Component):
             s.stream_outputs = SM_IterateThruAddresses(output_count+1, addri_ports[0]["width"],
                                                        skip_n=(unt-1),
                                                        start_wait=1, repeat_x=repeat_xo, debug_name="out")
-        s.stream_inputs = SM_IterateThruAddresses(input_count+1, addri_ports[0]["width"], repeat_x=repeat_xi, repeat_len=unt*ubt, debug_name="in")
+        if (ws and (mux_size > 1)):
+            os = ubx
+        else:
+            os = 1
+        if ws:
+            ms = mux_size
+        else:
+            ms = 1
+        s.stream_inputs = SM_IterateThruAddresses(input_count+1, addri_ports[0]["width"], repeat_x=repeat_xi, repeat_len=unt*ubt, debug_name="in", addr_b_offset=os, sel_count=ms, stride=stridey)
         s.istart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"]) + addri_ports[0]["width"]+1)
         s.stream_inputs.start_address //= s.istart_address_wide[0:addri_ports[0]["width"]]
         s.ostart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"]) + addri_ports[0]["width"]+1)
@@ -1576,7 +1604,8 @@ class StateMachineEMIFSeparate(Component):
 
         s.acc_en_top = OutPort(1)
         s.weight_addr_top = OutPort(addrw_ports[0]["width"])
-        s.input_addr_top = OutPort(addri_ports[0]["width"])
+        s.input_addr_top_a = OutPort(addri_ports[0]["width"])
+        s.input_addr_top_b = OutPort(addri_ports[0]["width"])
         s.output_addr_top = OutPort(addri_ports[0]["width"])
         s.emif_address = OutPort(utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS",
                                                                 "in"))
@@ -1588,15 +1617,8 @@ class StateMachineEMIFSeparate(Component):
                                                                 "AVALON_WRITEDATA", "in"))
         s.emif_readdata = InPort(utils.get_sum_datatype_width(emif_spec,
                                                                 "AVALON_READDATA", "out"))
-        mux_size = 1
-        if (proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
-            proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)) > 1:
-            mux_size = proj_spec.get("outer_projection",{}).get('UB',{}).get('y',1) * \
-                   proj_spec.get("inner_projection",{}).get('UB',{}).get('y',1) * \
-                   proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
-                   proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)
         s.urn_sel = OutPort(math.ceil(math.log(max(mux_size,2),2)))
-        s.urn_sel //= 1
+        s.urn_sel //= s.stream_inputs.urn_sel
         @update_ff
         def connect_weight_address_ff():
             if s.reset:
@@ -1621,9 +1643,7 @@ class StateMachineEMIFSeparate(Component):
                 elif (s.state == LOADING_MLBS):
                     if (ws):
                         # Pre-load weights into the MLBs
-                        #print("*")
                         if s.preload_weights.rdy:
-                            #print("************************STREAM MLBS!")
                             s.state <<= STREAMING_MLBS
                             if (s.uet_cnt < (uet-1)):
                                 s.uet_cnt <<= s.uet_cnt + 1
@@ -1664,9 +1684,11 @@ class StateMachineEMIFSeparate(Component):
             else:
                 s.weight_addr_top @= s.load_wbufs_emif.buf_address
             if (s.state == STREAMING_MLBS):
-                s.input_addr_top @= s.stream_inputs.address
+                s.input_addr_top_a @= s.stream_inputs.address
+                s.input_addr_top_b @= s.stream_inputs.address_b
             else:
-                s.input_addr_top @= s.load_ibufs_emif.buf_address
+                s.input_addr_top_a @= s.load_ibufs_emif.buf_address
+                s.input_addr_top_b @= s.load_ibufs_emif.buf_address
             if (s.state == STREAMING_MLBS):
                 s.output_addr_top @= s.stream_outputs.address
             else:
@@ -1708,8 +1730,6 @@ class StateMachineEMIFSeparate(Component):
             s.write_off_emif.emif_waitrequest @= s.emif_waitrequest
             s.write_off_emif.start @= (s.state == STREAMING_MLBS) & s.stream_inputs.rdy & ((ws==0) | (s.ugt_cnt == ugt))
 
-        #printi(il,s.__dict__)
-
         
 class MultipleLayerSystem(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
@@ -1728,9 +1748,7 @@ class MultipleLayerSystem(Component):
         #proj_specs2 = [proj_specs[0], proj_specs[1]] 
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs)
-        #for port in (s.datapath.get_input_value_ports()):
-        #    printi(il,port._dsl.my_name)
-        #assert 1==0
+            
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
         statemachines=[]
         connected_ins = []
@@ -1777,11 +1795,15 @@ class MultipleLayerSystem(Component):
                          s.datapath.sel]
     
         connected_ins += utils.mux_ports_by_name(s,statemachines, "urn_sel", s.datapath,
+            "input_act_modules_addr_sel_top", insel=s.sel)
+        connected_ins += utils.mux_ports_by_name(s,statemachines, "urn_sel", s.datapath,
             "input_interconnect_urn_sel_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "output_addr_top", s.datapath,
             "output_act_modules_portaaddr_top", insel=s.sel)
-        connected_ins += utils.mux_ports_by_name(s,statemachines, "input_addr_top", s.datapath,
+        connected_ins += utils.mux_ports_by_name(s,statemachines, "input_addr_top_a", s.datapath,
             "input_act_modules_portaaddr_top", insel=s.sel)
+        connected_ins += utils.mux_ports_by_name(s,statemachines, "input_addr_top_b", s.datapath,
+            "input_act_modules_portaaddr_b_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "weight_addr_top", s.datapath,
             "weight_modules_portaaddr_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "acc_en_top", s.datapath,
@@ -1809,6 +1831,7 @@ class MultipleLayerSystem(Component):
                                                  s.datapath,
                                                  r"weight_modules_portawe_(\d+)_top",
                                                  insel=s.sel)
+        
         connected_ins += utils.mux_ports_by_name(s, statemachines,
                                                  r"input_wen_(\d+)",
                                                  s.datapath,
@@ -1830,11 +1853,7 @@ class MultipleLayerSystem(Component):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_in_to_top(s, port, port._dsl.my_name)
-                    #printi(il,port._dsl.my_name)
             for port in (inst.get_output_value_ports()):
                 if (port._dsl.my_name not in s.__dict__.keys()) and \
                    (port not in connected_ins):
                     utils.connect_out_to_top(s, port, port._dsl.my_name)
-                    #printi(il,port._dsl.my_name)
-
-        #printi(il,s.__dict__)

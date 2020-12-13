@@ -6,6 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
+input_order = [['URN','chans'], ['UB','batches'], ['UG','value'], ['URN','y'], ['UB','y']]
 
 
 def get_var_product(projection, var_array):
@@ -13,9 +14,26 @@ def get_var_product(projection, var_array):
     """
     product = 1
     for var in var_array:
-        assert var in projection, "Key " + var + \
-               " not found in projection definition."
-        product *= int(projection[var]['value'])
+        #assert var in projection, "Key " + var + \
+        #       " not found in projection definition."
+        product *= int(projection.get(var,{}).get('value',1))
+    return product
+
+def get_var_product_new(projection, var_array, defaults=[]):
+    """ Multiply a subset of projection factors
+    """
+    product = 1
+    for var in var_array:
+        if var[0] in projection:
+            assert var[0] in projection
+            if var[0] in projection:
+                if var[1] in projection[var[0]]:
+                    product *= int(projection[var[0]][var[1]])
+                elif var[1] in defaults:
+                    product *= int(projection[var[0]]['value'])
+            
+            #assert var[0] in projection, "Key " + var + \
+            #   " not found in projection definition."
     return product
 
 
@@ -126,7 +144,7 @@ def get_sum_datatype_width(hw_spec, type, dir=['in', 'out']):
                    hw_spec['ports']))
 
 
-def get_num_buffers_reqd(buffer_spec, stream_count, stream_width):
+def get_num_buffers_reqd(buffer_spec, stream_count, stream_width, max_buf_width=10000000):
     """ Calculate the number of buffers required given IO requirements
 
     :param buffer_spec: Buffer hardware definition (according to hardware
@@ -141,18 +159,45 @@ def get_num_buffers_reqd(buffer_spec, stream_count, stream_width):
     :return: Number of buffers to be instantiated
     :rtype: int
     """
-    streams_per_buffer = math.floor(get_sum_datatype_width(
-        buffer_spec, 'DATA', ["in"]) / stream_width)
+    buf_width = get_sum_datatype_width(buffer_spec, "DATA", ["in"])
+    buf_width = min(max_buf_width, buf_width)
     
+    streams_per_buffer = math.floor(buf_width / stream_width)
+    buf_per_stream = math.ceil( stream_width / buf_width)
+    if (streams_per_buffer > 0):
+        buf_count = math.ceil(stream_count / streams_per_buffer)
+    else:
+        buf_count = buf_per_stream * stream_count
     assert get_sum_datatype_width(buffer_spec, 'DATA', ["in"]) > 0, \
         "Buffer DATAOUT port width of zero"
-    assert streams_per_buffer > 0, "Streams per buffer=" + \
-        str(get_sum_datatype_width(buffer_spec, 'DATA', ["in"])) + "/" + \
-        str(stream_width)
-    return math.ceil(stream_count/streams_per_buffer)
+    assert(buf_count > 0)
+    return buf_count
 
 
-def get_overall_idx(projection, idxs):
+def get_overall_idx_new(projection, idxs, order=['URW', 'URN', 'UE', 'UB', 'UG'], default=[]):
+    product = 1
+    total = 0
+    #for item in idxs:
+    #    assert item in order
+    for item in order:
+        if item[0] in idxs and item[1] in idxs[item[0]]:
+            curr_val = idxs[item[0]][item[1]]     
+            #assert item[0] in projection
+            if item[0] in projection and item[1] not in projection[item[0]]:
+                if item[1] in default:
+                    projection_val = projection[item[0]]['value']
+                else:
+                    projection_val = 1
+            else:  
+                projection_val = projection.get(item[0],{}).get(item[1],1)
+            assert curr_val < projection_val
+            assert curr_val >= 0
+            total += product*curr_val
+            product *= projection_val
+    return total
+
+
+def get_overall_idx(projection, idxs, order=['URW', 'URN', 'UE', 'UB', 'UG']):
     """ Calculate the inner block instance number based on loop unrolling
         factors
 
@@ -167,8 +212,8 @@ def get_overall_idx(projection, idxs):
     product = 1
     total = 0
     for item in idxs:
-        assert item in ['URW', 'URN', 'UE', 'UB', 'UG']
-    for item in ['URW', 'URN', 'UE', 'UB', 'UG']:
+        assert item in order
+    for item in order:
         if item in idxs:
             assert item in projection
             assert idxs[item] < projection[item]['value']
@@ -430,7 +475,7 @@ def get_port_name(plist, t):
     assert (count == 1)
     return retname
 
-def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel={}, sim=False):
+def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel={}, sim=False, idx=''):
     """ Connect ports named ``name1``_<#*``factor1``> on ``src``
         to ports named ``name2``_<#*``factor2``> on
 
@@ -465,33 +510,33 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel=
                         match_dict[str(int(foundname1.group(1))*factor1)] = [port]
                 except:
                     common_ports += [port]
-                
     assert (len(match_dict) > 0) or (len(common_ports) == len(srcs)), \
         "Should have found outputs with name " + \
         name1 + " in " + str(srcs[0].get_output_value_ports()) + " and " + str(common_ports)
-
     for port in inst2.get_input_value_ports():
         port2name = port._dsl.my_name
         foundname2 = re.search("^" + name2+r"$", port2name)
+        
         if foundname2:
             try:
                 name_to_get = str(int(foundname2.group(1))*factor2)
             except:
                 name_to_get = -1
-            #assert (str(int(foundname2.group(1))*factor2) in match_dict) or common, \
-            #    "Should have found output with name " + name2 + " in " + \
-            #    str(match_dict)
             inports = match_dict.get(name_to_get, common_ports)
-            muxn_inst = module_helper_classes.MUXN(port._dsl.Type.nbits, len(inports), sim=sim)
-            setattr(s, port2name+"mux", muxn_inst)
-            if (len(inports) < 2):
-                muxn_inst.sel //= 0
+            assert(len(inports) > 0)
+            if (len(inports) > 1):
+                muxn_inst = module_helper_classes.MUXN(port._dsl.Type.nbits, len(inports), sim=sim)
+                setattr(s, port2name+"mux"+idx, muxn_inst)
+                if (len(inports) < 2):
+                    muxn_inst.sel //= 0
+                else:
+                    muxn_inst.sel //= insel
+                for i in range(len(inports)):
+                    muxin = getattr(muxn_inst, "in"+str(i))
+                    muxin //= inports[i]
+                connectport = muxn_inst.out
             else:
-                muxn_inst.sel //= insel
-            for i in range(len(inports)):
-                muxin = getattr(muxn_inst, "in"+str(i))
-                muxin //= inports[i]
-            connectport = muxn_inst.out
+                connectport = inports[0]     
             connect(connectport, port)
             connected_ins += [port]
             connected_outs += [connectport]
@@ -606,7 +651,7 @@ def connect_inst_ports_by_name(parent, namep, inst, namei, \
     assert foundport, "Port " + namei + " not found in " + str(instports)
     return connected_ins
 
-def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, insel={}, sim=True):
+def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, insel={}, idx='', sim=True):
     """ Connect ports named ``name1``_<#*``factor1``> on ``src``...
     """
     match_dict = {}
@@ -627,7 +672,6 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
                         match_dict["c"] += [port]
                     else:
                         match_dict["c"] = [port]
-                
     assert (len(match_dict) > 0), \
         "Should have found outputs with name " + \
         name1 + " in " + str(srcs[0].get_output_value_ports())
@@ -643,7 +687,7 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
         assert(parentport)
         inports = match_dict[port]
         muxn_inst = module_helper_classes.MUXN(parentport._dsl.Type.nbits, len(inports), sim)
-        setattr(inst2, parentname+"mux", muxn_inst)
+        setattr(inst2, parentname+"mux"+idx, muxn_inst)
         if (len(inports) < 2):
             muxn_inst.sel //= 0
         else:
@@ -658,6 +702,14 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
         connected_outs += [connectport]
     return connected_ins + connected_outs
 
+def get_max_input_bus_width(buf_width, projection, data_type):
+    #buf_width = get_sum_datatype_width(buf_spec, "DATA", ["in"])
+    max_vals_per_buf = get_var_product_new(projection.get("inner_projection",{}), [['UB','batches'], ['UG','value'], ['URN','chans']], defaults=['chans','batches'])
+    if ((projection.get('inner_projection',{}).get('URN',{}).get('y',1) > 1) and data_type ==  "I"):
+        buf_width = min(projection["stream_info"][data_type]*max_vals_per_buf, buf_width)
+    #assert buf_width > 1
+    return buf_width
+
 def get_iw_buffer_dimensions(buf_spec, projection, data_type):
     """ Find the required number and sizes of buffers """
     
@@ -665,13 +717,20 @@ def get_iw_buffer_dimensions(buf_spec, projection, data_type):
                                          data_type)
     values_per_stream = get_proj_stream_count(projection["inner_projection"],
                                               data_type)
+    
     stream_bitwidth = values_per_stream * projection["stream_info"][data_type]
+    buf_width = get_max_input_bus_width(get_sum_datatype_width(buf_spec, "DATA", ["in"]),
+                                        projection, data_type)
     streams_per_buf = math.floor(
-         get_sum_datatype_width(buf_spec, "DATA", ["in"]) / stream_bitwidth)
-    assert (streams_per_buf > 0)
-    buf_count = math.ceil(stream_count / streams_per_buf)
-    values_per_buf = min(streams_per_buf * values_per_stream,
+         buf_width / stream_bitwidth)
+    buf_per_stream = math.ceil( stream_bitwidth / buf_width)
+    if (streams_per_buf > 0):
+        buf_count = math.ceil(stream_count / streams_per_buf)
+        values_per_buf = min(streams_per_buf * values_per_stream,
                          values_per_stream * stream_count)
+    else:
+        buf_count = buf_per_stream * stream_count
+        values_per_buf = math.ceil(values_per_stream / buf_per_stream)
     buf_len = 2 ** get_sum_datatype_width(buf_spec, "ADDRESS", ["in"])
     return (values_per_buf, buf_len, buf_count)
 
@@ -681,11 +740,10 @@ def get_obuffer_dimensions(buf_spec, projection):
         get_proj_stream_count(projection["outer_projection"], 'O') * \
         get_proj_stream_count(projection["inner_projection"], 'O') 
     activation_width = projection["stream_info"]["I"]
-    streams_per_buf = math.floor(
-        get_sum_datatype_width(buf_spec, "DATA", ["in"]) / activation_width)
-    buf_count = math.ceil(stream_count / streams_per_buf)
+    values_per_buf = math.floor(get_sum_datatype_width(buf_spec, "DATA", ["in"]) / activation_width)
+    buf_count = math.ceil(stream_count / values_per_buf)
     buf_len = 2 ** get_sum_datatype_width(buf_spec, "ADDRESS", ["in"])
-    return (streams_per_buf, buf_len, buf_count)
+    return (values_per_buf, buf_len, buf_count)
 
 def read_out_stored_values_from_emif(emif_inst,
                                      bytes_per_word,
@@ -736,6 +794,8 @@ def compute_layer(inputs, weights, layer):
     ug = layer["group"] 
     stridex = layer["stridex"]
     stridey = layer["stridey"]
+    dilx = layer["dilx"]
+    dily = layer["dily"]
     
     outputs = [[[[[0 for k in range(int(ubx/stridex))]  # x
                  for i in range(int(uby/stridey))]      # y    
@@ -750,10 +810,10 @@ def compute_layer(inputs, weights, layer):
                         for ubyi in range(ury-1, uby, stridey): # px y
                             for urxi in range(urx): # filter x
                                 for uryi in range(ury): # filter y
-                                    inact = inputs[ugi][ubi][urci][ubyi+1-ury+uryi][ubxi-urxi]
-                                    weight = weights[ugi][uei][urci][uryi][urxi]
-                                    #print("OUT ["  +str(ubi) + "," +str(int((ubxi-urx+1)/stridex)) + "] = "+ str(outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)]) + " += IN *" + str(inact) + " OUT" + str(weight))
-                                    outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)] += inact*weight
+                                    if ((urxi % dilx == 0) and (uryi % dily == 0)):
+                                        inact = inputs[ugi][ubi][urci][ubyi+1-ury+uryi][ubxi-urxi]
+                                        weight = weights[ugi][uei][urci][uryi][urxi]
+                                        outputs[ugi][ubi][uei][int((ubyi-ury+1)/stridey)][int((ubxi-urx+1)/stridex)] += inact*weight
     return outputs
 
 def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, projection):
@@ -846,13 +906,17 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf, ivalues_per_buf, pr
                                                             
                                                                 
                                                             w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
-                                                            i_stream_idx = (outer_ub*outer_un*ugo + \
-                                                                            ubo*outer_un + \
-                                                                            urno)
+                                                            i_stream_idx = get_overall_idx_new(projection["outer_projection"],
+                                                                                {'URN': {'chans':urno},
+                                                                                 'UB': {'batches':ubo},
+                                                                                 'UG': {'value': ugo}},
+                                                                                 order=input_order, default=['batches','chans'])
                                                             i_value_idx = i_stream_idx*get_proj_stream_count(projection["inner_projection"], 'I') + \
-                                                                          (inner_ub*inner_un*ugi + \
-                                                                           ubi*inner_un + \
-                                                                           urni)
+                                                                                get_overall_idx_new(projection["inner_projection"],
+                                                                                {'URN': {'chans':urni},
+                                                                                 'UB': {'batches':ubi},
+                                                                                 'UG': {'value': ugi}},
+                                                                                 order=input_order, default=['batches','chans'])
                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                             iv_idx = i_value_idx % ivalues_per_buf
                                                             
@@ -1001,3 +1065,65 @@ def print_heading(string, step = -1):
 def printi(level, string):
     """ Print something out with indents """
     print(('\t' * level) + str(string))
+
+    
+def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0, ivalues_per_buf=0):
+    if (ab_yaml):
+        ivalues_per_buf, ibuf_len, ibuf_count = get_iw_buffer_dimensions(
+             ab_yaml, proj_yaml, 'I')
+    output_map = [100 for buf in range(ibuf_count)]
+    inner_ug = proj_yaml.get("inner_projection",{}).get("UG",{}).get("value",1)
+    outer_ug = proj_yaml.get("outer_projection",{}).get("UG",{}).get("value",1)
+    inner_ub = proj_yaml.get("inner_projection",{}).get("UB",{}).get("value",1)
+    inner_ubb = proj_yaml.get("inner_projection",{}).get("UB",{}).get("batches",inner_ub)
+    inner_ubx = proj_yaml.get("inner_projection",{}).get("UB",{}).get("x",1)
+    inner_uby = proj_yaml.get("inner_projection",{}).get("UB",{}).get("y",1)
+    outer_ub = proj_yaml.get("outer_projection",{}).get("UB",{}).get("value",1)
+    outer_ubb = proj_yaml.get("outer_projection",{}).get("UB",{}).get("batches", outer_ub)
+    outer_ubx = proj_yaml.get("outer_projection",{}).get("UB",{}).get("x",1)
+    outer_uby = proj_yaml.get("outer_projection",{}).get("UB",{}).get("y",1)
+    inner_un = proj_yaml.get("inner_projection",{}).get("URN",{}).get("value",1)
+    inner_unc = proj_yaml.get("inner_projection",{}).get("URN",{}).get("chans",inner_un)
+    #
+    inner_unx = proj_yaml.get("inner_projection",{}).get("URN",{}).get("x",1)
+    inner_uny = proj_yaml.get("inner_projection",{}).get("URN",{}).get("y",1)
+    #
+    outer_un = proj_yaml.get("outer_projection",{}).get("URN",{}).get("value",1)
+    outer_unc = proj_yaml.get("outer_projection",{}).get("URN",{}).get("chans",outer_un)
+    outer_unx = proj_yaml.get("outer_projection",{}).get("URN",{}).get("x",1)
+    outer_uny = proj_yaml.get("outer_projection",{}).get("URN",{}).get("y",1)
+
+    for ugo in range(outer_ug): 
+        for ugi in range(inner_ug):
+            for ubox in range(outer_ubx):
+                for ubix in range(inner_ubx):
+                    for uboy in range(outer_uby):
+                        for ubiy in range(inner_uby):
+                            for ubob in range(outer_ubb):
+                                for ubib in range(inner_ubb):
+                                    for urnoc in range(outer_unc):
+                                        for urnic in range(inner_unc):
+                                            for urnoy in range(outer_uny):
+                                                for urniy in range(inner_uny):
+                                                    i_stream_idx = get_overall_idx_new(proj_yaml["outer_projection"],
+                                                                                       {'URN': {'y':urnoy, 'chans':urnoc},
+                                                                                        'UB': {'y':uboy, 'batches':ubob},
+                                                                                        'UG': {'value': ugo}},
+                                                                  order=input_order, default=['batches','chans'])
+                                                    i_value_idx = i_stream_idx*get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
+                                                                  get_overall_idx_new(proj_yaml["inner_projection"],
+                                                                                       {'URN': {'y':urniy, 'chans':urnic},
+                                                                                        'UB': {'y':ubiy, 'batches':ubib},
+                                                                                        'UG': {'value': ugi}},
+                                                         order=input_order, default=['batches','chans'])
+                                                    buf_idx = math.floor(i_value_idx / ivalues_per_buf)                
+                                                    inner_y = get_overall_idx_new(proj_yaml["inner_projection"],
+                                                                                       {'URN': {'y':urniy}, 'UB': {'y':ubiy}},
+                                                                  order=[['URN','y'], ['UB','y']], default=['batches','chans'])
+                                                    outer_y = get_overall_idx_new(proj_yaml["outer_projection"],
+                                                                                       {'URN': {'y':urnoy}, 'UB': {'y':uboy}},
+                                                                  order=[['URN','y'], ['UB','y']], default=['batches','chans'])
+                                                    output_map[buf_idx] = outer_y*inner_uby*inner_uny + inner_y
+                                                    #print(" ---->  " + str(buf_idx) + " : " + str(outer_y) + ", " + str(inner_y)) 
+                                                       
+    return output_map

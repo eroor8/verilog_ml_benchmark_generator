@@ -406,6 +406,7 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
         wb_spec, projection, 'W')
     ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
         ab_spec, projection, 'I')
+    #assert(ibuf_count == 8)
     ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
         ab_spec, projection)
 
@@ -490,12 +491,12 @@ def simulate_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif_spec, \
     obuf = [[[0 for i in range(ovalues_per_buf)]
          for i in range(obuf_len)]
          for j in range (obuf_count)]
-    obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
-        wbuf,
-        ibuf, ivalues_per_buf, projection)
     
     if (validate_output):
         utils.print_heading("Comparing final off-chip buffer contents with expected results",3)
+        obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
+            wbuf,
+            ibuf, ivalues_per_buf, projection)
         print("Expected " + str(obuf))
         print("Actual " + str(emif_vals))
         for bufi in range(obuf_count):
@@ -519,6 +520,7 @@ def simulate_multiple_statemachine(module_name, mlb_spec, wb_spec, ab_spec, emif
     mlb_spec["simulation_model"] = "MLB"
     if "inner_projection" in projections:
         projections = [projections]
+    
     validate(instance=wb_spec, schema=buffer_spec_schema)
     validate(instance=ab_spec, schema=buffer_spec_schema)
     validate(instance=mlb_spec, schema=mlb_spec_schema)

@@ -36,6 +36,21 @@ class MUX_NXN(Component):
                 inportm //= inport
         utils.tie_off_clk_reset(s)
 
+class MUX2(Component):
+    def construct(s, input_width, sel_width, threshhold, sim=False):
+        assert(input_width>0)
+        s.in0 = InPort(input_width)
+        s.in1 = InPort(input_width)
+        s.sel = InPort(sel_width)
+        utils.AddOutPort(s, input_width, "out")
+        @update
+        def upblk_set_wen1():
+            if (s.sel > threshhold):
+                s.out @= s.in1
+            else:
+                s.out @= s.in0
+        utils.tie_off_clk_reset(s)
+        
 class MUXN(Component):
     def construct(s, input_width, input_count, sim=False):
         assert(input_width>0)
@@ -452,7 +467,8 @@ class MAC(Component):
                 s.sum_reg.input_data @= s.sum_reg.output_data + \
                                     s.input_in_w * s.weight_in_w
             else:
-                #print("SUM_REG <= " + str(int(s.input_in_w)) + " * " +  str(int(s.weight_in_w)) + "=" + str(int((s.weight_in_w*s.input_in_w))%(2^4))  )
+                #if (s.sum_in >0 or s.input_in_w > 0 or s.weight_in_w > 0):
+                 #   print("SUM_REG <= " + str(s.sum_in) + " + " + str(int(s.input_in_w)) + " * " +  str(int(s.weight_in_w)) + "=" + str(int((s.weight_in_w*s.input_in_w))%(2^4))  )
                 #print("    OUT <= " + str(int(s.sum_in + s.input_out_w * s.weight_out_w)))
                 s.sum_out @= s.sum_in + s.input_out_w * s.weight_out_w
                 s.sum_reg.input_data @= s.input_in_w * s.weight_in_w

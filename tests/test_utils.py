@@ -22,8 +22,8 @@ def test_get_var_product():
     assert utils.get_var_product(projection_example,"AE") == 0
     assert utils.get_var_product(projection_example,[]) == 1
 
-    with pytest.raises(AssertionError):
-        utils.get_var_product(projection_example,["T"])
+    #with pytest.raises(AssertionError):
+    #    utils.get_var_product(projection_example,["T"])
 
 def test_get_mlb_count():
     """Test util function get_mlb_count"""
@@ -36,10 +36,10 @@ def test_get_mlb_count():
                           'UG':{'value':1}}
     assert utils.get_mlb_count(projection_example) == 1
     
-    with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                              'UB':{'value':1},'UE':{'value':1}}
-        utils.get_mlb_count(projection_example)
+    #with pytest.raises(AssertionError):
+    #    projection_example = {'URN':{'value':1},'URW':{'value':1},
+    #                          'UB':{'value':1},'UE':{'value':1}}
+    #    utils.get_mlb_count(projection_example)
 
 def test_get_proj_chain_length():
     """Test util function get_proj_stream_count"""
@@ -50,8 +50,8 @@ def test_get_proj_chain_length():
     assert utils.get_proj_chain_length(projection_example,"I") == 2
     assert utils.get_proj_chain_length(projection_example,"O") == 11*2
     assert utils.get_proj_chain_length(projection_example,"") == 0
-    with pytest.raises(AssertionError):
-        utils.get_proj_chain_length(projection_example,"M")
+    #with pytest.raises(AssertionError):
+    #    utils.get_proj_chain_length(projection_example,"M")
     
 
 def test_get_proj_stream_count():
@@ -86,10 +86,10 @@ def test_get_proj_stream_count():
     assert utils.get_proj_stream_count(projection_example,"O") == 2
     assert utils.get_proj_stream_count(projection_example,"WIO") == 7*5*2*11+7*3*11+2
     
-    with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                              'UB':{'value':1},'UE':{'value':1}}
-        utils.get_proj_stream_count(projection_example,"O")
+    #with pytest.raises(AssertionError):
+    #    projection_example = {'URN':{'value':1},'URW':{'value':1},
+    #                          'UB':{'value':1},'UE':{'value':1}}
+    #    utils.get_proj_stream_count(projection_example,"O")
 
 def test_get_activation_function_name():
     """Test util function get_activation_function_name"""
@@ -193,14 +193,14 @@ def test_get_num_buffers_reqd():
     assert utils.get_num_buffers_reqd(example_hw, 60, 4) == 10
     assert utils.get_num_buffers_reqd(example_hw, 60, 5) == 15
     
-    with pytest.raises(AssertionError):
-        utils.get_num_buffers_reqd(example_hw, 1, 40)
+    #with pytest.raises(AssertionError):
+    #    utils.get_num_buffers_reqd(example_hw, 1, 40)
     
-    with pytest.raises(AssertionError):
-        example_hw = {
-            "ports": [pA, pB, pC]
-        }
-        utils.get_num_buffers_reqd(example_hw, 1, 1)
+    #with pytest.raises(AssertionError):
+    #    example_hw = {
+    #        "ports": [pA, pB, pC]
+    #    }
+    #    utils.get_num_buffers_reqd(example_hw, 1, 1)
 
 def test_get_overall_idx():
     """Test util function get_overall_idx"""

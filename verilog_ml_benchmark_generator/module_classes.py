@@ -486,7 +486,7 @@ class WeightInterconnect(Component):
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
                   num_buffers=1, num_mlbs=1, projection={}, sim=False,
-                  num_mlbs_used=-1):
+                  num_mlbs_used=-1, inner_projection={}, dilx=1):
         """ Constructor for WeightInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -592,8 +592,32 @@ class WeightInterconnect(Component):
                                 input_bus_start = section_idx * mlb_width_used
                                 input_bus_end = (section_idx + 1) * \
                                                 mlb_width_used
-                                connect(newout[0:mlb_width_used],
-                                    input_bus[input_bus_start:input_bus_end])
+                                urw_total = 0
+                                if (dilx > 1):
+                                    if (inner_projection):
+                                        num_weight_ins = utils.get_var_product(inner_projection, ['UG', 'UE',
+                                                              'URN']) 
+                                        for input_gen in range(num_weight_ins):
+                                            for weight_x in range(inner_projection.get('URW').get('x',1)):
+                                                input_w = input_gen*inner_projection.get('URW').get('x',1)+weight_x
+                                                w_width = int(mlb_width_used/(inner_projection.get('URW').get('x',1)*num_weight_ins))
+                                                start_w_idx = w_width*input_w
+                                                end_w_idx = w_width*(input_w+1)
+                                                total_urw = inner_projection.get('URW').get('x',1)*urw + weight_x
+                                                if (total_urw % dilx == 0):
+                                                    connect(newout[start_w_idx:end_w_idx],
+                                                        input_bus[input_bus_start+start_w_idx:input_bus_start+end_w_idx])
+                                                else:
+                                                    newout[start_w_idx:end_w_idx] //= 0
+                                    else:
+                                        if (urw % dilx == 0):
+                                            connect(newout[0:mlb_width_used],
+                                                input_bus[input_bus_start:input_bus_end])
+                                        else:
+                                            newout[0:mlb_width_used] //= 0
+                                else:
+                                    connect(newout[0:mlb_width_used],
+                                            input_bus[input_bus_start:input_bus_end])
                 
                                 # Then connect each chain output
                                 if (ub == 0):
@@ -639,7 +663,7 @@ class InputInterconnect(Component):
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
                   num_buffers=1, num_mlbs=1, projection={},
-                  inner_projection={}, inner_width=1, mux_urn=False, sim=False):
+                  inner_projection={}, inner_width=1, mux_urn=False, sim=False, dily=1):
         """ Constructor for InputInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -784,11 +808,11 @@ class InputInterconnect(Component):
                                                                 muxout = getattr(currmux, "out" + str(mux_in_idx))
                                                                 total_idx = input_bus_start+math.floor(mlb_in_idx % ins_per_buffer)*inner_width
                                                                 connect(input_bus[total_idx:total_idx+inner_width], muxin)
-                                                                #if (curr_uny % 2 == 0):
-                                                                connect(muxout, newout[mlb_in_idx*inner_width:
+                                                                if (curr_uny % dily == 0):
+                                                                    connect(muxout, newout[mlb_in_idx*inner_width:
                                                                                        (mlb_in_idx+1)*inner_width])
-                                                                #else:
-                                                                #    newout[mlb_in_idx*inner_width:(mlb_in_idx+1)*inner_width] //= 0
+                                                                else:
+                                                                    newout[mlb_in_idx*inner_width:(mlb_in_idx+1)*inner_width] //= 0
                                                                 
                                     else:
                                         section_w = int(mlb_width_used/buffers_per_stream)
@@ -1105,7 +1129,9 @@ class Datapath(Component):
                 mlb_width_used=inner_bus_widths['W'][i],
                 num_buffers=max(buffer_counts['W']),
                 num_mlbs=max(MLB_counts),
-                projection=outer_projs[i])
+                projection=outer_projs[i],
+                inner_projection=inner_projs[i],
+                dilx=proj_specs[i].get("dilation",{}).get("x",1))
             weight_interconnects += [weight_interconnect]
             setattr(s,"weight_interconnect"+newname, weight_interconnect)
             input_interconnect = InputInterconnect(
@@ -1118,7 +1144,9 @@ class Datapath(Component):
                 projection=proj_specs[i],
                 inner_projection=inner_projs[i],
                 inner_width=inner_data_widths['I'][i],
-                mux_urn=True)
+                mux_urn=True,
+                dily=proj_specs[i].get("dilation",{}).get("y",1)
+            )
             setattr(s,"input_interconnect"+newname, input_interconnect)
             input_interconnects += [input_interconnect]
             output_ps_interconnect = OutputPSInterconnect(

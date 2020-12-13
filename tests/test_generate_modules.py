@@ -734,7 +734,7 @@ def test_simulate_layer(
     print(layer)
 
     # Create random input data arrays to load into EMIF
-    weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+    weights = [[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans

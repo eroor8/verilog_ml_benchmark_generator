@@ -1,8 +1,8 @@
 name: "test_proj"
 inner_projection:
     URW: 
-        value: 1
-        x: 1
+        value: 2
+        x: 2
         y: 1
     URN: 
         value: 3
@@ -46,9 +46,9 @@ temporal_projection:
     UE: 
         value: 1
     UB: 
-        value: 8
-        x: 1
-        y: 8
+        value: 16
+        x: 4
+        y: 4
         batches: 1
     UG: 
         value: 1
@@ -57,8 +57,8 @@ stride:
     x: 1
     y: 1
 dilation:
-    x: 1
-    y: 1
+    x: 2
+    y: 2
 stream_info:
     W: 4
     I: 4

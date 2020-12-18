@@ -316,6 +316,8 @@ def odinify(filename_in):
     filedata =  '\n'.join(line_list)
     
     # replace HW block component names with actual names
+    filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)", r"\2\4\5",
+                      filedata)
     filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)", r"\2\4\5",
                       filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)

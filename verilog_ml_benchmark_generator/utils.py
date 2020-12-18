@@ -190,7 +190,7 @@ def get_overall_idx_new(projection, idxs, order=['URW', 'URN', 'UE', 'UB', 'UG']
                     projection_val = 1
             else:  
                 projection_val = projection.get(item[0],{}).get(item[1],1)
-            assert curr_val < projection_val
+            #assert curr_val < projection_val
             assert curr_val >= 0
             total += product*curr_val
             product *= projection_val
@@ -784,18 +784,18 @@ def read_out_stored_values_from_array(array,
     
 
 def compute_layer(inputs, weights, layer):
-    urx = layer["filter_x"]
-    ury = layer["filter_y"]
-    urc = layer["in_chans"]
-    ue = layer["out_chans"]
-    ub = layer["batches"]
-    ubx = layer["image_x"] 
-    uby = layer["image_y"] 
-    ug = layer["group"] 
-    stridex = layer["stridex"]
-    stridey = layer["stridey"]
-    dilx = layer["dilx"]
-    dily = layer["dily"]
+    urx = layer.get("filter_x",1)
+    ury = layer.get("filter_y",1)
+    urc = layer.get("in_chans",1)
+    ue = layer.get("out_chans",1)
+    ub = layer.get("batches",1)
+    ubx = layer.get("image_x",1) 
+    uby = layer.get("image_y",1) 
+    ug = layer.get("group",1) 
+    stridex = layer.get("stridex",1)
+    stridey = layer.get("stridey",1)
+    dilx = layer.get("dilx",1)
+    dily = layer.get("dily",1)
     
     outputs = [[[[[0 for k in range(int(ubx/stridex))]  # x
                  for i in range(int(uby/stridey))]      # y    

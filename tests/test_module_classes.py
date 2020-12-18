@@ -117,6 +117,70 @@ def test_HWB():
     testinst = module_classes.HWB_Sim(spec, proj_spec)
     testinst.elaborate()
     
+def test_MLB_Wrapper():
+    """Test Component class HWB Wrapper"""
+    spec = {
+        "block_name": "test_block",
+        "ports": [{"name":"acc_en", "width":1, "direction": "in", "type":"ACC_EN"},
+                  {"name":"a", "width":64, "direction": "in", "type":"W"},
+                  {"name":"a_out", "width":64, "direction": "out", "type":"W"},
+                  {"name":"a_en", "width":1, "direction": "in", "type":"W_EN"},
+                  {"name":"b", "width":64, "direction": "in", "type":"I"},
+                  {"name":"b_out", "width":64, "direction": "out", "type":"I"},
+                  {"name":"b_en", "width":1, "direction": "in", "type":"I_EN"},
+                  {"name":"res", "width":128, "direction": "in", "type":"O"},
+                  {"name":"res_out", "width":128, "direction": "out", "type":"O"}
+                  ],
+        "simulation_model": "MLB",
+        "possible_projections": {"URW":1, "URN":8, "UE":1, "UB":1, "UG":1}
+    }
+    projection = {"name": "test",
+                  "activation_function": "RELU",
+                  "stream_info": {"W": 4,
+                                  "I": 4,
+                                  "O": 16},
+                  "inner_projection": {'URN':{'y':2, 'value':2, 'chans':1},'URW':{'value':2},
+                                       'UB':{'value':1},'UE':{'value':1},
+                                       'UG':{'value':1},
+                                       'PRELOAD':[{'dtype':'W','bus_count':1}]}
+                  }
+    testinst = module_classes.MLB_Wrapper(spec,[projection])
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup()) 
+    testinst.a @= 0
+    testinst.a_en @= 0
+    testinst.b @= 0
+    testinst.b_en @= 0
+    testinst.res @= 0
+    testinst.acc_en @= 0
+    testinst.sim_tick()
+    
+    # Load weights
+    testinst.a_en @= 1
+    testinst.a @= 1
+    for cycle in range(4):
+        assert testinst.a_out == 0
+        testinst.sim_tick()
+    assert testinst.a_out == 1
+    assert testinst.sim_model.mac_modules.MAC_inst_0.weight_out == 1
+    assert testinst.sim_model.mac_modules.MAC_inst_1.weight_out == 1
+    assert testinst.sim_model.mac_modules.MAC_inst_2.weight_out == 1
+    assert testinst.sim_model.mac_modules.MAC_inst_3.weight_out == 1
+    
+    testinst.a_en @= 0
+    testinst.b_en @= 1
+    testinst.b @= 35 #23
+    testinst.sim_tick()
+
+    assert(testinst.b_out[0:4] == 0)
+    assert(testinst.b_out[4:8] == 0)
+    assert(testinst.res_out == 5)
+    testinst.b @= 20 #14
+    testinst.sim_tick()
+    assert(testinst.b_out[0:4] == 3)
+    assert(testinst.b_out[4:8] == 2)
+    testinst.sim_tick()
+    
 def test_HWB_Wrapper():
     """Test Component class HWB Wrapper"""
     spec = {

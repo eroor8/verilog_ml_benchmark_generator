@@ -1,0 +1,79 @@
+block_name: "ml_block"
+simulation_model: "MLB"
+MAC_info:
+    num_units: 64
+    data_widths:
+        W: 4
+        I: 4
+        O: 8
+possible_projections:
+    URW: 1
+    URN: 8
+    UE: 1
+    UB: 1
+    UG: 1
+ports:
+    -   name: a_en
+        width: 1
+        direction: "in"
+        type: "W_EN"
+    -   name: config_in
+        width: 1
+        direction: "in"
+        type: "MODE"
+    -   name: b_en
+        width: 1
+        direction: "in"
+        type: "I_EN"
+    -   name: hp_en
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: acc_en
+        width: 1
+        direction: "in"
+        type: "ACC_EN"
+    -   name: config_en
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: config_in
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: a
+        width: 64
+        direction: "in"
+        type: "W"
+    #-   name: b
+    #    width: 24
+    #    direction: "in"
+    #    type: "I"
+    -   name: b_cas_in
+        width: 256
+        direction: "in"
+        type: "I"
+    -   name: res_cas_in
+        width: 256
+        direction: "in"
+        type: "O"
+    -   name: b_cas_out
+        width: 256
+        direction: "out"
+        type: "I"
+    -   name: a_out
+        width: 64
+        direction: "out"
+        type: "W"
+    -   name: res_cas_out
+        width: 256
+        direction: "out"
+        type: "O"
+    -   name: clk
+        width: 1
+        direction: "in"
+        type: "CLK"
+    -   name: reset
+        width: 1
+        direction: "in"
+        type: "RESET"

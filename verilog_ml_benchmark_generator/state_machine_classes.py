@@ -462,6 +462,7 @@ class SM_IterateThruAddresses(Component):
         s.skip_cnt = Wire(w_addr_width)
         s.repeat_count = Wire(repeat_x+1)
         sel_width = math.ceil(math.log(max(sel_count,2),2))
+        s.w_urn_sel = Wire(sel_width*2)
         s.urn_sel = OutPort(sel_width)
         swm = 0
         if (start_wait > 0):
@@ -476,6 +477,7 @@ class SM_IterateThruAddresses(Component):
             s.address @= s.w_address[0:addr_width]
             s.address_b @= s.w_address[0:addr_width] + addr_b_offset
             s.total_incr @= s.incr + s.inner_incr + s.section_incr
+            s.urn_sel @= s.w_urn_sel[0:sel_width]
             
         INIT, LOAD, START_WAIT = 0, 1, 2
         @update_ff
@@ -489,7 +491,7 @@ class SM_IterateThruAddresses(Component):
                 s.wen <<= 0
                 s.skip_cnt <<= 0
                 s.repeat_count <<= 0
-                s.urn_sel <<= 0
+                s.w_urn_sel <<= 0
             else:
                 if (s.state == INIT):
                     if (s.start):
@@ -525,10 +527,10 @@ class SM_IterateThruAddresses(Component):
                         s.skip_cnt <<= s.skip_cnt + 1
                 elif (s.state == LOAD):
                     if (s.inner_incr + 1 >= addr_b_offset):
-                        if (s.urn_sel >= sel_count - stride):
-                            s.urn_sel <<= s.urn_sel - sel_count + stride
+                        if (s.w_urn_sel >= sel_count - stride):
+                            s.w_urn_sel <<= s.w_urn_sel - sel_count + stride
                         else:
-                            s.urn_sel <<= s.urn_sel + stride
+                            s.w_urn_sel <<= s.w_urn_sel + stride
                     if ((s.total_incr + 1) >= write_count):
                         s.state <<= INIT
                         s.rdy <<= 1
@@ -550,7 +552,7 @@ class SM_IterateThruAddresses(Component):
                             else:
                                 if (s.inner_incr+1 >= addr_b_offset):
                                     s.inner_incr <<= 0
-                                    if (s.urn_sel >= sel_count - stride):
+                                    if (s.w_urn_sel >= sel_count - stride):
                                         s.incr <<= s.incr + addr_b_offset
                                 else:
                                     s.inner_incr <<= s.inner_incr + 1

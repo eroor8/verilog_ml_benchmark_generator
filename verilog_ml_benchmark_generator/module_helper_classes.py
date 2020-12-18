@@ -123,6 +123,8 @@ class ShiftRegister(Component):
             newreg = Register(reg_width, sim=sim)
             setattr(s, "SR_" + str(shift_reg), newreg)
             connect(newreg.ena, s.ena)
+            newout = utils.AddOutPort(s, reg_width, "out" + str(shift_reg))
+            newout //= newreg.output_data
 
         if (length > 0):
             connect(s.SR_0.input_data, s.input_data)
@@ -402,7 +404,7 @@ class MAC(Component):
          :param acc_en: Accumulate output
          :type acc_en: Component class
     """
-    def construct(s, input_width=8, weight_width=8, sum_width=32, sim=False):
+    def construct(s, input_width=8, weight_width=8, sum_width=32, sim=False, register_input=True):
         """ Constructor for register
          :param input_width: Bit-width of register
          :type input_width: int
@@ -420,7 +422,7 @@ class MAC(Component):
         s.input_reg.input_data //= s.input_in
         s.input_reg.ena //= s.input_en
         s.input_out //= s.input_reg.output_data
-        
+            
         utils.AddInPort(s,weight_width, "weight_in")
         utils.AddInPort(s,1, "weight_en")
         utils.AddOutPort(s,weight_width, "weight_out")
@@ -480,7 +482,7 @@ class MACWrapper(Component):
          number of instantiations, named <MAC_port>_<instance>.
     """
     def construct(s, count=1, input_width=1,
-                  weight_width=1, sum_width=32, sim=False):
+                  weight_width=1, sum_width=32, sim=False, register_input=True):
         """ Constructor for MACWrapper
 
          :param count: Number of activation functions to instantiate
@@ -493,7 +495,7 @@ class MACWrapper(Component):
          :type sum_width: int
         """
         for i in range(count):
-            curr_inst = MAC(input_width, weight_width, sum_width, sim)
+            curr_inst = MAC(input_width, weight_width, sum_width, sim, register_input)
             setattr(s, 'MAC_inst_' + str(i), curr_inst)
 
             for port in curr_inst.get_input_value_ports():
@@ -507,7 +509,7 @@ class MACWrapper(Component):
 class MLB(Component):
     """" This is the sim model for an MLB block with given projection.
     """
-    def construct(s, proj_specs, sim=False):
+    def construct(s, proj_specs, sim=False, register_input=True):
         """ Constructor for MLB
 
          :param proj_spec: Dictionary describing projection of computations
@@ -537,7 +539,7 @@ class MLB(Component):
         s.mac_modules = MACWrapper(max(MAC_counts),
                                    max(data_widths['I']),
                                    max(data_widths['W']),
-                                   max(data_widths['O']), sim)
+                                   max(data_widths['O']), sim, register_input)
         utils.AddInPort(s, max(bus_widths['W']), "W_IN")
         utils.AddOutPort(s, max(bus_widths['W']), "W_OUT")
         utils.AddInPort(s, 1, "W_EN")

@@ -446,7 +446,7 @@ def test_simulate_multiple_layers(
     print(iaddrs)
     print(oaddrs)
     print("start sim")
-    outvals, testinst = generate_modules.simulate_multiple_statemachine(
+    outvals, testinst = generate_modules.simulate_accelerator(
         module_name="test_odin_emif_sm", 
         mlb_spec=mlb_yaml,
         wb_spec=wb_yaml,
@@ -771,18 +771,18 @@ def test_simulate_layer(
     
     emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
     print("==> Start simulation")
-    outvals, testinst = generate_modules.simulate_statemachine(
+    outvals, testinst = generate_modules.simulate_accelerator(
         module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml,
                                                     wb_spec=wb_yaml,
                                                     ab_spec=ab_yaml,
                                                     emif_spec=emif_yaml,
-                                                    projection=proj_yaml,
+                                                    projections=proj_yaml,
                                                     write_to_file=True,
                                                     randomize=False,
-                                                    waddr=0,
-                                                    iaddr=iaddr,
-                                                    oaddr=oaddr,
+                                                    waddrs=[0],
+                                                    iaddrs=[iaddr],
+                                                    oaddrs=[oaddr],
                                                     ws=ws,
                                                     validate_output=v)
     print("==> Done simulation")
@@ -817,7 +817,7 @@ def test_simulate_layer(
                   ibuf, proj_yaml["stream_info"]["I"], testinst)
 
     with open("final_offchip_data_contents.yaml") as outfile:
-        outvals_yaml = yaml.safe_load(outfile)
+        outvals_yaml = yaml.safe_load(outfile)[0]
     actual_outputs = [[[[[0
                      for k in range(len(layer_outputs[t][l][j][i]))]  # x
                      for i in range(len(layer_outputs[t][l][j]))]      # y    
@@ -903,18 +903,18 @@ def test_simulate_emif_statemachine(
     oaddr = len(emif_data)
     
     emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
-    outvals, testinst = generate_modules.simulate_statemachine(
+    outvals, testinst = generate_modules.simulate_accelerator(
         module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml,
                                                     wb_spec=wb_yaml,
                                                     ab_spec=ab_yaml,
                                                     emif_spec=emif_yaml,
-                                                    projection=proj_yaml,
+                                                    projections=proj_yaml,
                                                     write_to_file=True,
                                                     randomize=False,
-                                                    waddr=0,
-                                                    iaddr=iaddr,
-                                                    oaddr=oaddr,
+                                                    waddrs=[0],
+                                                    iaddrs=[iaddr],
+                                                    oaddrs=[oaddr],
                                                     ws=ws,
                                                     validate_output=v)
     print("done simulating")
@@ -971,12 +971,11 @@ def test_simulate_emif_statemachine(
     print("\nACTUAL OUT")
 
     with open("final_offchip_data_contents.yaml") as outfile:
-        outvals_yaml = yaml.safe_load(outfile)
-    print(outvals_yaml)
-    print(obuf_count)
-    print(obuf_len)
+        outvals_yaml = yaml.safe_load(outfile)[0]
+
     for bufi in range(obuf_count):
-        for olen in range(min(obuf_len,ibuf_len)-1): 
+        for olen in range(min(obuf_len,ibuf_len)-1):
+            print(obuf[bufi][olen])
             assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
 
 
@@ -1090,7 +1089,8 @@ def test_simulate_random_emif_statemachine():
     oaddr = len(emif_data)
     
     emif_yaml["parameters"]["fill"] = emif_data
-    outvals, testinst = generate_modules.simulate_statemachine(module_name="test_odin_emif_sm", 
+    outvals, testinst = generate_modules.simulate_accelerator_with_random_input(
+        module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml,
                                                     wb_spec=wb_yaml,
                                                     ab_spec=ab_yaml,

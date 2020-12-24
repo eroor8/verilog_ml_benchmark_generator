@@ -50,9 +50,15 @@ def test_find_mappings():
                 'ET': 5,'PXT':1,
                 'PYT':2,'RXT':4,
                 'RYT':1}
-    result = constraint_evaluation.find_mappings(hwb, workload_conv1, 200, False, suggested_solution=None ) #suggested_soln)
-    assert len(result) > 0
-    print(len(result))
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 200, False, suggested_solution=None)
+    print(len(mappings))
+    assert tp == 14340
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 200, True, suggested_solution=None)
+    print(len(mappings))
+    assert tp == 10648
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 200, False, suggested_solution=None)
+    print(len(mappings))
+    assert tp == 3521
 
     
 if __name__ == "__main__":

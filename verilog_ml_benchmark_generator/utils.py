@@ -475,6 +475,12 @@ def get_port_name(plist, t):
     assert (count == 1)
     return retname
 
+def flatten_array(input_array, data_width):
+    return [sum((lambda i: inner[i] * (2 ** (i * data_width)))(i)
+                for i in range(len(inner)))
+            for outer in input_array
+            for inner in outer]
+
 def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1, insel={}, sim=False, idx=''):
     """ Connect ports named ``name1``_<#*``factor1``> on ``src``
         to ports named ``name2``_<#*``factor2``> on

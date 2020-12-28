@@ -5,9 +5,9 @@ inner_projection:
         x: 2
         y: 1
     URN: 
-        value: 3
+        value: 2
         x: 1
-        y: 3
+        y: 2
         chans: 1 
     UE: 
         value: 1
@@ -38,7 +38,7 @@ outer_projection:
     UG: 
         value: 1
 temporal_projection:
-    URN: # 0 for ws
+    URN: 
         value: 1
         x: 1
         y: 1

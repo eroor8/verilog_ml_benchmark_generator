@@ -41,12 +41,13 @@ def generate_full_datapath(module_name, mlb_definition,
     proj_yaml = yaml.safe_load(projection_definition)
     if type(proj_yaml) == list:
         generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml,
-                                            ab_yaml, proj_yaml, True)
+                                                ab_yaml, proj_yaml, True)
     else:
         generate_modules.generate_full_datapath(module_name, mlb_yaml, wb_yaml,
-                                            ab_yaml, [proj_yaml], True)
+                                                ab_yaml, [proj_yaml], True)
     print("Datapath generation was successful")
     return 0
+
 
 @click.command()
 @click.option('--module_name', default='activation_functions',
@@ -67,9 +68,9 @@ def generate_full_datapath(module_name, mlb_definition,
               help='YAML definition of some projection',
               type=click.File('rb'))
 def generate_statemachine(module_name, mlb_definition,
-                           act_buffer_definition, weight_buffer_definition,
-                           emif_definition,
-                           projection_definition):
+                          act_buffer_definition, weight_buffer_definition,
+                          emif_definition,
+                          projection_definition):
     """Generate an activation function module -
        Currently only RELU is supported"""
     mlb_yaml = yaml.safe_load(mlb_definition)
@@ -78,8 +79,9 @@ def generate_statemachine(module_name, mlb_definition,
     proj_yaml = yaml.safe_load(projection_definition)
     emif_yaml = yaml.safe_load(emif_definition)
     generate_modules.generate_statemachine(module_name, mlb_yaml, wb_yaml,
-                                            ab_yaml, proj_yaml,
-                                            write_to_file=True, emif_spec=emif_yaml)
+                                           ab_yaml, proj_yaml,
+                                           write_to_file=True,
+                                           emif_spec=emif_yaml)
     print("Statemachine generation was successful")
     return 0
 
@@ -110,14 +112,10 @@ def generate_statemachine(module_name, mlb_definition,
               help='Address of weights in off chip data')
 @click.option('--output_address', required=False, default=0,
               help='Address of outputs in off chip data')
-def simulate_statemachine(module_name, mlb_definition,
-                           act_buffer_definition, weight_buffer_definition,
-                           emif_definition,
-                           projection_definition,
-                           randomize_inputs,
-                           input_address,
-                           weight_address,
-                           output_address):
+def simulate_accelerator_with_random_input(
+        module_name, mlb_definition, act_buffer_definition,
+        weight_buffer_definition, emif_definition, projection_definition,
+        randomize_inputs, input_address, weight_address, output_address):
     """Generate an activation function module -
        Currently only RELU is supported"""
     mlb_yaml = yaml.safe_load(mlb_definition)
@@ -125,16 +123,15 @@ def simulate_statemachine(module_name, mlb_definition,
     ab_yaml = yaml.safe_load(act_buffer_definition)
     proj_yaml = yaml.safe_load(projection_definition)
     emif_yaml = yaml.safe_load(emif_definition)
-    generate_modules.simulate_statemachine(module_name, mlb_yaml, wb_yaml,
-                                            ab_yaml, emif_yaml, proj_yaml,
-                                            True, randomize_inputs, output_address,
-                                            input_address, weight_address)
+    generate_modules.simulate_accelerator_with_random_input(
+        module_name, mlb_yaml, wb_yaml, ab_yaml, emif_yaml, proj_yaml,
+        True, randomize_inputs, output_address, input_address, weight_address)
     print("Statemachine simulation was successful")
     return 0
 
 
 cli.add_command(generate_full_datapath)
-cli.add_command(simulate_statemachine)
+cli.add_command(simulate_accelerator_with_random_input)
 cli.add_command(generate_statemachine)
 
 if __name__ == "__main__":

@@ -1,14 +1,14 @@
 name: "test_proj"
 inner_projection:
     URW: 
-        value: 2
-        x: 2
+        value: 3
+        x: 3
         y: 1
     URN: 
-        value: 2
+        value: 3
         x: 1
         y: 1
-        chans: 2 
+        chans: 3
     UE: 
         value: 1
     UB: 
@@ -29,7 +29,7 @@ outer_projection:
         y: 1
         chans: 1
     UE: 
-        value: 1
+        value: 2
     UB: 
         value: 1
         x: 1

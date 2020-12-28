@@ -4,10 +4,10 @@
 
 import pytest
 import random
+import os
+import sys
 from pymtl3 import *
-
 from click.testing import CliRunner
-
 from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import module_helper_classes
 from verilog_ml_benchmark_generator import cli

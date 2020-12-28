@@ -83,7 +83,7 @@ def test_simulate_statemachine():
                             "projection_spec_0.yaml")
     emif_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "emif_spec_0.yaml")
-    result = runner.invoke(cli.simulate_statemachine,
+    result = runner.invoke(cli.simulate_accelerator_with_random_input,
                            ['--module_name', "test",
                             '--mlb_definition', mlb_spec,
                             '--act_buffer_definition', ab_spec,

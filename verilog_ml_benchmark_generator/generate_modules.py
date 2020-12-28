@@ -11,6 +11,7 @@ import os
 import re
 import random
 import yaml
+import constraint_evaluation
 from jsonschema import validate
 from pymtl3 import *
 from pymtl3.passes.backends.verilog import *
@@ -21,6 +22,7 @@ import module_classes
 import utils
 import state_machine_classes
 il = 1
+currstep = 0
 
 # Schemas to validate input yamls
 supported_activations = ["RELU"]
@@ -383,7 +385,7 @@ def run_simulation(module, num_cycles, n=-1):
     :param num_cycles: number of cycles to simulate
     """
     # Start simulation and wait for done to be asserted
-    utils.print_heading("Begin cycle accurate simulation", 2)
+    utils.print_heading("Begin cycle accurate simulation", currstep + 2)
     module.sim_reset()
     if (n > -1):
         module.sel @= n
@@ -392,7 +394,7 @@ def run_simulation(module, num_cycles, n=-1):
     module.sm_start @= 0
     for i in range(num_cycles):
         if (module.done):
-            print("Simulation complete (done asserted)")
+            utils.printi(il, "Simulation complete (done asserted)", "GREEN")
             break
         module.sim_tick()
     module.sim_tick()
@@ -412,6 +414,21 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     Generate an accelerator.
     Fill the off-chip memory with random data (or assume initial data is
     included in the spec).
+
+    :param module_name: Top level module name and filename
+    :param mlb_spec: Hardware definition of ML block
+    :param wb_spec: Hardware definition of weight buffer
+    :param ab_spec: Hardware definition of input buffer
+    :param emif_spec: Hardware definition of EMIF
+    :param projections: Projection information
+    :param write_to_file: Whether or not to write resulting verilog to file.
+    :param randomize: Whether to randomize input data or read from emif spec.
+    :param oaddrs: Address of output actiavations in off-chip data
+    :param iaddrs: Address of input actiavations in off-chip data
+    :param waddrs: Address of weights in off-chip data
+    :param ws: Weight stationary (or output stationary)
+    :param validate_output: Whether to check the output correctness
+    :param layer_sel: Which layers to simulate
     """
     emif_spec["simulation_model"] = "EMIF"
     wb_spec["simulation_model"] = "Buffer"
@@ -434,7 +451,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     if (randomize):
         # Fill EMIF with random data
         utils.print_heading("Generating random data to initialize " +
-                            "off-chip memory", 0)
+                            "off-chip memory", currstep + 0)
         wbuf = [[[random.randint(0, (2 ** projection["stream_info"]["W"]) - 1)
                   for k in range(wvalues_per_buf)]
                  for i in range(wbuf_len)]
@@ -463,7 +480,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
             iaddr, ibuf_len)
 
     # Generate the accelerator
-    utils.print_heading("Generating pyMTL model of accelerator", 1)
+    utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projection, w_address=0,
@@ -487,7 +504,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     # Check that the outputs are right!
     if (validate_output):
         utils.print_heading("Comparing final off-chip buffer contents " +
-                            "with expected results", 3)
+                            " with expected results", currstep + 3)
         obuf = [[[0 for i in range(ovalues_per_buf)]
                  for i in range(obuf_len)]
                 for j in range(obuf_count)]
@@ -501,14 +518,15 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
                 assert obuf[bufi][olen] == emif_vals[bufi *
                                                      min(obuf_len, ibuf_len)
                                                      + olen]
-        utils.printi(il, "Simulation outputs were correct.")
+        utils.printi(il, "Simulation outputs were correct.", "GREEN")
     return emif_vals, t
 
 
 def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                          projections, write_to_file, randomize=True,
                          oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True,
-                         validate_output=True, layer_sel=[0]):
+                         validate_output=True, layer_sel=[0], simulate=True,
+                         gen_ver=False):
     """
     Generate an accelerator
     Fill the off-chip memory with random data (or assume initial data is
@@ -529,21 +547,25 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     :param validate_output: Whether to check the output correctness
     :param layer_sel: Which layers to simulate
     """
-    emif_spec["simulation_model"] = "EMIF"
-    wb_spec["simulation_model"] = "Buffer"
-    ab_spec["simulation_model"] = "Buffer"
     mlb_spec["simulation_model"] = "MLB"
     if "inner_projection" in projections:
         projections = [projections]
-
     validate(instance=wb_spec, schema=buffer_spec_schema)
     validate(instance=ab_spec, schema=buffer_spec_schema)
     validate(instance=mlb_spec, schema=mlb_spec_schema)
+
+    if (gen_ver):
+        generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec,
+                              projections[0], write_to_file, emif_spec,
+                              waddrs[0], iaddrs[0], oaddrs[0], ws)
+    emif_spec["simulation_model"] = "EMIF"
+    wb_spec["simulation_model"] = "Buffer"
+    ab_spec["simulation_model"] = "Buffer"
     for projection in projections:
         validate(instance=projection, schema=proj_schema)
 
     # Generate the statemachine
-    utils.print_heading("Generating pyMTL model of accelerator", 1)
+    utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projections,
@@ -551,7 +573,8 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                                   i_address=iaddrs,
                                                   o_address=oaddrs, ws=ws)
     t.elaborate()
-    t.apply(DefaultPassGroup())
+    if (simulate):
+        t.apply(DefaultPassGroup())
 
     # Simulate each of the layers
     output_vals = [[] for l in range(max(layer_sel) + 1)]
@@ -576,17 +599,18 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
             iaddrs[n], ibuf_len)
 
         # Run the simulation for 2000 cycles
-        run_simulation(t, 2000, n)
+        if (simulate):
+            run_simulation(t, 2000, n)
 
-        # Collect final EMIF data (and later write to file)
-        emif_vals = utils.read_out_stored_values_from_emif(
-            t.emif_inst.sim_model.buf, ovalues_per_buf,
-            min(obuf_len, ibuf_len) * obuf_count,
-            projections[n]["stream_info"]["I"], oaddrs[n])
-        output_vals[n] = emif_vals
+            # Collect final EMIF data (and later write to file)
+            emif_vals = utils.read_out_stored_values_from_emif(
+                t.emif_inst.sim_model.buf, ovalues_per_buf,
+                min(obuf_len, ibuf_len) * obuf_count,
+                projections[n]["stream_info"]["I"], oaddrs[n])
+            output_vals[n] = emif_vals
 
         # Check that the outputs are right!
-        if (validate_output):
+        if (simulate and validate_output):
             obuf = [[[0 for i in range(ovalues_per_buf)]
                     for i in range(obuf_len)]
                     for j in range(obuf_count)]
@@ -594,17 +618,109 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                               ibuf, ivalues_per_buf,
                                               projections[n])
             utils.print_heading("Comparing final off-chip buffer contents" +
-                                "with expected results", 3)
+                                "with expected results", currstep + 3)
             utils.printi(il, "Expected " + str(obuf))
             utils.printi(il, "Actual " + str(emif_vals))
             for bufi in range(obuf_count):
                 for olen in range(min(obuf_len, ibuf_len) - 1):
                     assert obuf[bufi][olen] == \
                         emif_vals[bufi * min(obuf_len, ibuf_len) + olen]
-            utils.printi(il, "Simulation outputs were correct.")
+            utils.printi(il, "Simulation outputs were correct.", "GREEN")
 
     if (write_to_file):
         with open("final_offchip_data_contents.yaml", 'w') as file:
             yaml.dump(output_vals, file, default_flow_style=False)
 
     return output_vals, t
+
+
+def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
+                                    ab_spec, emif_spec,
+                                    pe_count, layer,
+                                    oaddr=0, iaddr=0, waddr=0,
+                                    simulate=True,
+                                    ws=True):
+    """
+    Generate an accelerator for a given set of layers.
+
+    :param module_name: Top level module name and filename
+    :param mlb_spec: Hardware definition of ML block
+    :param wb_spec: Hardware definition of weight buffer
+    :param ab_spec: Hardware definition of input buffer
+    :param emif_spec: Hardware definition of EMIF
+    :param pe_count: Number of PEs available
+    :param oaddr: Address of output actiavations in off-chip data
+    :param iaddr: Address of input actiavations in off-chip data
+    :param waddr: Address of weights in off-chip data
+    :param ws: Weight stationary (or output stationary)
+    """
+    global currstep
+    utils.print_heading("Find an appropriate mapping vector for given layer " +
+                        "specification", 1)
+    currstep = 1
+    mappings, mapping_score = constraint_evaluation.find_mappings(
+        mlb_spec,
+        layer["loop_dimensions"],
+        pe_count
+    )
+    assert(len(mappings) == 1)
+    proj = {}
+
+    proj["activation_function"] = layer["activation_function"]
+    proj["stride"] = layer["stride"]
+    proj["dilation"] = layer["dilation"]
+    proj["stream_info"] = layer["stream_info"]
+    proj["temporal_projection"] = {'URN': {'value': (mappings[0]["RXT"] *
+                                                     mappings[0]["RYT"] *
+                                                     mappings[0]["CT"]),
+                                           'x': mappings[0]["RXT"],
+                                           'y': mappings[0]["RYT"],
+                                           'chans': mappings[0]["CT"]},
+                                   'UE': {'value': mappings[0]["ET"]},
+                                   'UB': {'value': (mappings[0]["BT"] *
+                                                    mappings[0]["PXT"] *
+                                                    mappings[0]["PYT"]),
+                                          'x': mappings[0]["PXT"],
+                                          'y': mappings[0]["PYT"],
+                                          'batches': mappings[0]["BT"]},
+                                   'UG': {'value': 1}}
+    proj["outer_projection"] = {'URN': {'value': (mappings[0]["RYO"] *
+                                                  mappings[0]["CO"]),
+                                        'x': 1,
+                                        'y': mappings[0]["RYO"],
+                                        'chans': mappings[0]["CO"]},
+                                'URW': {'value': mappings[0]["RXO"],
+                                        'x': mappings[0]["RXO"],
+                                        'y': 1},
+                                'UE': {'value': mappings[0]["EO"]},
+                                'UB': {'value': (mappings[0]["BO"] *
+                                                 mappings[0]["PXO"] *
+                                                 mappings[0]["PYO"]),
+                                       'x': mappings[0]["PXO"],
+                                       'y': mappings[0]["PYO"],
+                                       'batches': mappings[0]["BO"]},
+                                'UG': {'value': 1}}
+    proj["inner_projection"] = {'URN': {'value': (mappings[0]["RYI"] *
+                                                  mappings[0]["CI"]),
+                                        'x': 1,
+                                        'y': mappings[0]["RYI"],
+                                        'chans': mappings[0]["CI"]},
+                                'URW': {'value': mappings[0]["RXI"],
+                                        'x': mappings[0]["RXI"],
+                                        'y': 1},
+                                'UE': {'value': mappings[0]["EI"]},
+                                'UB': {'value': (mappings[0]["BI"] *
+                                                 mappings[0]["PXI"] *
+                                                 mappings[0]["PYI"]),
+                                       'x': mappings[0]["PXI"],
+                                       'y': mappings[0]["PYI"],
+                                       'batches': mappings[0]["BI"]},
+                                'UG': {'value': 1}}
+
+    outvals, testinst = simulate_accelerator(
+        module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
+        False, [oaddr], [iaddr], [waddr], ws, simulate=simulate,
+        gen_ver=True)
+
+    # Calculate buffer counts and dimensions
+    return outvals, testinst

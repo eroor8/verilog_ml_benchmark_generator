@@ -11,12 +11,11 @@ from pymtl3 import *
 
 from click.testing import CliRunner
 
-from verilog_ml_benchmark_generator import utils
-from verilog_ml_benchmark_generator import module_classes
-from verilog_ml_benchmark_generator import state_machine_classes
-from verilog_ml_benchmark_generator import cli
-
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import utils
+import module_classes
+import cli
+import state_machine_classes
 from test_helpers import *
 
 def test_SM_InputSel():

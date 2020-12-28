@@ -4,11 +4,11 @@ import os
 import yaml
 import sys
 import random
-from verilog_ml_benchmark_generator import utils
-from verilog_ml_benchmark_generator import generate_modules
 import jsonschema
 import subprocess
 from jsonschema import validate
+from verilog_ml_benchmark_generator import utils
+from verilog_ml_benchmark_generator import generate_modules
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_helpers import *
@@ -1186,3 +1186,94 @@ def test_odinify():
     assert "OK" in str(process.stdout.read())
 
     
+
+@pytest.mark.skip
+def test_generate_layer(workload_yaml,
+        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True):
+
+    # Make sure that output gets through odin.
+    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            mlb_file)
+    ab_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            ab_file)
+    wb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            wb_file)
+    emif_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             emif_file)
+    proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             proj_file)
+    
+    with open(mlb_spec) as stream:
+        mlb_yaml = yaml.safe_load(stream)
+    with open(ab_spec) as stream:
+        ab_yaml = yaml.safe_load(stream)
+    with open(wb_spec) as stream:
+        wb_yaml = yaml.safe_load(stream)
+    with open(proj_spec) as stream:
+        proj_yaml = yaml.safe_load(stream)
+    with open(emif_spec) as stream:
+        emif_yaml = yaml.safe_load(stream)
+  
+    # Calculate buffer dimensions info
+    wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
+        wb_yaml, proj_yaml, 'W')
+    ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
+        ab_yaml, proj_yaml, 'I')
+    ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
+        ab_yaml, proj_yaml)
+
+    # Create random input data arrays to load into EMIF
+    wbuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["W"])-1)
+            for k in range(wvalues_per_buf)]    # values per word
+            for i in range(wbuf_len)]           # words per buffer
+            for j in range(wbuf_count)]         # buffer count
+    wbuf_flat = [sum((lambda i: inner[i] * \
+                      (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                     for i in range(len(inner))) \
+                         for outer in wbuf for inner in outer]
+    iaddr = len(wbuf_flat)
+    ibuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["I"])-1)
+             for k in range(ivalues_per_buf)]            # values per word
+             for i in range(ibuf_len)]                   # words per buffer
+             for j in range (ibuf_count)]                # buffers
+    ibuf_flat = [sum((lambda i: inner[i] * \
+                (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                     for i in range(len(inner))) \
+                          for outer in ibuf for inner in outer]
+    emif_data = wbuf_flat + ibuf_flat
+    oaddr = len(emif_data)
+    
+    emif_yaml["parameters"]["fill"] = emif_data
+    generate_modules.generate_accelerator_for_layers(
+        module_name="test_full_layer_flow", 
+        mlb_spec=mlb_yaml,
+        wb_spec=wb_yaml,
+        ab_spec=ab_yaml,
+        emif_spec=emif_yaml,
+        pe_count=10,
+        layer=workload_yaml,
+        waddr=0,
+        iaddr=iaddr,
+        oaddr=oaddr)
+    
+def test_generate_layer_example():
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":4, "I":4, "O":16},
+        "loop_dimensions": {'B':1,'C':3,
+                     'E':4,'PX':2,
+                     'PY':2,'RX':1,
+                            'RY':1},
+        #"loop_dimensions": {'B':1,'C':3,
+        #             'E':32,'PX':224,
+        #             'PY':224,'RX':3,
+        #                    'RY':3},
+        "activation_function": 'RELU'
+    }
+    test_generate_layer(workload, "mlb_spec_intel.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_cs.yaml", True, False)

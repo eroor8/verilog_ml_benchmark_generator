@@ -8,6 +8,40 @@ import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
 input_order = [['URN','chans'], ['UB','batches'], ['UG','value'], ['URN','y'], ['UB','y']]
 
+def print_warning(indent, string):
+    printi(indent, "WARNING: " + string, "ORANGE")
+
+def print_mapping(mapping, indent):
+    """ Print a layer nicely
+    """
+    i = {"RX": mapping["RXI"],
+         "RY": mapping["RYI"],
+         "E": mapping["EI"],
+         "C": mapping["CI"],
+         "B": mapping["BI"],
+         "PX": mapping["PXI"],
+         "PY": mapping["PYI"]
+    }
+    o = {"RX": mapping["RXO"],
+         "RY": mapping["RYO"],
+         "E": mapping["EO"],
+         "C": mapping["CO"],
+         "B": mapping["BO"],
+         "PX": mapping["PXO"],
+         "PY": mapping["PYO"]
+    }
+    t = {"RX": mapping["RXT"],
+         "RY": mapping["RYT"],
+         "E": mapping["ET"],
+         "C": mapping["CT"],
+         "B": mapping["BT"],
+         "PX": mapping["PXT"],
+         "PY": mapping["PYT"]
+    }
+    
+    return ("\n" + "\t"*indent + "Intra-PE unrolling factors: " + str(i) +
+            "\n" + "\t"*indent + "Iner-PE unrolling factors: " + str(o) +
+            "\n" + "\t"*indent + "Temporal tiling factors: " + str(t)) 
 
 def get_var_product(projection, var_array):
     """ Multiply a subset of projection factors
@@ -1059,6 +1093,7 @@ def merge_bus(v,width):
         sum += v[i] * (2 ** (width * i))
     return sum
 
+
 def print_heading(string, step = -1):
     """ Print something out on the terminal in green with underlines """
     to_print = '\n===> '
@@ -1066,11 +1101,21 @@ def print_heading(string, step = -1):
         to_print += "Step " + str(step) + ": "
     to_print += string + "\n"
     to_print += ("=" * len(to_print))
-    print(to_print)
+    printi(1, to_print, "BLUE")
 
-def printi(level, string):
+    
+def printi(level, string, colour="None"):
     """ Print something out with indents """
-    print(('\t' * level) + str(string))
+    col_code = ''
+    if (colour) == "ORANGE":
+        col_code = '\033[31m'
+    elif (colour) == 'GREEN':
+        col_code = '\033[32m'
+    elif (colour) == 'RED':
+        col_code = '\033[31m'
+    elif (colour) == 'BLUE':
+        col_code = '\033[34m'
+    print(('\t' * level) + col_code + str(string)  + '\033[0m')
 
     
 def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0, ivalues_per_buf=0):

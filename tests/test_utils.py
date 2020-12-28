@@ -3,13 +3,14 @@
 """Tests for `verilog_ml_benchmark_generator` package utilities."""
 
 import pytest
+import os
+import sys
 from pymtl3 import *
-
 from click.testing import CliRunner
-
 from verilog_ml_benchmark_generator import utils
-from verilog_ml_benchmark_generator import module_helper_classes
 from verilog_ml_benchmark_generator import cli
+from verilog_ml_benchmark_generator import module_helper_classes
+
 
 def test_get_var_product():
     """Test util function get_var_product"""

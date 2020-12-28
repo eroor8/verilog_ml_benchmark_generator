@@ -1,12 +1,22 @@
 import constraint
 import sys
+import os
 import math
+il = 1
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import utils
 
 
 def get_factors(maxv, product):
+    """ Make a list of factors of product, less than maxv.
+
+    :param maxv: Maximum factor size
+    :param product: Product to factor
+    """
     max_bound = min(maxv, math.ceil(math.sqrt(product)))
     var_range = []
-    for i in range(1, max_bound+1):
+    for i in range(1, max_bound + 1):
         if i not in var_range:
             var_range += [i]
         if (math.ceil(product / i) < maxv) and \
@@ -14,22 +24,38 @@ def get_factors(maxv, product):
             var_range += [math.ceil(product / i)]
     return var_range
 
+
 def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
+    """ Score a possible solution based on estimated cycle count.
+
+    :param solution: Mapping vector
+    :param num_MACs: Total number of MACs per PE
+    :param loop_bounds: Layer loop bounds
+    :param preload_i: number of weight chains per PE
+    :param preload_o: number of PE weight chains
+    """
     # calculate an approximate cycle count
     product_cycles = get_product(
         solution, [loop_bound + 'T' for loop_bound in loop_bounds])
-    num_used_PEs = get_product(solution,
+    num_used_PEs = get_product(
+        solution,
         [loop_bound + 'O' for loop_bound in loop_bounds])
-    preload_streams = preload_i*preload_o
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
-                     math.ceil(num_used_PEs/preload_o)
+        math.ceil(num_used_PEs/preload_o)
     preload_cycles = preload_chain_len * \
-                     get_product(solution, ['ET', 'RXT', 'RYT'])
+        get_product(solution, ['ET', 'RXT', 'RYT'])
     total_cycles = product_cycles + preload_cycles
     return total_cycles
 
+
 def ApproximateProductConstraint(x, val0=1, val1=1, val2=1, val3=1, val4=1,
                                  val5=1, val6=1):
+    """ Make sure that product of given factors is greater than x,
+        but not unneccessarily big.
+
+    :param x: Expected product
+    :param val0-val6: Factors
+    """
     min_product = (val0 * val1 * val2 * val3 * val4 * val5 * val6)
     max_product = max((val0 - 1) * val1 * val2 * val3 * val4 * val5 * val6,
                       val0 * (val1 - 1) * val2 * val3 * val4 * val5 * val6,
@@ -42,6 +68,11 @@ def ApproximateProductConstraint(x, val0=1, val1=1, val2=1, val3=1, val4=1,
 
 
 def get_product(var_dict, var_keys):
+    """ Find the product of values in the dict with keys in ver_keys
+
+    :param var_dict: Dict of factors
+    :param var_keys: List of keys
+    """
     product = 1
     for var_key in var_keys:
         product *= var_dict[var_key]
@@ -49,10 +80,21 @@ def get_product(var_dict, var_keys):
 
 
 def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
-                  suggested_solution=None, preload_o=1, preload_i=1, num_solutions=1,
-                  cost_function=score_solution):
-    print("Solving for optimal mapping vector. " +
-          "This may take several minutes.")
+                  suggested_solution=None, preload_o=1, preload_i=1,
+                  num_solutions=1, cost_function=score_solution):
+    """ Find the best set of mappings (according to a given cost function)
+    that are achievable given the ML blocks available.
+
+    :param hwb: Tensor block definition
+    :param pe_count: Number of PEs available
+    :param enable_soft_logic: Add soft-logic to PEs to enable more mappings.
+    :param suggested_solution: Proposed mapping vector
+    :param preload_o: Information about weight preload method
+    :param preload_i: Information about weight preload method
+    """
+    utils.printi(il, "Solving for optimal mapping vector. " +
+                 "This may take several minutes.")
+    utils.printi(il, "Workload definition: " + str(workload))
     problem = constraint.Problem()
     hwbp = hwb['possible_projections']
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
@@ -88,8 +130,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                 access_patterns_r[lb] += ['UG']
                 access_patterns_r[lb].remove('UB')
             access_patterns['UB'] = []
-    print(access_patterns)
-    print(access_patterns_r)
 
     # Windowing can't be done in both dimensions inside the PE or across PEs.
     # problem.addConstraint(constraint.InSetConstraint([1]), ['PXO'])
@@ -126,7 +166,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                     var_range = get_factors(pe_count,
                                             math.ceil(curr_bound /
                                                       min_bound_i))
-                    print(str(var_range) + " (to " + str(curr_bound) + ")")
                 elif (level == 'I'):
                     var_range = range(min_bound_i,
                                       min(curr_bound, max_bound_i) + 1)
@@ -134,8 +173,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                     var_range = get_factors(sys.maxsize,
                                             math.ceil(curr_bound /
                                                       min_bound_i))
-                    print("T: " + str(var_range) +
-                          " (to " + str(curr_bound) + ")")
                 problem.addVariable(loop_bound + level, var_range)
 
         nested_bounds = [loop_bound + level for level in levels]
@@ -167,9 +204,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
 
     solutions = problem.getSolutions()
     assert len(solutions) > 0
-    
-    print("Finding best solutions")
-    
+
     # Sort by estimated cycle count
     min_product = sys.maxsize
     num_MACs = hwb["MAC_info"]["num_units"]
@@ -179,9 +214,12 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                               cost_function(soln, nm, lbs, pli, plo))
     min_solutions = sorted_solutions[0:num_solutions]
     min_product = cost_function(min_solutions[0], num_MACs, loop_bounds,
-                                 preload_i, preload_o)
-    print("Best solutions (of " + str(len(solutions)) +
-          ", with throughput " + str(min_product))
+                                preload_i, preload_o)
+    utils.printi(il, "Found best " + str(num_solutions) +
+                 " solutions out of " + str(len(solutions)) +
+                 " possibilities, with estimated cycle count " +
+                 str(min_product))
     for min_solution in min_solutions:
-        print(min_solution)
+        utils.printi(il, "Solution: " + utils.print_mapping(min_solution,
+                                                            il + 1))
     return min_solutions, min_product

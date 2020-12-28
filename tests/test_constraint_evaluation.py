@@ -4,16 +4,13 @@ import os
 import yaml
 import sys
 import random
+from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import constraint_evaluation
 from verilog_ml_benchmark_generator import generate_modules
 import jsonschema
 import subprocess
 from jsonschema import validate
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from test_helpers import *
-
-VTR_FLOW_PATH = os.getenv('VTR_FLOW_PATH')
 
 def test_find_mappings():
     """Test yaml schema validation"""
@@ -59,7 +56,3 @@ def test_find_mappings():
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 200, False, suggested_solution=None)
     print(len(mappings))
     assert tp == 3521
-
-    
-if __name__ == "__main__":
-    test_find_mappings()

@@ -14,8 +14,7 @@ import math
 import os
 import copy
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import utils
-from utils import printi
+from utils import *
 import module_helper_classes
 from module_helper_classes import *
 il = 1
@@ -401,7 +400,7 @@ class HWB_Sim(Component):
         
         # If this is an ML block, add behavioural info
         if "simulation_model" not in spec:
-            printi(il,"Warning: HW block " + spec.get("block_name","unnamed") + \
+            utils.print_warning(il, "HW block " + spec.get("block_name","unnamed") + \
                   "has no sim model - all outputs tied off")
         else:
             if spec.get("simulation_model","") == "Buffer":
@@ -1283,7 +1282,7 @@ class Datapath(Component):
                     utils.get_sum_datatype_width(mlb_spec, dtype)
                 if (inner_data_widths[dtype][i] > \
                     mlb_spec['MAC_info']['data_widths'][dtype]):
-                    print("WARNING: MLB width insufficient to for inner projection")
+                    utils.print_warning(il, "MLB width insufficient to for inner projection")
 
         # Calculate required number of MLBs, IO streams, activations
         outer_projs = [proj_spec['outer_projection'] for proj_spec in proj_specs]
@@ -1426,14 +1425,12 @@ class Datapath(Component):
                                                          portname["name"]+"_(\d+)",
                                                          weight_interconnect,
                                                          "inputs_from_mlb_(\d+)")
-                
-        print("Connect weight interconnect")
+
         for portname in utils.get_ports_of_type(mlb_spec, 'W', ["in"]):
             connected_ins += utils.mux_ports_by_name(s,
                 weight_interconnects, "outputs_to_mlb_(\d+)", s.mlb_modules,
                                                      portname["name"]+"_(\d+)", insel=s.sel)
-            
-        print("Connect weight interconnect2")
+
         for portname in utils.get_ports_of_type(buffer_specs['W'], 'DATA',
                                                 ["out"]):
             for i in range(len(proj_specs)):
@@ -1444,7 +1441,6 @@ class Datapath(Component):
                                                          "inputs_from_buffer_(\d+)")
 
         # Connect input interconnect
-        print("Connect input interconnect")
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["out"]):
             for i in range(len(proj_specs)):
                 input_interconnect = input_interconnects[i]
@@ -1452,14 +1448,13 @@ class Datapath(Component):
                                                          portname["name"]+"_(\d+)",
                                                          input_interconnect,
                                                          "inputs_from_mlb_(\d+)")
-              #  assert(9==8)
-        print("Connect input interconnect2")
+
         for portname in utils.get_ports_of_type(mlb_spec, 'I', ["in"]):
-            #assert(len(input_interconnects) == 2)
             connected_ins += utils.mux_ports_by_name(s, input_interconnects,
-                                                         "outputs_to_mlb_(\d+)",
-                                                         s.mlb_modules,
-                                                         portname["name"]+"_(\d+)", insel=s.sel)
+                                                     "outputs_to_mlb_(\d+)",
+                                                     s.mlb_modules,
+                                                     portname["name"]+"_(\d+)",
+                                                     insel=s.sel)
         
         for portname in utils.get_ports_of_type(buffer_specs['I'], 'DATA',
                                                 ["out"]):

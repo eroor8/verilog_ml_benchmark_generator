@@ -3,14 +3,16 @@ import numpy
 import pytest
 import random
 import math
+import os
+import sys
 from pymtl3 import *
 
 from click.testing import CliRunner
 
-from verilog_ml_benchmark_generator import utils
-from verilog_ml_benchmark_generator import module_classes
-from verilog_ml_benchmark_generator import cli
-
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import utils
+import module_classes
+import cli
 
 def merge_bus(v,width):
     sum = 0

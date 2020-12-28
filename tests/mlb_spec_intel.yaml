@@ -8,8 +8,8 @@ MAC_info:
         O: 8
 possible_projections:
     URW: 1
-    URN: 8
-    UE: 1
+    URN: 10
+    UE: 3
     UB: 1
     UG: 1
 ports:

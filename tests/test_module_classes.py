@@ -8,9 +8,7 @@ import math
 import os
 import sys
 from pymtl3 import *
-
 from click.testing import CliRunner
-
 from verilog_ml_benchmark_generator import utils
 from verilog_ml_benchmark_generator import module_classes
 from verilog_ml_benchmark_generator import cli

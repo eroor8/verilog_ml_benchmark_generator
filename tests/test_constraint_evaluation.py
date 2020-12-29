@@ -52,7 +52,7 @@ def test_find_mappings():
     assert tp == 14340
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 200, True, suggested_solution=None)
     print(len(mappings))
-    assert tp == 10648
+    assert tp == 15512
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 200, False, suggested_solution=None)
     print(len(mappings))
-    assert tp == 3521
+    assert tp == 4090

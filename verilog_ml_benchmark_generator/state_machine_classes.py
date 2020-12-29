@@ -1752,6 +1752,8 @@ class MultipleLayerSystem(Component):
                                              ob_spec, proj_specs)
             
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
+        s.synth_keep = OutPort(1)
+        s.synth_keep //= s.emif_inst.readdata[0]
         statemachines=[]
         connected_ins = []
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))

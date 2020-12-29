@@ -1,4 +1,4 @@
-block_name: "ml_block_inputs"
+block_name: "ml_block_input"
 ports:
     -   name: portawe
         width: 1

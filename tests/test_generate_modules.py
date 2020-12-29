@@ -813,7 +813,7 @@ def test_simulate_layer(
                   "ml_block_weights_inst_{}",
                   wbuf, proj_yaml["stream_info"]["W"], testinst)
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
-                  "ml_block_inputs_inst_{}",
+                  "ml_block_input_inst_{}",
                   ibuf, proj_yaml["stream_info"]["I"], testinst)
 
     with open("final_offchip_data_contents.yaml") as outfile:
@@ -946,7 +946,7 @@ def test_simulate_emif_statemachine(
                   "ml_block_weights_inst_{}",
                   wbuf, proj_yaml["stream_info"]["W"], testinst)
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
-                  "ml_block_inputs_inst_{}",
+                  "ml_block_input_inst_{}",
                   ibuf, proj_yaml["stream_info"]["I"], testinst)
     # Check that the right data is in the MLBs
     #if (ws):
@@ -1250,11 +1250,24 @@ def test_generate_layer(workload_yaml,
         wb_spec=wb_yaml,
         ab_spec=ab_yaml,
         emif_spec=emif_yaml,
-        pe_count=10,
+        pe_count=20,
         layer=workload_yaml,
         waddr=0,
         iaddr=iaddr,
         oaddr=oaddr)
+
+    verilog_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                            "test_full_layer_flow.v")
+    archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "test_arch.xml")
+    command = [VTR_FLOW_PATH, verilog_file, archfile,
+               "-ending_stage", "abc"]
+    print("ODIN command:" + str(command))
+    process = subprocess.Popen(command,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+    assert "OK" in str(process.stdout.read())
+
     
 def test_generate_layer_example():
     

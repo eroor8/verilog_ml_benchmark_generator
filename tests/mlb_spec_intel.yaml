@@ -7,9 +7,9 @@ MAC_info:
         I: 4
         O: 8
 possible_projections:
-    URW: 1
-    URN: 10
-    UE: 3
+    URW: 2
+    URN: 2 #10
+    UE: 1
     UB: 1
     UG: 1
 ports:
@@ -42,7 +42,7 @@ ports:
         direction: "in"
         type: "C"
     -   name: a
-        width: 64
+        width: 32
         direction: "in"
         type: "W"
     #-   name: b
@@ -50,23 +50,23 @@ ports:
     #    direction: "in"
     #    type: "I"
     -   name: b_cas_in
-        width: 256
+        width: 24
         direction: "in"
         type: "I"
     -   name: res_cas_in
-        width: 256
+        width: 128
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 256
+        width: 24
         direction: "out"
         type: "I"
     -   name: a_out
-        width: 64
+        width: 32
         direction: "out"
         type: "W"
     -   name: res_cas_out
-        width: 256
+        width: 128
         direction: "out"
         type: "O"
     -   name: clk

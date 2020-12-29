@@ -132,7 +132,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
             access_patterns['UB'] = []
 
     # Windowing can't be done in both dimensions inside the PE or across PEs.
-    # problem.addConstraint(constraint.InSetConstraint([1]), ['PXO'])
     # problem.addConstraint(constraint.InSetConstraint([1]), ['PXI'])
 
     # Ensure that product of tiling factors is the workload dimension
@@ -202,6 +201,10 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                 ((val0 * val1 * val2 * val3 * val4 * val5 * val6) <= maxv),
                 nested_bounds)
 
+    problem.addConstraint(constraint.InSetConstraint([1]), ['RXT'])
+    problem.addConstraint(constraint.InSetConstraint([1]), ['RYT'])
+    problem.addConstraint(constraint.InSetConstraint([1]), ['CT'])
+    
     solutions = problem.getSolutions()
     assert len(solutions) > 0
 

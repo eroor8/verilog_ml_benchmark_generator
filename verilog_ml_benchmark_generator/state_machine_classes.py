@@ -126,6 +126,7 @@ class SM_WriteOffChip(Component):
         datain_inputs = utils.add_n_wires(s, buffer_count, datawidth, "sel_cin")
         
         for wb in range(buffer_count):
+            #new_sel = SM_InputSel(datawidth, math.ceil(math.log(buffer_count,2)), wb)
             new_sel = SM_InputSel(datawidth, math.ceil(math.log(buffer_count,2)), wb)
             setattr(s, "insel{}".format(wb), new_sel)
             if (buffer_count > 1):
@@ -944,7 +945,7 @@ class SM_WriteOffChipEMIF(Component):
         assert (datawidth>0)
         assert (emif_data_width>=datawidth)
         s.start = InPort(1)
-        s.buf_count = Wire(max(int(math.log(buffer_count,2)),1))
+        s.buf_count = Wire(max(math.ceil(math.log(buffer_count,2)),1))
         s.address = OutPort(addr_width)
         s.bufdata = Wire(datawidth)
         
@@ -955,14 +956,14 @@ class SM_WriteOffChipEMIF(Component):
         s.emif_read = OutPort(1)
         s.emif_read //= 0
         s.emif_waitrequest = InPort(1)
-        
         s.rdy = OutPort(1)
         s.state = Wire(2)
         datain_inputs = utils.add_n_inputs(s, buffer_count, datawidth, "datain_")
         datain_inputs = utils.add_n_wires(s, buffer_count, datawidth, "sel_cin")
         
         for wb in range(buffer_count):
-            new_sel = SM_InputSel(datawidth, math.ceil(math.log(buffer_count,2)), wb)
+            new_sel = SM_InputSel(datawidth,
+                                  math.ceil(math.log(buffer_count,2)), wb)
             setattr(s, "insel{}".format(wb), new_sel)
             if (buffer_count > 1):
                 new_sel.buffer_count //= s.buf_count

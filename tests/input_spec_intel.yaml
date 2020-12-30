@@ -1,0 +1,18 @@
+block_name: "ml_block_input"
+ports:
+    -   name: portawe
+        width: 1
+        direction: "in"
+        type: "WEN"
+    -   name: portaaddr
+        width: 8
+        direction: "in"
+        type: "ADDRESS"
+    -   name: portadatain
+        width: 32
+        direction: "in"
+        type: "DATA"
+    -   name: portadataout
+        width: 32
+        direction: "out"
+        type: "DATA"

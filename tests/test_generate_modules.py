@@ -1189,7 +1189,7 @@ def test_odinify():
 
 @pytest.mark.skip
 def test_generate_layer(workload_yaml,
-        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True):
+                        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, sim=True, num_mlbs=1):
 
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -1250,16 +1250,17 @@ def test_generate_layer(workload_yaml,
         wb_spec=wb_yaml,
         ab_spec=ab_yaml,
         emif_spec=emif_yaml,
-        pe_count=20,
+        pe_count=num_mlbs,
         layer=workload_yaml,
         waddr=0,
         iaddr=iaddr,
-        oaddr=oaddr)
+        oaddr=oaddr,
+        simulate=sim)
 
     verilog_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                             "test_full_layer_flow.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_arch.xml")
+                            "test_arch_intel.xml")
     command = [VTR_FLOW_PATH, verilog_file, archfile,
                "-ending_stage", "abc"]
     print("ODIN command:" + str(command))
@@ -1275,18 +1276,27 @@ def test_generate_layer_example():
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
         "stream_info": {"W":4, "I":4, "O":16},
+        #"loop_dimensions": {'B':64, 'C':64, #1024
+        #                    'E':1, 'PX':1,
+        #                    'PY':1, 'RX':1,
+        #                    'RY':1},
+        #"loop_dimensions": {'B':1000, 'C':1024
+        #                    'E':1, 'PX':1,
+        #                    'PY':1, 'RX':1,
+        #                    'RY':1},
+        #"loop_dimensions": {'B':1, 'C':64,
+        #                    'E':128, 'PX':56,
+        #                    'PY':56, 'RX':1,
+        #                    'RY':1},
         "loop_dimensions": {'B':1,'C':3,
-                     'E':4,'PX':2,
-                     'PY':2,'RX':1,
-                            'RY':1},
-        #"loop_dimensions": {'B':1,'C':3,
-        #             'E':32,'PX':224,
-        #             'PY':224,'RX':3,
-        #                    'RY':3},
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3}, # 3: (Mux isn't synthesizable!)
         "activation_function": 'RELU'
     }
     test_generate_layer(workload, "mlb_spec_intel.yaml",
-                        "input_spec_2.yaml",
+                        "input_spec_intel.yaml",
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
-                        "projection_spec_cs.yaml", True, False)
+                        "projection_spec_cs.yaml", True, False, False, 40)
+    #assert 5==8

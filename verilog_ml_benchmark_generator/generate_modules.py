@@ -297,6 +297,9 @@ def odinify(filename_in):
     # Odin can't handle wide values
     filedata = filedata.replace('64\'d', '62\'d')
     filedata = filedata.replace('128\'d', '62\'d')
+    filedata = filedata.replace('210\'d', '62\'d')
+    filedata = filedata.replace('416\'d', '62\'d')
+    filedata = filedata.replace('216\'d', '62\'d')
 
     # pyMTL adds clk and reset to everything... but we dont want it
     # in some cases.
@@ -589,17 +592,17 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
 
         # Initial data is included in the EMIF spec.
         assert("fill" in emif_spec["parameters"])
-        wbuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"], wvalues_per_buf,
-            wbuf_len * wbuf_count, projections[n]["stream_info"]["W"],
-            waddrs[n], wbuf_len)
-        ibuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"], ivalues_per_buf,
-            ibuf_len * ibuf_count, projections[n]["stream_info"]["I"],
-            iaddrs[n], ibuf_len)
 
         # Run the simulation for 2000 cycles
         if (simulate):
+            wbuf = utils.read_out_stored_values_from_array(
+                emif_spec["parameters"]["fill"], wvalues_per_buf,
+                wbuf_len * wbuf_count, projections[n]["stream_info"]["W"],
+                waddrs[n], wbuf_len)
+            ibuf = utils.read_out_stored_values_from_array(
+                emif_spec["parameters"]["fill"], ivalues_per_buf,
+                ibuf_len * ibuf_count, projections[n]["stream_info"]["I"],
+                iaddrs[n], ibuf_len)
             run_simulation(t, 2000, n)
 
             # Collect final EMIF data (and later write to file)
@@ -665,7 +668,6 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     )
     assert(len(mappings) == 1)
     proj = {}
-
     proj["activation_function"] = layer["activation_function"]
     proj["stride"] = layer["stride"]
     proj["dilation"] = layer["dilation"]
@@ -716,7 +718,11 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                        'y': mappings[0]["PYI"],
                                        'batches': mappings[0]["BI"]},
                                 'UG': {'value': 1}}
-
+    
+    proj['inner_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':1}]
+    proj['outer_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':1}]
+    print(proj)
+    
     outvals, testinst = simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         False, [oaddr], [iaddr], [waddr], ws, simulate=simulate,

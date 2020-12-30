@@ -35,7 +35,10 @@ class MUX_NXN(Component):
         s.sel = InPort(math.ceil(math.log(max(input_count, 2), 2)))
         for i in range(input_count):
             newout = utils.AddOutPort(s, input_width, "out" + str(i))
-            newmux = MUXN(input_width, input_count)
+            if (input_count == 3):
+                newmux = MUX3(input_width)
+            else:
+                newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel
             newout //= newmux.out
@@ -71,6 +74,32 @@ class MUX2(Component):
                 s.out @= s.in0
         utils.tie_off_clk_reset(s)
 
+
+class MUX3(Component):
+    """" Implements a single 3-input mux.
+    """
+    def construct(s, input_width, sim=False):
+        """ Constructor for MUX
+
+         :param input_width: Bit-width of input
+         :param input_count: Number of inputs to mux between
+         :param sim: Whether to skip synthesis
+        """
+        assert(input_width > 0)
+        for i in range(3):
+            newin = utils.AddInPort(s, input_width, "in" + str(i))
+        utils.AddOutPort(s, input_width, "out")
+        utils.AddInPort(s, 2, "sel")
+        @update
+        def upblk_set_wen0():
+            if (s.sel == 0):
+                s.out @= s.in0
+            elif (s.sel == 1):
+                s.out @= s.in1
+            else:
+                s.out @= s.in2
+        utils.tie_off_clk_reset(s)
+        
 
 class MUXN(Component):
     """" Implements a single N-input mux.

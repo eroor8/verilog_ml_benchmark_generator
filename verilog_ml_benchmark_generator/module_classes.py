@@ -593,7 +593,7 @@ class InputBufferWrapper(Component):
                      proj['inner_projection']['URN'].get('y',1)*proj['outer_projection']['URN'].get('y',1)
                      for proj in projections]
         if (max(mux_sizes)>1):
-            s.addr_sel = utils.AddInPort(s, math.ceil(math.log(max(max(mux_sizes),2),2)), 'addr_sel_' + str(j))
+            s.addr_sel = InPort(math.ceil(math.log(max(max(mux_sizes),2),2)))
             utils.tie_off_port(s, s.addr_sel)
         s.sel = InPort(math.ceil(math.log(max(len(projections),2),2)))
         utils.tie_off_port(s, s.sel)
@@ -1056,7 +1056,7 @@ class InputInterconnect(Component):
                                                                     newout[mlb_in_idx*inner_width:(mlb_in_idx+1)*inner_width] //= 0
                                                                 
                                     else:
-                                        section_w = int(mlb_width_used/buffers_per_stream)
+                                        section_w = min(buffer_width,mlb_width_used) #int(mlb_width_used/buffers_per_stream)
                                         connect(newout[buf*section_w:(buf+1)*section_w],
                                                 input_bus[input_bus_start:
                                                       input_bus_end])
@@ -1065,7 +1065,8 @@ class InputInterconnect(Component):
                                         output_bus = utils.AddOutPort(s, buffer_width,
                                                                       "outputs_to_buffer_" +
                                                                       str(input_bus_idx))
-                                        section_w = int(mlb_width_used/buffers_per_stream)
+                                        section_w = min(buffer_width,mlb_width_used) #int(mlb_width_used/buffers_per_stream)
+                                        #section_w = int(mlb_width_used/buffers_per_stream)
                                         
                                         connect(newin[buf*section_w:(buf+1)*section_w],
                                                 output_bus[input_bus_start:input_bus_end])

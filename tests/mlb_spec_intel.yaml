@@ -5,11 +5,11 @@ MAC_info:
     data_widths:
         W: 4
         I: 4
-        O: 8
+        O: 16
 possible_projections:
-    URW: 2
-    URN: 2 #10
-    UE: 1
+    URW: 1
+    URN: 10
+    UE: 3
     UB: 1
     UG: 1
 ports:
@@ -42,31 +42,27 @@ ports:
         direction: "in"
         type: "C"
     -   name: a
-        width: 32
+        width: 8
         direction: "in"
         type: "W"
-    #-   name: b
-    #    width: 24
-    #    direction: "in"
-    #    type: "I"
     -   name: b_cas_in
-        width: 24
+        width: 96
         direction: "in"
         type: "I"
     -   name: res_cas_in
-        width: 128
+        width: 96
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 24
+        width: 96
         direction: "out"
         type: "I"
     -   name: a_out
-        width: 32
+        width: 8
         direction: "out"
         type: "W"
     -   name: res_cas_out
-        width: 128
+        width: 96
         direction: "out"
         type: "O"
     -   name: clk

@@ -1275,28 +1275,24 @@ def test_generate_layer_example():
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":4, "I":4, "O":16},
-        #"loop_dimensions": {'B':64, 'C':64, #1024
-        #                    'E':1, 'PX':1,
-        #                    'PY':1, 'RX':1,
-        #                    'RY':1},
-        #"loop_dimensions": {'B':1000, 'C':1024
-        #                    'E':1, 'PX':1,
-        #                    'PY':1, 'RX':1,
-        #                    'RY':1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1, 'C':1024, 
+                            'E':1000, 'PX':1,
+                            'PY':1, 'RX':1,
+                            'RY':1},
         #"loop_dimensions": {'B':1, 'C':64,
         #                    'E':128, 'PX':56,
         #                    'PY':56, 'RX':1,
         #                    'RY':1},
-        "loop_dimensions": {'B':1,'C':3,
-                            'E':32,'PX':224,
-                            'PY':224,'RX':3,
-                            'RY':3}, # 3: (Mux isn't synthesizable!)
+        #"loop_dimensions": {'B':1,'C':3,
+        #                    'E':32,'PX':224,
+        #                    'PY':224,'RX':3,
+        #                    'RY':3}, # 3: (Mux isn't synthesizable!)
         "activation_function": 'RELU'
     }
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel.yaml",
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
-                        "projection_spec_cs.yaml", True, False, False, 40)
+                        "projection_spec_cs.yaml", True, False, False, 288)
     #assert 5==8

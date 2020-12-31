@@ -1010,7 +1010,6 @@ class InputInterconnect(Component):
                                     input_bus_idx = stream_idx*buffers_per_stream+buf
                                     input_bus_start = 0
                                     input_bus_end = min(buffer_width,mlb_width_used)
-                                        
                                     if (streams_per_buffer > 1):
                                         input_bus_idx = math.floor(stream_idx / streams_per_buf_int)
                                         section_idx = stream_idx % streams_per_buf_int
@@ -1057,9 +1056,11 @@ class InputInterconnect(Component):
                                                                 
                                     else:
                                         section_w = min(buffer_width,mlb_width_used) #int(mlb_width_used/buffers_per_stream)
-                                        connect(newout[buf*section_w:(buf+1)*section_w],
+                                        buf_start_idx = buf*section_w
+                                        connection_width = min(mlb_width, buf_start_idx+(section_w)) - buf_start_idx
+                                        connect(newout[buf_start_idx:buf_start_idx + connection_width],
                                                 input_bus[input_bus_start:
-                                                      input_bus_end])
+                                                          input_bus_start + connection_width])
                                     # And one of the outputs
                                     if (ue == 0):
                                         output_bus = utils.AddOutPort(s, buffer_width,
@@ -1067,9 +1068,10 @@ class InputInterconnect(Component):
                                                                       str(input_bus_idx))
                                         section_w = min(buffer_width,mlb_width_used) #int(mlb_width_used/buffers_per_stream)
                                         #section_w = int(mlb_width_used/buffers_per_stream)
-                                        
-                                        connect(newin[buf*section_w:(buf+1)*section_w],
-                                                output_bus[input_bus_start:input_bus_end])
+                                        buf_start_idx = buf*section_w
+                                        connection_width = min(mlb_width, buf_start_idx+(section_w)) - buf_start_idx
+                                        connect(newin[buf_start_idx:buf_start_idx + connection_width],
+                                                output_bus[input_bus_start:input_bus_start + connection_width])
                                         
         # Tie disconnected MLBs to 0
         for i in range(num_mlbs):

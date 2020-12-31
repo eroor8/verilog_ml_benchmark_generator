@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
-input_order = [['URN','chans'], ['UB','batches'], ['UG','value'], ['URN','y'], ['UB','y']]
+input_order = [['URN','chans'], ['UB','batches'], ['UG','value'], ['URN','y'], ['UB','x','y']]
 
 def print_warning(indent, string):
     printi(indent, "WARNING: " + string, "ORANGE")
@@ -1122,7 +1122,8 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0, ivalues_per_b
     if (ab_yaml):
         ivalues_per_buf, ibuf_len, ibuf_count = get_iw_buffer_dimensions(
              ab_yaml, proj_yaml, 'I')
-    output_map = [100 for buf in range(ibuf_count)]
+        
+    output_map = [0 for buf in range(ibuf_count)]
     inner_ug = proj_yaml.get("inner_projection",{}).get("UG",{}).get("value",1)
     outer_ug = proj_yaml.get("outer_projection",{}).get("UG",{}).get("value",1)
     inner_ub = proj_yaml.get("inner_projection",{}).get("UB",{}).get("value",1)
@@ -1158,13 +1159,13 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0, ivalues_per_b
                                                 for urniy in range(inner_uny):
                                                     i_stream_idx = get_overall_idx_new(proj_yaml["outer_projection"],
                                                                                        {'URN': {'y':urnoy, 'chans':urnoc},
-                                                                                        'UB': {'y':uboy, 'batches':ubob},
+                                                                                        'UB': {'y':uboy, 'x':ubox, 'batches':ubob},
                                                                                         'UG': {'value': ugo}},
                                                                   order=input_order, default=['batches','chans'])
                                                     i_value_idx = i_stream_idx*get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
                                                                   get_overall_idx_new(proj_yaml["inner_projection"],
                                                                                        {'URN': {'y':urniy, 'chans':urnic},
-                                                                                        'UB': {'y':ubiy, 'batches':ubib},
+                                                                                        'UB': {'y':ubiy, 'x':ubix, 'batches':ubib},
                                                                                         'UG': {'value': ugi}},
                                                          order=input_order, default=['batches','chans'])
                                                     buf_idx = math.floor(i_value_idx / ivalues_per_buf)                
@@ -1175,6 +1176,4 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0, ivalues_per_b
                                                                                        {'URN': {'y':urnoy}, 'UB': {'y':uboy}},
                                                                   order=[['URN','y'], ['UB','y']], default=['batches','chans'])
                                                     output_map[buf_idx] = outer_y*inner_uby*inner_uny + inner_y
-                                                    #print(" ---->  " + str(buf_idx) + " : " + str(outer_y) + ", " + str(inner_y)) 
-                                                       
     return output_map

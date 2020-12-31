@@ -37,15 +37,15 @@ def test_find_mappings():
                       'E':1,'PX':1,
                       'PY':1,'RX':1,
                       'RY':1}
-    suggested_soln = {'BO':1,'CO':1,
+    suggested_soln = {'BO':1,'CO':103,
                 'EO':1,'PXO':1,
                 'PYO':1,'RXO':1,
-                'RYO':1,'BI':1,'CI':1,
-                'EI': 3,'PXI':1,
+                'RYO':1,'BI':1,'CI':10,
+                'EI': 1,'PXI':1,
                 'PYI':1,'RXI':1,
-                'RYI':4,'BT':2,'CT':1,
-                'ET': 5,'PXT':1,
-                'PYT':2,'RXT':4,
+                'RYI':1,'BT':1000,'CT':1,
+                'ET': 1,'PXT':1,
+                'PYT':1,'RXT':1,
                 'RYT':1}
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 200, False, suggested_solution=None)
     print(len(mappings))
@@ -53,6 +53,6 @@ def test_find_mappings():
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 200, True, suggested_solution=None)
     print(len(mappings))
     assert tp == 15512
-    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 200, False, suggested_solution=None)
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 288, False, suggested_solution=None)
     print(len(mappings))
     assert tp == 4090

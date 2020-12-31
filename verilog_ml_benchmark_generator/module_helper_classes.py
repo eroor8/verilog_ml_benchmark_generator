@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import module_classes
 import random
-
+fast_generate = True
 
 class MUX_NXN(Component):
     """" Implements a crossbar of N N-input muxes.
@@ -223,8 +223,13 @@ class EMIF(Component):
         s.waddress = Wire(wide_addr_width)
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
-        
-        s.buf = Buffer(datawidth, length, startaddr, preload_vector,
+        if (fast_generate):
+            s.avalon_readdata //= 0  
+            s.avalon_readdatavalid //= 0  
+            s.avalon_waitrequest //= 0  
+            s.avalon_writeresponsevalid //= 0      
+        else:
+            s.buf = Buffer(datawidth, length, startaddr, preload_vector,
                        keepdata=False,
                        sim=True)
         INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE = \
@@ -235,102 +240,103 @@ class EMIF(Component):
         s.curr_pending_start = Wire(10)
         s.curr_pending_end = Wire(10)
 
-        @update_ff
-        def upff():
-            curr_rand = random.randint(0, 3)
-            if s.reset:
-                s.state <<= INIT
-                s.curr_pending_start <<= 0
-                s.curr_pending_end <<= 0
-                if (pipelined):
-                    s.avalon_readdatavalid <<= 0
-                    s.avalon_writeresponsevalid <<= 0
-            else:
-                num_pending_transfers = s.curr_pending_end - \
-                    s.curr_pending_start
-                # print("Pending " + str(pending_transfers))
-                # print("Num pending" + str(num_pending_transfers))
-                # print("Read " + str(s.avalon_read))
-                # print("Address" + str(s.avalon_address))
-                # print("Readdata " + str(s.avalon_readdata))
-                # print("Writedata " + str(s.avalon_writedata))
-                # print("Readdatavalid " + str(s.avalon_readdatavalid))
-                # print("Waitrequest " + str(s.avalon_waitrequest))
-                # print("Write " + str(s.avalon_write))
-                # print("Countdown " + str(s.latency_countdown))
-                if pipelined:
-                    if (s.avalon_read or s.avalon_write) and \
-                       (num_pending_transfers < max_pipeline_transfers):
-                        pending_transfers[s.curr_pending_end %
-                                          max_pipeline_transfers] = \
-                                              [int(s.avalon_read),
-                                               int(s.avalon_write),
-                                               int(s.avalon_address),
-                                               int(s.avalon_writedata)]
-                        s.curr_pending_end <<= s.curr_pending_end + 1
-
-                    if (s.latency_countdown == 0) and \
-                       (num_pending_transfers > 0):
-                        s.avalon_readdatavalid <<= pending_transfers[
-                            s.curr_pending_start % max_pipeline_transfers][0]
-                        s.curr_pending_start <<= s.curr_pending_start + 1
-                        s.buf.address <<= pending_transfers[
-                            s.curr_pending_start % max_pipeline_transfers][2]
-                        s.buf.wen <<= pending_transfers[
-                            s.curr_pending_start % max_pipeline_transfers][1]
-                        s.buf.datain <<= pending_transfers[
-                            s.curr_pending_start % max_pipeline_transfers][3]
-                        s.latency_countdown <<= curr_rand
-                    else:
-                        if (s.latency_countdown > 0):
-                            s.latency_countdown <<= s.latency_countdown - 1
-                        else:
-                            s.latency_countdown <<= curr_rand
+        if (not fast_generate):
+            @update_ff
+            def upff():
+                curr_rand = random.randint(0, 3)
+                if s.reset:
+                    s.state <<= INIT
+                    s.curr_pending_start <<= 0
+                    s.curr_pending_end <<= 0
+                    if (pipelined):
                         s.avalon_readdatavalid <<= 0
+                        s.avalon_writeresponsevalid <<= 0
                 else:
-                    if (s.state == INIT):
-                        if s.avalon_read:
-                            s.state <<= WAIT_READING
-                            s.buf.address <<= s.avalon_address
+                    num_pending_transfers = s.curr_pending_end - \
+                        s.curr_pending_start
+                    # print("Pending " + str(pending_transfers))
+                    # print("Num pending" + str(num_pending_transfers))
+                    # print("Read " + str(s.avalon_read))
+                    # print("Address" + str(s.avalon_address))
+                    # print("Readdata " + str(s.avalon_readdata))
+                    # print("Writedata " + str(s.avalon_writedata))
+                    # print("Readdatavalid " + str(s.avalon_readdatavalid))
+                    # print("Waitrequest " + str(s.avalon_waitrequest))
+                    # print("Write " + str(s.avalon_write))
+                    # print("Countdown " + str(s.latency_countdown))
+                    if pipelined:
+                        if (s.avalon_read or s.avalon_write) and \
+                           (num_pending_transfers < max_pipeline_transfers):
+                            pending_transfers[s.curr_pending_end %
+                                              max_pipeline_transfers] = \
+                                                  [int(s.avalon_read),
+                                                   int(s.avalon_write),
+                                                   int(s.avalon_address),
+                                                   int(s.avalon_writedata)]
+                            s.curr_pending_end <<= s.curr_pending_end + 1
+            
+                        if (s.latency_countdown == 0) and \
+                           (num_pending_transfers > 0):
+                            s.avalon_readdatavalid <<= pending_transfers[
+                                s.curr_pending_start % max_pipeline_transfers][0]
+                            s.curr_pending_start <<= s.curr_pending_start + 1
+                            s.buf.address <<= pending_transfers[
+                                s.curr_pending_start % max_pipeline_transfers][2]
+                            s.buf.wen <<= pending_transfers[
+                                s.curr_pending_start % max_pipeline_transfers][1]
+                            s.buf.datain <<= pending_transfers[
+                                s.curr_pending_start % max_pipeline_transfers][3]
                             s.latency_countdown <<= curr_rand
-                        elif s.avalon_write:
-                            s.state <<= WAIT_WRITING
-                            s.buf.address <<= s.avalon_address
-                            s.buf.datain <<= s.avalon_writedata
-                            s.buf.wen <<= 1
-                            s.latency_countdown <<= curr_rand
-                    elif (s.state == WAIT_READING):
-                        s.latency_countdown <<= s.latency_countdown - 1
-                        if (s.latency_countdown == 0):
-                            s.state <<= DONE_READ
-                    elif (s.state == DONE_READ):
-                        s.state <<= INIT
-                        s.latency_countdown <<= 0
-                    elif (s.state == WAIT_WRITING):
-                        s.latency_countdown <<= s.latency_countdown - 1
-                        if (s.latency_countdown == 0):
-                            s.state <<= DONE_WRITE
-                    elif (s.state == DONE_WRITE):
-                        s.state <<= INIT
-
-        @update
-        def upblk0():
-            s.avalon_readdata @= s.buf.dataout
-            if (pipelined):
-                num_pending_transfers = s.curr_pending_end - \
-                    s.curr_pending_start
-                if (s.avalon_read or s.avalon_write) and \
-                   (num_pending_transfers == max_pipeline_transfers):
-                    s.avalon_waitrequest @= 1
+                        else:
+                            if (s.latency_countdown > 0):
+                                s.latency_countdown <<= s.latency_countdown - 1
+                            else:
+                                s.latency_countdown <<= curr_rand
+                            s.avalon_readdatavalid <<= 0
+                    else:
+                        if (s.state == INIT):
+                            if s.avalon_read:
+                                s.state <<= WAIT_READING
+                                s.buf.address <<= s.avalon_address
+                                s.latency_countdown <<= curr_rand
+                            elif s.avalon_write:
+                                s.state <<= WAIT_WRITING
+                                s.buf.address <<= s.avalon_address
+                                s.buf.datain <<= s.avalon_writedata
+                                s.buf.wen <<= 1
+                                s.latency_countdown <<= curr_rand
+                        elif (s.state == WAIT_READING):
+                            s.latency_countdown <<= s.latency_countdown - 1
+                            if (s.latency_countdown == 0):
+                                s.state <<= DONE_READ
+                        elif (s.state == DONE_READ):
+                            s.state <<= INIT
+                            s.latency_countdown <<= 0
+                        elif (s.state == WAIT_WRITING):
+                            s.latency_countdown <<= s.latency_countdown - 1
+                            if (s.latency_countdown == 0):
+                                s.state <<= DONE_WRITE
+                        elif (s.state == DONE_WRITE):
+                            s.state <<= INIT
+            
+            @update
+            def upblk0():
+                s.avalon_readdata @= s.buf.dataout
+                if (pipelined):
+                    num_pending_transfers = s.curr_pending_end - \
+                        s.curr_pending_start
+                    if (s.avalon_read or s.avalon_write) and \
+                       (num_pending_transfers == max_pipeline_transfers):
+                        s.avalon_waitrequest @= 1
+                    else:
+                        s.avalon_waitrequest @= 0
                 else:
-                    s.avalon_waitrequest @= 0
-            else:
-                if ((s.state == INIT) and (s.avalon_read == 0) and
-                    (s.avalon_write == 0)) \
-                    or (s.state == DONE_READ) or (s.state == DONE_WRITE):
-                    s.avalon_waitrequest @= 0
-                else:
-                    s.avalon_waitrequest @= 1
+                    if ((s.state == INIT) and (s.avalon_read == 0) and
+                        (s.avalon_write == 0)) \
+                        or (s.state == DONE_READ) or (s.state == DONE_WRITE):
+                        s.avalon_waitrequest @= 0
+                    else:
+                        s.avalon_waitrequest @= 1
 
 
 class Buffer(Component):

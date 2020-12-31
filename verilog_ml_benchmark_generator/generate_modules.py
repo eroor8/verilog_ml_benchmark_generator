@@ -300,6 +300,8 @@ def odinify(filename_in):
     filedata = filedata.replace('210\'d', '62\'d')
     filedata = filedata.replace('416\'d', '62\'d')
     filedata = filedata.replace('216\'d', '62\'d')
+    filedata = filedata.replace('112\'d', '62\'d')
+    filedata = filedata.replace('312\'d', '62\'d')
 
     # pyMTL adds clk and reset to everything... but we dont want it
     # in some cases.

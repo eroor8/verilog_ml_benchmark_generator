@@ -43,7 +43,7 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
         math.ceil(num_used_PEs/preload_o)
     preload_cycles = preload_chain_len * \
-        get_product(solution, ['ET', 'RXT', 'RYT'])
+        get_product(solution, ['ET', 'RXT', 'RYT', 'CT'])
     total_cycles = product_cycles + preload_cycles
     return total_cycles
 

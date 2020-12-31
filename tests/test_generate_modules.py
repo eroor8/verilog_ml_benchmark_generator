@@ -1293,6 +1293,6 @@ def test_generate_layer_example():
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel.yaml",
                         "weight_spec_3.yaml",
-                        "emif_spec_1.yaml",
+                        "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True, False, False, 288)
     #assert 5==8

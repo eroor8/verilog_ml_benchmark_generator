@@ -3,9 +3,9 @@ simulation_model: "MLB"
 MAC_info:
     num_units: 64
     data_widths:
-        W: 4
-        I: 4
-        O: 16
+        W: 8
+        I: 8
+        O: 32
 possible_projections:
     URW: 1
     URN: 10
@@ -17,7 +17,7 @@ ports:
         width: 1
         direction: "in"
         type: "W_EN"
-    -   name: config_in
+    -   name: load_buf_sel
         width: 1
         direction: "in"
         type: "MODE"
@@ -25,7 +25,11 @@ ports:
         width: 1
         direction: "in"
         type: "I_EN"
-    -   name: hp_en
+    -   name: feed_sel0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: feed_sel1
         width: 1
         direction: "in"
         type: "C"
@@ -33,35 +37,31 @@ ports:
         width: 1
         direction: "in"
         type: "ACC_EN"
-    -   name: config_en
+    -   name: zero_en
         width: 1
         direction: "in"
         type: "C"
-    -   name: config_in
-        width: 1
-        direction: "in"
-        type: "C"
-    -   name: a
-        width: 8
+    -   name: data_in_w
+        width: 16
         direction: "in"
         type: "W"
-    -   name: b_cas_in
-        width: 96
+    -   name: data_in_i
+        width: 80
         direction: "in"
         type: "I"
-    -   name: res_cas_in
+    -   name: cascade_data_in
         width: 96
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 96
+        width: 80
         direction: "out"
         type: "I"
-    -   name: a_out
-        width: 8
+    -   name: weight_cascade_out
+        width: 16
         direction: "out"
         type: "W"
-    -   name: res_cas_out
+    -   name: cascade_data_out
         width: 96
         direction: "out"
         type: "O"

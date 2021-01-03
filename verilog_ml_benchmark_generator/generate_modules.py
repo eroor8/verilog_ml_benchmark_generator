@@ -294,15 +294,6 @@ def odinify(filename_in):
     filedata = filedata.replace('1\'d1', '2\'d1')
     filedata = filedata.replace('{}', 'empty')
 
-    # Odin can't handle wide values
-    filedata = filedata.replace('64\'d', '62\'d')
-    filedata = filedata.replace('128\'d', '62\'d')
-    filedata = filedata.replace('210\'d', '62\'d')
-    filedata = filedata.replace('416\'d', '62\'d')
-    filedata = filedata.replace('216\'d', '62\'d')
-    filedata = filedata.replace('112\'d', '62\'d')
-    filedata = filedata.replace('312\'d', '62\'d')
-
     # pyMTL adds clk and reset to everything... but we dont want it
     # in some cases.
     non_existant_ports = [r"ml_block_weights_inst_\d+__clk",
@@ -328,6 +319,22 @@ def odinify(filename_in):
                       r"\2\4\5",
                       filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
+
+    # Odin can't handle wide values
+    filedata = filedata.replace('64\'d', '62\'d')
+    filedata = filedata.replace('128\'d', '62\'d')
+    filedata = filedata.replace('210\'d', '62\'d')
+    filedata = filedata.replace('416\'d', '62\'d')
+    filedata = filedata.replace('216\'d', '62\'d')
+    filedata = filedata.replace('112\'d', '62\'d')
+    filedata = filedata.replace('312\'d', '62\'d')
+    filedata = filedata.replace('96\'d', '62\'d')
+    filedata = filedata.replace('310\'d', '62\'d')
+    filedata = filedata.replace('110\'d', '62\'d')
+    filedata = filedata.replace('210\'d', '62\'d')
+    filedata = filedata.replace('310\'d', '62\'d')
+    filedata = filedata.replace('110\'d', '62\'d')
+    filedata = filedata.replace('210\'d', '62\'d')
     return filedata
 
 
@@ -644,6 +651,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                     pe_count, layer,
                                     oaddr=0, iaddr=0, waddr=0,
                                     simulate=True,
+                                    preload_o=1,
+                                    preload_i=1,
                                     ws=True):
     """
     Generate an accelerator for a given set of layers.
@@ -663,12 +672,28 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     utils.print_heading("Find an appropriate mapping vector for given layer " +
                         "specification", 1)
     currstep = 1
+    if (preload_o < 1):
+        preload_o = pe_count
+    
+    suggested_soln = {'BO':1,'CO':1,
+                'EO':11,'PXO':14,
+                'PYO':4,'RXO':3,
+                'RYO':1,'BI':1,'CI':3,
+                'EI': 3,'PXI':1,
+                'PYI':1,'RXI':1,
+                'RYI':3,'BT':1,'CT':1,
+                'ET': 1,'PXT':16,
+                'PYT':56,'RXT':1,
+                'RYT':1}
     mappings, mapping_score = constraint_evaluation.find_mappings(
         mlb_spec,
         layer["loop_dimensions"],
-        pe_count
+        pe_count,
+        preload_o=preload_o,
+        suggested_solution=None
     )
     assert(len(mappings) == 1)
+    #assert 1==0
     proj = {}
     proj["activation_function"] = layer["activation_function"]
     proj["stride"] = layer["stride"]
@@ -700,9 +725,9 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                 'UB': {'value': (mappings[0]["BO"] *
                                                  mappings[0]["PXO"] *
                                                  mappings[0]["PYO"]),
-                                       'x': mappings[0]["PXO"],
+                                       'x': 1,
                                        'y': mappings[0]["PYO"],
-                                       'batches': mappings[0]["BO"]},
+                                       'batches': mappings[0]["BO"]*mappings[0]["PXO"]},
                                 'UG': {'value': 1}}
     proj["inner_projection"] = {'URN': {'value': (mappings[0]["RYI"] *
                                                   mappings[0]["CI"]),
@@ -716,13 +741,14 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                 'UB': {'value': (mappings[0]["BI"] *
                                                  mappings[0]["PXI"] *
                                                  mappings[0]["PYI"]),
-                                       'x': mappings[0]["PXI"],
+                                       'x': 1,
                                        'y': mappings[0]["PYI"],
-                                       'batches': mappings[0]["BI"]},
+                                       'batches': mappings[0]["BI"]*mappings[0]["PXI"]},
                                 'UG': {'value': 1}}
-    
-    proj['inner_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':1}]
-    proj['outer_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':1}]
+    if (preload_o > 0):
+        proj['outer_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':preload_o}]
+    if (preload_i > 0):
+        proj['inner_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':preload_i}]
     print(proj)
     
     outvals, testinst = simulate_accelerator(

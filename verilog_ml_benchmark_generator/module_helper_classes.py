@@ -37,7 +37,14 @@ class MUX_NXN(Component):
             newout = utils.AddOutPort(s, input_width, "out" + str(i))
             if (input_count == 3):
                 newmux = MUX3(input_width)
+            elif (input_count == 6):
+                newmux = MUX6(input_width)
+            elif (input_count == 9):
+                newmux = MUX9(input_width)
+            elif (input_count == 12):
+                newmux = MUX12(input_width)
             else:
+                assert (input_count == 1)
                 newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel
@@ -99,6 +106,117 @@ class MUX3(Component):
             else:
                 s.out @= s.in2
         utils.tie_off_clk_reset(s)
+
+class MUX6(Component):
+    """" Implements a single 6-input mux.
+    """
+    def construct(s, input_width, sim=False):
+        """ Constructor for MUX
+
+         :param input_width: Bit-width of input
+         :param input_count: Number of inputs to mux between
+         :param sim: Whether to skip synthesis
+        """
+        assert(input_width > 0)
+        for i in range(6):
+            newin = utils.AddInPort(s, input_width, "in" + str(i))
+        utils.AddOutPort(s, input_width, "out")
+        utils.AddInPort(s, 3, "sel")
+        @update
+        def upblk_set_wen0():
+            if (s.sel == 0):
+                s.out @= s.in0
+            elif (s.sel == 1):
+                s.out @= s.in1
+            elif (s.sel == 2):
+                s.out @= s.in2
+            elif (s.sel == 3):
+                s.out @= s.in3
+            elif (s.sel == 4):
+                s.out @= s.in4
+            else:
+                s.out @= s.in5
+        utils.tie_off_clk_reset(s)
+
+class MUX9(Component):
+    """" Implements a single 6-input mux.
+    """
+    def construct(s, input_width, sim=False):
+        """ Constructor for MUX
+
+         :param input_width: Bit-width of input
+         :param input_count: Number of inputs to mux between
+         :param sim: Whether to skip synthesis
+        """
+        assert(input_width > 0)
+        for i in range(9):
+            newin = utils.AddInPort(s, input_width, "in" + str(i))
+        utils.AddOutPort(s, input_width, "out")
+        utils.AddInPort(s, 4, "sel")
+        @update
+        def upblk_set_wen0():
+            if (s.sel == 0):
+                s.out @= s.in0
+            elif (s.sel == 1):
+                s.out @= s.in1
+            elif (s.sel == 2):
+                s.out @= s.in2
+            elif (s.sel == 3):
+                s.out @= s.in3
+            elif (s.sel == 4):
+                s.out @= s.in4
+            elif (s.sel == 5):
+                s.out @= s.in5
+            elif (s.sel == 6):
+                s.out @= s.in6
+            elif (s.sel == 7):
+                s.out @= s.in7
+            else:
+                s.out @= s.in8
+        utils.tie_off_clk_reset(s)
+        
+class MUX12(Component):
+    """" Implements a single 6-input mux.
+    """
+    def construct(s, input_width, sim=False):
+        """ Constructor for MUX
+
+         :param input_width: Bit-width of input
+         :param input_count: Number of inputs to mux between
+         :param sim: Whether to skip synthesis
+        """
+        assert(input_width > 0)
+        for i in range(12):
+            newin = utils.AddInPort(s, input_width, "in" + str(i))
+        utils.AddOutPort(s, input_width, "out")
+        utils.AddInPort(s, 4, "sel")
+        @update
+        def upblk_set_wen0():
+            if (s.sel == 0):
+                s.out @= s.in0
+            elif (s.sel == 1):
+                s.out @= s.in1
+            elif (s.sel == 2):
+                s.out @= s.in2
+            elif (s.sel == 3):
+                s.out @= s.in3
+            elif (s.sel == 4):
+                s.out @= s.in4
+            elif (s.sel == 5):
+                s.out @= s.in5
+            elif (s.sel == 6):
+                s.out @= s.in6
+            elif (s.sel == 7):
+                s.out @= s.in7
+            elif (s.sel == 8):
+                s.out @= s.in8
+            elif (s.sel == 9):
+                s.out @= s.in9
+            elif (s.sel == 10):
+                s.out @= s.in10
+            else:
+                s.out @= s.in11
+        utils.tie_off_clk_reset(s)
         
 
 class MUXN(Component):
@@ -119,9 +237,10 @@ class MUXN(Component):
             s.long_input[i * input_width:(i + 1) * input_width] //= newin
         utils.AddOutPort(s, input_width, "out")
         utils.AddInPort(s, math.ceil(math.log(max(input_count, 2), 2)), "sel")
-        s.w_sel = Wire(math.ceil(math.log(max(input_width, 2), 2)) + 2)
+        s.w_sel = Wire(math.ceil(math.log(max(input_width*input_count, 2), 2)))
         s.w_sel[0:math.ceil(math.log(max(input_count, 2), 2))] //= s.sel
         if (input_count > 1):
+            #print(input_count)
             @update
             def upblk_set_wen0():
                 s.out @= s.long_input[s.w_sel * input_width:(s.w_sel + 1) *
@@ -358,6 +477,11 @@ class Buffer(Component):
         utils.AddInPort(s, addrwidth, "address")
         utils.AddInPort(s, 1, "wen")
         utils.AddOutPort(s, datawidth, "dataout")
+
+        if (fast_generate):
+            s.dataout //= 0
+            return
+            
         if (keepdata):
             s.data = Wire(length * datawidth)
         s.waddress = Wire(math.ceil(math.log(datawidth * (length + startaddr),
@@ -551,12 +675,7 @@ class MLB(Component):
                     for (bus_count, data_width) in zip(bus_counts[dtype],
                                                        data_widths[dtype])]
             for dtype in MAC_datatypes}
-
-        # Instantiate MACs, IOs
-        s.mac_modules = MACWrapper(max(MAC_counts),
-                                   max(data_widths['I']),
-                                   max(data_widths['W']),
-                                   max(data_widths['O']), sim, register_input)
+        
         utils.AddInPort(s, max(bus_widths['W']), "W_IN")
         utils.AddOutPort(s, max(bus_widths['W']), "W_OUT")
         utils.AddInPort(s, 1, "W_EN")
@@ -566,14 +685,25 @@ class MLB(Component):
         utils.AddInPort(s, 1, "ACC_EN")
         utils.AddInPort(s, max(bus_widths['O']), "O_IN")
         utils.AddOutPort(s, max(bus_widths['O']), "O_OUT")
+        s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
+        utils.tie_off_port(s, s.sel)
+        if (fast_generate):
+            s.W_OUT //= 0
+            s.I_OUT //= 0
+            s.O_OUT //= 0
+            return    
 
+        # Instantiate MACs, IOs
+        s.mac_modules = MACWrapper(max(MAC_counts),
+                                   max(data_widths['I']),
+                                   max(data_widths['W']),
+                                   max(data_widths['O']), sim, register_input)
+        
         # Instantiate interconnects
         weight_interconnects = []
         input_interconnects = []
         output_ps_interconnects = []
         output_interconnects = []
-        s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
-        utils.tie_off_port(s, s.sel)
         for i in range(len(proj_specs)):
             if (i > 0):
                 newname = proj_specs[i].get("name", i)

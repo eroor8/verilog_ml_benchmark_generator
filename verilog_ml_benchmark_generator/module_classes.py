@@ -971,6 +971,7 @@ class InputInterconnect(Component):
             utils.tie_off_port(s, s.urn_sel)
         # Add input and output ports from each MLB
         mux_count = 0
+        #print(" - Interconnect")
         for ug in range(projection['UG']['value']):
             for ue in range(projection['UE']['value']):
                 for ubb in range(int(projection['UB']['value']/projection['UB'].get('y',1))):
@@ -1006,6 +1007,7 @@ class InputInterconnect(Component):
                                      order=utils.input_order,
                                      default=['batches','chans'])
                                 streams_per_buf_int = math.floor(streams_per_buffer)
+                                #print("Here...")
                                 for buf in range(buffers_per_stream):
                                     input_bus_idx = stream_idx*buffers_per_stream+buf
                                     input_bus_start = 0
@@ -1042,8 +1044,15 @@ class InputInterconnect(Component):
                                                                 total_uny = inner_projection['URN'].get('y',1)*projection['URN'].get('y',1)
                                                                 curr_uny = urny*inner_projection['URN'].get('y',1)+unyi
                                                                 mux_in_idx = curr_uby*total_uny+curr_uny
-                                                                if (num_buffers > 1):
-                                                                    assert(mux_in_idx == buffer_idxs[input_bus_idx])
+                                                                #if (num_buffers > 1):
+                                                                    #if not (mux_in_idx == buffer_idxs[input_bus_idx]):
+                                                                    #    print(mux_in_idx)
+                                                                    #    print(input_bus_idx)
+                                                                    #    print(curr_uby)
+                                                                    #    print(curr_uny)
+                                                                    #    print(buffer_idxs)
+                                                    
+                                                                    #assert(mux_in_idx == buffer_idxs[input_bus_idx])
                                                                 muxin = getattr(currmux, "in" + str(mux_in_idx))
                                                                 muxout = getattr(currmux, "out" + str(mux_in_idx))
                                                                 total_idx = input_bus_start+math.floor(mlb_in_idx % ins_per_buffer)*inner_width

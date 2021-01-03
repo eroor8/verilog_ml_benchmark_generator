@@ -40,11 +40,23 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
     num_used_PEs = get_product(
         solution,
         [loop_bound + 'O' for loop_bound in loop_bounds])
+    preload_o = min(preload_o, num_used_PEs)
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
         math.ceil(num_used_PEs/preload_o)
     preload_cycles = preload_chain_len * \
         get_product(solution, ['ET', 'RXT', 'RYT', 'CT'])
+    #print("PRELOAD")
+    #print(solution)
+    #print(product_cycles)
+    #print(preload_cycles)
+    #print(preload_o)
+    #print(preload_chain_len)
+    #print(math.ceil(num_MACs / preload_i))
+    #print(math.ceil(num_used_PEs/preload_o))
+    #print(preload_i)
+    #print(num_MACs)
     total_cycles = product_cycles + preload_cycles
+    #print(total_cycles)
     return total_cycles
 
 
@@ -183,6 +195,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                               nested_bounds)
 
     # Ensure that product of outer tiling factors is <= # PEs
+    #print("Product of " + str([loop_bound + 'O' for loop_bound in loop_bounds]) + " < " + str(pe_count))
     problem.addConstraint(
         lambda val0=1, val1=1, val2=1, val3=1, val4=1, val5=1, val6=1,
         maxv=pe_count:

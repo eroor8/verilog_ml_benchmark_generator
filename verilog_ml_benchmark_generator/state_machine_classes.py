@@ -832,6 +832,8 @@ class SM_LoadBufsEMIF(Component):
         utils.add_n_outputs(s, buffer_count, 1, "wen_")
         
         s.emif_address = OutPort(emif_addr_width)
+        s.emif_address_w = Wire(max(math.ceil(math.log(startaddr+write_count*buffer_count,2)),emif_addr_width))
+        s.emif_address //= s.emif_address_w[0:emif_addr_width]
         s.emif_write = OutPort(1)
         s.emif_write //= 0
         s.emif_writedata = OutPort(emif_data_width)
@@ -862,7 +864,7 @@ class SM_LoadBufsEMIF(Component):
                 s.buf_count <<= 0
                 s.state <<= INIT
                 s.buf_address <<= 0
-                s.emif_address <<= startaddr
+                s.emif_address_w <<= startaddr
                 s.emif_read <<= 0
                 s.rdy <<= 1
                 s.buf_wen <<= 0
@@ -872,7 +874,7 @@ class SM_LoadBufsEMIF(Component):
                     if (s.start):
                         s.state <<= LOAD
                         s.rdy <<= 0
-                        s.emif_address <<= startaddr
+                        s.emif_address_w <<= startaddr
                         s.emif_read <<= 1
                         s.buf_address <<= 0
                         s.buf_count <<= 0
@@ -880,10 +882,10 @@ class SM_LoadBufsEMIF(Component):
                         s.rdy <<= 1
                 elif (s.state == LOAD):
                     if (s.emif_waitrequest == 0):
-                        if (s.emif_address < (startaddr+write_count*buffer_count-1)):
-                            s.emif_address <<= s.emif_address + 1
+                        if (s.emif_address_w < (startaddr+write_count*buffer_count-1)):
+                            s.emif_address_w <<= s.emif_address_w + 1
                         else:
-                            s.emif_address <<= startaddr
+                            s.emif_address_w <<= startaddr
                             s.emif_read <<= 0
                     if (s.emif_readdatavalid == 1):
                         s.buf_writedata <<= s.emif_readdata[0:datawidth]
@@ -914,7 +916,7 @@ class SM_WriteOffChipEMIF(Component):
     # Outputs:
     # -  address
     # -  bufdata
-    # -  emif_address
+    # -  emif_address_w
     # -  emif_writedata
     # -  emif_write
     # -  emif_read
@@ -950,6 +952,8 @@ class SM_WriteOffChipEMIF(Component):
         s.bufdata = Wire(datawidth)
         
         s.emif_address = OutPort(emif_addr_width)
+        s.emif_address_w = Wire(max(math.ceil(math.log(startaddr+write_count*buffer_count,2)),emif_addr_width))
+        s.emif_address //= s.emif_address_w[0:emif_addr_width]
         s.emif_write = OutPort(1)
         s.emif_writedata = OutPort(emif_data_width)
         s.emif_writedata[0:datawidth] //= s.bufdata
@@ -983,7 +987,7 @@ class SM_WriteOffChipEMIF(Component):
                 s.buf_count <<= 0
                 s.state <<= INIT
                 s.address <<= 0
-                s.emif_address <<= startaddr
+                s.emif_address_w <<= startaddr
                 s.emif_write <<= 0
                 s.rdy <<= 1
             else:
@@ -1004,10 +1008,10 @@ class SM_WriteOffChipEMIF(Component):
                                 s.emif_write <<= 0
                             else:
                                 s.buf_count <<= s.buf_count + 1
-                                s.emif_address <<= s.emif_address + 1
+                                s.emif_address_w <<= s.emif_address_w + 1
                         else:
                             s.address <<= s.address + 1
-                            s.emif_address <<= s.emif_address + 1
+                            s.emif_address_w <<= s.emif_address_w + 1
         utils.tie_off_clk_reset(s)
             
 class StateMachineEMIF(Component):

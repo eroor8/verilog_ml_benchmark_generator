@@ -1189,7 +1189,7 @@ def test_odinify():
 
 @pytest.mark.skip
 def test_generate_layer(workload_yaml,
-                        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, sim=True, num_mlbs=1):
+                        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, sim=True, num_mlbs=1, preload_o=1, preload_i=1, layer_name="test_full_layer_flow"):
 
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -1245,7 +1245,7 @@ def test_generate_layer(workload_yaml,
     
     emif_yaml["parameters"]["fill"] = emif_data
     generate_modules.generate_accelerator_for_layers(
-        module_name="test_full_layer_flow", 
+        module_name=layer_name, 
         mlb_spec=mlb_yaml,
         wb_spec=wb_yaml,
         ab_spec=ab_yaml,
@@ -1255,10 +1255,12 @@ def test_generate_layer(workload_yaml,
         waddr=0,
         iaddr=iaddr,
         oaddr=oaddr,
-        simulate=sim)
+        simulate=sim,
+        preload_o=preload_o,
+        preload_i=preload_i)
 
     verilog_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                            "test_full_layer_flow.v")
+                            layer_name + ".v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "test_arch_intel.xml")
     command = [VTR_FLOW_PATH, verilog_file, archfile,
@@ -1269,9 +1271,18 @@ def test_generate_layer(workload_yaml,
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
 
-    
-def test_generate_layer_example():
-    
+
+@pytest.mark.skip
+def test_odin_widths():
+    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "../test_full_layer_flow_pymtl.v")
+    ret_data = generate_modules.odinify(mlb_spec)
+    print(ret_data)
+    with open("test_out.v", 'w') as file:
+        file.write(ret_data)
+    assert  0==9
+
+def test_generate_layer_example_l1(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
@@ -1280,19 +1291,54 @@ def test_generate_layer_example():
                             'E':1000, 'PX':1,
                             'PY':1, 'RX':1,
                             'RY':1},
-        #"loop_dimensions": {'B':1, 'C':64,
-        #                    'E':128, 'PX':56,
-        #                    'PY':56, 'RX':1,
-        #                    'RY':1},
-        #"loop_dimensions": {'B':1,'C':3,
-        #                    'E':32,'PX':224,
-        #                    'PY':224,'RX':3,
-        #                    'RY':3}, # 3: (Mux isn't synthesizable!)
         "activation_function": 'RELU'
-    }
+       }
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel.yaml",
                         "weight_spec_3.yaml",
                         "emif_spec_intel.yaml",
-                        "projection_spec_cs.yaml", True, False, False, 288)
-    #assert 5==8
+                        "projection_spec_cs.yaml", True,
+                        False, False, 1000, 28, 2, layer_name=layer_name)
+    
+def test_generate_layer_example_l2(layer_name="test_full_layer_flow"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1, 'C':64,
+                            'E':128, 'PX':56,
+                            'PY':56, 'RX':1,
+                            'RY':1},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False, 1000, 1000, 2, layer_name=layer_name)
+
+def test_generate_layer_example_l3(layer_name="test_full_layer_flow"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1,'C':3,
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False, 288, -1, 2, layer_name=layer_name)
+    
+def test_generate_layer_example():
+    test_generate_layer_example_l1(layer_name="test_full_layer_flow_l1")
+    test_generate_layer_example_l2(layer_name="test_full_layer_flow_l2")
+    test_generate_layer_example_l3(layer_name="test_full_layer_flow_l3")

@@ -4,7 +4,7 @@ parameters:
     fill: []
 ports:
     -   name: address
-        width: 17
+        width: 32
         direction: "in"
         type: "AVALON_ADDRESS"
     -   name: read

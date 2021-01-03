@@ -573,10 +573,13 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     validate(instance=ab_spec, schema=buffer_spec_schema)
     validate(instance=mlb_spec, schema=mlb_spec_schema)
 
+    utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
     if (gen_ver):
-        generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec,
+        generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                               projections[0], write_to_file, emif_spec,
                               waddrs[0], iaddrs[0], oaddrs[0], ws, fast_gen=True)
+        if (not simulate):
+            return
     emif_spec["simulation_model"] = "EMIF"
     wb_spec["simulation_model"] = "Buffer"
     ab_spec["simulation_model"] = "Buffer"
@@ -758,10 +761,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
         proj['inner_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':preload_i}]
     print(proj)
     
-    outvals, testinst = simulate_accelerator(
+    simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         False, [oaddr], [iaddr], [waddr], ws, simulate=simulate,
         gen_ver=True)
 
-    # Calculate buffer counts and dimensions
-    return outvals, testinst

@@ -44,7 +44,9 @@ class MUX_NXN(Component):
             elif (input_count == 12):
                 newmux = MUX12(input_width)
             else:
-                #assert (input_count == 1)
+                if not (input_count == 1):
+                    print(input_count)
+                assert (input_count == 1)
                 newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel

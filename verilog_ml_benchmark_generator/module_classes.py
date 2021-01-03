@@ -399,10 +399,10 @@ class HWB_Sim(Component):
         s._dsl.args = [spec.get('block_name', "unnamed")]
         
         # If this is an ML block, add behavioural info
-        if "simulation_model" not in spec:
-            utils.print_warning(il, "HW block " + spec.get("block_name","unnamed") + \
-                  "has no sim model - all outputs tied off")
-        else:
+        #if "simulation_model" not in spec:
+        #    utils.print_warning(il, "HW block " + spec.get("block_name","unnamed") + \
+        #          "has no sim model - all outputs tied off")
+        if "simulation_model" in spec:
             if spec.get("simulation_model","") == "Buffer":
                 for req in ["ADDRESS_in", "WEN_in", "DATA_in", "DATA_out"]:
                     assert req in ports_by_type, \

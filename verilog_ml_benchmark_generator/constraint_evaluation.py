@@ -41,6 +41,8 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
         solution,
         [loop_bound + 'O' for loop_bound in loop_bounds])
     preload_o = min(preload_o, num_used_PEs)
+    if (preload_o < 0):
+        preload_o = num_used_PEs
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
         math.ceil(num_used_PEs/preload_o)
     preload_cycles = preload_chain_len * \

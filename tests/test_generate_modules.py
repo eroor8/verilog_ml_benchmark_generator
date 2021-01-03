@@ -117,7 +117,7 @@ def test_yaml_schemas():
         validate(instance=proj_illegal, schema=generate_modules.proj_schema)
 
 
-@pytest.mark.skip
+@pytest.mark.requiresodin
 def test_odinify_statemachine():
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to " + \
         "location of VTR flow scripts"
@@ -599,10 +599,6 @@ def test_simulate_multiple_layers(
                                                                             [ubb]\
                                                                             [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
                                                                             [uby][ubx] = correct_val
-        #                                                            print("UBX: " + str(ubx) + " max " + str(max_ubx) + " maxun " + str(max_un) +
-        #                                                                  " BANK " + str(obuf_idx*min(obuf_len,ibuf_len)) + 
-        #                                                                      "+" + str(ugt*temp_ub*temp_ue+uet*temp_ub) + "+" + str(ubt))
-        #                                                            print("->" + str(outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]))
         print(layer)
         print("Weights")
         print(weights[py_i])
@@ -1014,7 +1010,6 @@ def test_simulate_layer_intel():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_cs.yaml", True, False)
-    #assert 1==0
     
 def test_simulate_multiple_layer_ws_bc():
     test_simulate_multiple_layers("mlb_spec_3.yaml",
@@ -1102,7 +1097,7 @@ def test_simulate_random_emif_statemachine():
                                                     iaddr=iaddr,
                                                     oaddr=oaddr)
 
-            
+@pytest.mark.requiresodin
 def test_odinify_emif_statemachine():
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location " + \
         " of VTR flow scripts"
@@ -1148,6 +1143,7 @@ def test_odinify_emif_statemachine():
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
 
+@pytest.mark.requiresodin
 def test_odinify():
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location " + \
         "of VTR flow scripts"
@@ -1189,7 +1185,7 @@ def test_odinify():
 
 @pytest.mark.skip
 def test_generate_layer(workload_yaml,
-                        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, sim=True, num_mlbs=1, preload_o=1, preload_i=1, layer_name="test_full_layer_flow"):
+                        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, sim=True, num_mlbs=1, preload_o=1, preload_i=1, layer_name="test_full_layer_flow", run_odin=True):
 
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -1266,23 +1262,14 @@ def test_generate_layer(workload_yaml,
     command = [VTR_FLOW_PATH, verilog_file, archfile,
                "-ending_stage", "abc"]
     print("ODIN command:" + str(command))
-    process = subprocess.Popen(command,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-    assert "OK" in str(process.stdout.read())
+    if (run_odin):
+        process = subprocess.Popen(command,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        assert "OK" in str(process.stdout.read())
 
-
-@pytest.mark.skip
-def test_odin_widths():
-    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "../test_full_layer_flow_pymtl.v")
-    ret_data = generate_modules.odinify(mlb_spec)
-    print(ret_data)
-    with open("test_out.v", 'w') as file:
-        file.write(ret_data)
-    assert  0==9
-
-def test_generate_layer_example_l1(layer_name="test_full_layer_flow"):
+@pytest.mark.longtest 
+def test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
@@ -1298,9 +1285,10 @@ def test_generate_layer_example_l1(layer_name="test_full_layer_flow"):
                         "weight_spec_3.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 1000, 28, 2, layer_name=layer_name)
+                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
     
-def test_generate_layer_example_l2(layer_name="test_full_layer_flow"):
+@pytest.mark.longtest
+def test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow"):
     
     workload = {
         "stride": {"x":1, "y":1},
@@ -1317,9 +1305,10 @@ def test_generate_layer_example_l2(layer_name="test_full_layer_flow"):
                         "weight_spec_3.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 1000, 1000, 2, layer_name=layer_name)
+                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
 
-def test_generate_layer_example_l3(layer_name="test_full_layer_flow"):
+@pytest.mark.longtest
+def test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow"):
     
     workload = {
         "stride": {"x":1, "y":1},
@@ -1336,9 +1325,10 @@ def test_generate_layer_example_l3(layer_name="test_full_layer_flow"):
                         "input_spec_intel.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 288, -1, 2, layer_name=layer_name)
-    
-def test_generate_layer_example():
-    test_generate_layer_example_l1(layer_name="test_full_layer_flow_l1")
-    test_generate_layer_example_l2(layer_name="test_full_layer_flow_l2")
-    test_generate_layer_example_l3(layer_name="test_full_layer_flow_l3")
+                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
+
+@pytest.mark.longtest
+def test_generate_layer_intel():
+    test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow_l1")
+    test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow_l2")
+    test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow_l3")

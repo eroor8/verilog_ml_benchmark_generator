@@ -119,7 +119,7 @@ class MLB_Wrapper(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, projs={}, sim=True):
+    def construct(s, spec={}, projs={}, sim=True, fast_gen=False):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -221,7 +221,7 @@ class MLB_Wrapper(Component):
     
                 assert(ip["UG"]["value"] <= spec_keys["UG"])
         
-        s.sim_model = module_helper_classes.MLB(copy_projs, sim=sim)
+        s.sim_model = module_helper_classes.MLB(copy_projs, sim=sim, fast_gen=fast_gen)
         MAC_datatypes = ['W', 'I', 'O']
         inner_bus_counts = {
             dtype: [utils.get_proj_stream_count(inner_proj, dtype)
@@ -365,7 +365,7 @@ class HWB_Sim(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, projs={}, sim=True):
+    def construct(s, spec={}, projs={}, sim=True, fast_gen=False):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -423,7 +423,7 @@ class HWB_Sim(Component):
                     addrlen = ports_by_type["ADDRESS_in"][buffer_inst][0]["width"]
                     size = 2**addrlen
                     sim_model = module_helper_classes.Buffer(datalen,
-                                                             size, keepdata=False, sim=sim)
+                                                             size, keepdata=False, sim=sim, fast_gen=fast_gen)
                     setattr(s,"sim_model_inst" + str(buffer_inst), sim_model)
                     connect(ports_by_type["DATA_in"][buffer_inst][1],
                             sim_model.datain)
@@ -445,7 +445,7 @@ class HWB_Sim(Component):
                         "To run simulation, you need port of type " + req_port + \
                         " in definition of " + spec["block_name"] 
                     assert len(ports_by_type[req_port]) == 1
-                s.sim_model = module_helper_classes.MLB(projs, sim=sim)
+                s.sim_model = module_helper_classes.MLB(projs, sim=sim, fast_gen=fast_gen)
                 MAC_datatypes = ['W', 'I', 'O']
                 inner_projs = [proj['inner_projection'] for proj in projs]
                 inner_bus_counts = {
@@ -504,7 +504,7 @@ class HWB_Sim(Component):
                     pipelined=spec.get('parameters',{}).get('pipelined', False),
                     max_pipeline_transfers=spec.get('max_pipeline_transfers',
                                                     {}).get('max_pipeline_transfers', 4),
-                    sim=True)
+                    sim=True, fast_gen=fast_gen)
                 connect(ports_by_type["AVALON_ADDRESS_in"][0][1], s.sim_model.avalon_address)
                 connect(ports_by_type["AVALON_WRITEDATA_in"][0][1],
                         s.sim_model.avalon_writedata)
@@ -526,7 +526,7 @@ class HWB_Wrapper(Component):
          each instance on the top level, and named
          <instance_port_name>_<instance>. Clock and reset are common.
     """
-    def construct(s, spec={}, count=1, name="_v1", projections={}):
+    def construct(s, spec={}, count=1, name="_v1", projections={}, fast_gen=False):
         """ Constructor for HWB_Wrapper
 
          :param spec: Dictionary describing hardware block ports and
@@ -542,9 +542,9 @@ class HWB_Wrapper(Component):
         for i in range(count):
             if  (spec.get("simulation_model","") == "MLB" or \
                  spec.get("simulation_model","") == "ML_Block"):
-                curr_inst = MLB_Wrapper(spec, projections, sim=True)
+                curr_inst = MLB_Wrapper(spec, projections, sim=True, fast_gen=fast_gen)
             else:
-                curr_inst = HWB_Sim(spec, projections, sim=True)
+                curr_inst = HWB_Sim(spec, projections, sim=True, fast_gen=fast_gen)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
             for port in spec['ports']:
@@ -575,7 +575,7 @@ class InputBufferWrapper(Component):
          each instance on the top level, and named
          <instance_port_name>_<instance>. Clock and reset are common.
     """
-    def construct(s, spec={}, count=1, name="_v1", projections={}, mux=True):
+    def construct(s, spec={}, count=1, name="_v1", projections={}, mux=True, fast_gen=False):
         # Add ports shared between instances to the top level
         # How many address muxes are required? URNYxURNB
         muxes = [[] for proj in projections]
@@ -616,7 +616,7 @@ class InputBufferWrapper(Component):
             j += 1
         
         for i in range(count):
-            curr_inst = HWB_Sim(spec, projections, sim=True)
+            curr_inst = HWB_Sim(spec, projections, sim=True, fast_gen=fast_gen)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
             
@@ -1239,7 +1239,7 @@ class Datapath(Component):
          :type output_interconnect: MargeBusses Component
     """
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
-                  proj_specs=[]):
+                  proj_specs=[], fast_gen=False):
         """ Constructor for Datapath
 
          :param af_width: Bit-width of activation function input
@@ -1257,7 +1257,7 @@ class Datapath(Component):
          :param projection: Projection specification
          :type projection: dict
         """
-        printi(il,"{:=^60}".format("> Constructing Datapath with MLB block " +
+        utils.printi(il,"{:=^60}".format("> Constructing Datapath with MLB block " +
                                str(mlb_spec.get('block_name', "unnamed") +
                                    " <")))
         MAC_datatypes = ['W', 'I', 'O']
@@ -1273,17 +1273,18 @@ class Datapath(Component):
                              for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
                                  for (inner_bus_count,inner_data_width) in zip(inner_bus_counts[dtype],inner_data_widths[dtype])]
-                                 for dtype in MAC_datatypes} 
+                                 for dtype in MAC_datatypes}
+        print(inner_bus_counts)
         for (proj_spec, MAC_count, inner_bus_count, inner_data_width, inner_bus_width) in zip(proj_specs, MAC_counts, inner_bus_counts, inner_data_widths, inner_bus_widths):
             print(utils.print_table("ML Block Details, Projection " +
                                     proj_spec.get("name", "unnamed"),
                                     [["Num MACs", MAC_count,
                                       "(MACs within each MLB)"],
-                                     ["bandwidth by type", inner_bus_count,
+                                     ["bandwidth by type", inner_bus_counts,
                                       "(number of in and output values per MLB)"],
-                                     ["data widths by type", inner_data_width,
+                                     ["data widths by type", inner_data_widths,
                                       "(bit-width of each value)"],
-                                     ["total bus width, by type", inner_bus_width,
+                                     ["total bus width, by type", inner_bus_widths,
                                       "(bit-width of MLB interface)"]], il) + "\n")
 
         # Check that this configuration is supported by the hardware model
@@ -1330,9 +1331,9 @@ class Datapath(Component):
                                 [["Num MLBs", MAC_count,
                                   "(Number of MLBs required for projection)"],
                                  ["total data widths by type",
-                                  outer_bus_width,
+                                  outer_bus_widths,
                                   "(total data width from buffers)"],
-                                 ["bandwidth, by type", total_bus_count,
+                                 ["bandwidth, by type", total_bus_counts,
                                   "(total # values from buffers)"],
                                  ],#["# buffers, by type", buffer_counts]],
                                   il) + "\n")
@@ -1341,16 +1342,18 @@ class Datapath(Component):
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs),2),2)))
         utils.tie_off_port(s, s.sel)
         s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
-                                    projections=proj_specs)
+                                    projections=proj_specs, fast_gen=fast_gen)
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
-                                       max(buffer_counts['W']))
+                                       max(buffer_counts['W']),
+                                       fast_gen=fast_gen)
         s.input_act_modules = InputBufferWrapper(buffer_specs['I'],
                                                  max(buffer_counts['I']),
-                                                 projections=proj_specs)
+                                                 projections=proj_specs,
+                                                 fast_gen=fast_gen)
         s.input_act_modules.sel //= s.sel
         s.output_act_modules = HWB_Wrapper(buffer_specs['O'],
                                            max(buffer_counts['O']),
-                                           name='_v2')
+                                           name='_v2', fast_gen=fast_gen)
         activation_function_modules = []
         for i in range(len(proj_specs)):
             new_act_modules = ActivationWrapper(

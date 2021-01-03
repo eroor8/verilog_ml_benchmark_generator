@@ -11,7 +11,6 @@ import jsonschema
 import subprocess
 from jsonschema import validate
 
-
 def test_find_mappings():
     """Test yaml schema validation"""
     hwb = {
@@ -47,12 +46,12 @@ def test_find_mappings():
                 'ET': 1,'PXT':16,
                 'PYT':75,'RXT':1,
                 'RYT':1}
-    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 2000, False, preload_o=32, suggested_solution=suggested_soln)
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, suggested_solution=None)
     print(len(mappings))
-    #assert tp == 14340
-    #mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 200, True, suggested_solution=None)
-    #print(len(mappings))
-    #assert tp == 15512
-    #mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 2000, False, suggested_solution=None)
-    #print(len(mappings))
+    assert tp == 14098
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 288, True, suggested_solution=None)
+    print(len(mappings))
+    assert tp == 15512
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 288, False, suggested_solution=None)
+    print(len(mappings))
     assert tp == 4090

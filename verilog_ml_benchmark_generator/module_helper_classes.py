@@ -17,7 +17,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import module_classes
 import random
-fast_generate = True
+fast_generate = False
 
 class MUX_NXN(Component):
     """" Implements a crossbar of N N-input muxes.
@@ -44,7 +44,7 @@ class MUX_NXN(Component):
             elif (input_count == 12):
                 newmux = MUX12(input_width)
             else:
-                assert (input_count == 1)
+                #assert (input_count == 1)
                 newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel
@@ -316,7 +316,7 @@ class EMIF(Component):
     """
     def construct(s, datawidth=8, length=1, startaddr=0,
                   preload_vector=[], pipelined=False,
-                  max_pipeline_transfers=4, sim=False):
+                  max_pipeline_transfers=4, sim=False, fast_gen=False):
         """ Constructor for Buffer
 
          :param datawidth: Bit-width of input, output data
@@ -342,7 +342,7 @@ class EMIF(Component):
         s.waddress = Wire(wide_addr_width)
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
-        if (fast_generate):
+        if (fast_gen):
             s.avalon_readdata //= 0  
             s.avalon_readdatavalid //= 0  
             s.avalon_waitrequest //= 0  
@@ -359,7 +359,7 @@ class EMIF(Component):
         s.curr_pending_start = Wire(10)
         s.curr_pending_end = Wire(10)
 
-        if (not fast_generate):
+        if (not fast_gen):
             @update_ff
             def upff():
                 curr_rand = random.randint(0, 3)
@@ -462,7 +462,7 @@ class Buffer(Component):
     """" Implements and initializes a buffer.
     """
     def construct(s, datawidth=8, length=1, startaddr=0,
-                  preload_vector=[], keepdata=True, sim=False):
+                  preload_vector=[], keepdata=True, sim=False, fast_gen=False):
         """ Constructor for Buffer
 
          :param datawidth: Bit-width of input, output data
@@ -478,7 +478,7 @@ class Buffer(Component):
         utils.AddInPort(s, 1, "wen")
         utils.AddOutPort(s, datawidth, "dataout")
 
-        if (fast_generate):
+        if (fast_gen):
             s.dataout //= 0
             return
             
@@ -649,7 +649,7 @@ class MACWrapper(Component):
 class MLB(Component):
     """" This is the sim model for an MLB block with given projection.
     """
-    def construct(s, proj_specs, sim=False, register_input=True):
+    def construct(s, proj_specs, sim=False, register_input=True, fast_gen=False):
         """ Constructor for MLB
 
          :param proj_spec: Dictionary describing projection of computations
@@ -687,7 +687,7 @@ class MLB(Component):
         utils.AddOutPort(s, max(bus_widths['O']), "O_OUT")
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
         utils.tie_off_port(s, s.sel)
-        if (fast_generate):
+        if (fast_gen):
             s.W_OUT //= 0
             s.I_OUT //= 0
             s.O_OUT //= 0

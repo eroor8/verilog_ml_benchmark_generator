@@ -530,7 +530,7 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
                                                                                         ueo*outer_un*outer_uw + \
                                                                                         urno*outer_uw + \
                                                                                         urwo
-                                                                                    streams_per_buffer = math.floor(len(wbuf[0][0]) / stream_width)
+                                                                                    streams_per_buffer = max(math.floor(len(wbuf[0][0]) / stream_width),1)
                                                                                     buffer_cnt = math.floor(stream_idx / streams_per_buffer)
                                                                                     bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
                                                                                 buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)

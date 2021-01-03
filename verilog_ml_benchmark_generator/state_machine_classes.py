@@ -1740,7 +1740,7 @@ class StateMachineEMIFSeparate(Component):
         
 class MultipleLayerSystem(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={}, emif_spec={},
-                  proj_specs=[], w_address=[0], i_address=[0], o_address=[0], ws=True):
+                  proj_specs=[], w_address=[0], i_address=[0], o_address=[0], ws=True, fast_gen=False):
         """ Constructor
         """
         printi(il, "{:=^60}".format("> Constructing Multiple Statemachine System with MLB block " +
@@ -1754,9 +1754,9 @@ class MultipleLayerSystem(Component):
    
         #proj_specs2 = [proj_specs[0], proj_specs[1]] 
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
-                                             ob_spec, proj_specs)
+                                             ob_spec, proj_specs, fast_gen=fast_gen)
             
-        s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True)
+        s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True, fast_gen=fast_gen)
         s.synth_keep = OutPort(1)
         s.synth_keep //= s.emif_inst.readdata[0]
         statemachines=[]

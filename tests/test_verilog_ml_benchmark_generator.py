@@ -58,7 +58,7 @@ def test_generate_statemachine():
                             "projection_spec.yaml")
     emif_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "emif_spec.yaml")
-    result = runner.invoke(cli.generate_statemachine,
+    result = runner.invoke(cli.generate_accelerator_verilog,
                            ['--module_name', "test",
                             '--mlb_definition', mlb_spec,
                             '--act_buffer_definition', ab_spec,

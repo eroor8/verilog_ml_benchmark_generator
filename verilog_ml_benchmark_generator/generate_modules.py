@@ -363,9 +363,9 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec,
     return generate_verilog(t, write_to_file, module_name)
 
 
-def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec,
+def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                           projection, write_to_file, emif_spec={},
-                          waddr=0, iaddr=0, oaddr=0, ws=True):
+                          waddr=0, iaddr=0, oaddr=0, ws=True, fast_gen=False):
     """ Validate input specifications, generate a system including both
         the statemachines and datapath.
 
@@ -385,7 +385,7 @@ def generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec,
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projection, waddr, iaddr,
-                                                  oaddr, ws)
+                                                  oaddr, ws, fast_gen)
     t.elaborate()
     return generate_verilog(t, write_to_file, module_name)
 
@@ -527,6 +527,13 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
         utils.printi(il, "Actual " + str(emif_vals))
         for bufi in range(obuf_count):
             for olen in range(min(obuf_len, ibuf_len) - 1):
+                if (obuf[bufi][olen] != emif_vals[bufi *
+                                                     min(obuf_len, ibuf_len)
+                                                     + olen]):
+                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " + str(obuf[bufi][olen]))
+                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " + str(emif_vals[bufi *
+                                                     min(obuf_len, ibuf_len)
+                                                     + olen]))
                 assert obuf[bufi][olen] == emif_vals[bufi *
                                                      min(obuf_len, ibuf_len)
                                                      + olen]
@@ -569,7 +576,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     if (gen_ver):
         generate_statemachine(module_name, mlb_spec, wb_spec, ab_spec,
                               projections[0], write_to_file, emif_spec,
-                              waddrs[0], iaddrs[0], oaddrs[0], ws)
+                              waddrs[0], iaddrs[0], oaddrs[0], ws, fast_gen=True)
     emif_spec["simulation_model"] = "EMIF"
     wb_spec["simulation_model"] = "Buffer"
     ab_spec["simulation_model"] = "Buffer"
@@ -672,8 +679,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     utils.print_heading("Find an appropriate mapping vector for given layer " +
                         "specification", 1)
     currstep = 1
-    if (preload_o < 1):
-        preload_o = pe_count
+    #if (preload_o < 1):
+    #    preload_o = pe_count
     
     suggested_soln = {'BO':1,'CO':1,
                 'EO':11,'PXO':14,

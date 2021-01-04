@@ -1011,6 +1011,20 @@ def test_simulate_layer_intel():
                         "emif_spec_1.yaml",
                         "projection_spec_cs.yaml", True, False)
     
+def test_simulate_layer_xilinx_mode1():
+    test_simulate_layer("mlb_spec_xilinx_mode1.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_x1.yaml", True, False)
+    
+def test_simulate_layer_xilinx_mode2():
+    test_simulate_layer("mlb_spec_xilinx_mode2.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_x2.yaml", True, False)
+    
 def test_simulate_multiple_layer_ws_bc():
     test_simulate_multiple_layers("mlb_spec_3.yaml",
                                "input_spec_1.yaml",

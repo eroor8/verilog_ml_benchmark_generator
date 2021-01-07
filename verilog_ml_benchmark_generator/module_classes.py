@@ -13,6 +13,7 @@ import sys
 import math
 import os
 import copy
+import yaml
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import *
 import module_helper_classes
@@ -167,6 +168,75 @@ class MLB_Wrapper(Component):
             assert len(ports_by_type[req_port]) == 1
 
         inner_projs = [proj['inner_projection'] for proj in copy_projs]
+        s.sim_model = module_helper_classes.MLB(copy_projs, sim=sim, fast_gen=fast_gen)
+        MAC_datatypes = ['W', 'I', 'O']
+        inner_bus_counts = {
+            dtype: [utils.get_proj_stream_count(inner_proj, dtype)
+                    for inner_proj in inner_projs]
+            for dtype in MAC_datatypes}
+        inner_bus_widths = {dtype: [inner_bus_count * proj['stream_info'][dtype]
+                for (proj, inner_bus_count) in zip(copy_projs, inner_bus_counts[dtype])]
+                for dtype in MAC_datatypes}
+        assert(ports_by_type["I_out"][0][0]['width'] == ports_by_type["I_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB I ports)"
+        i_out = ports_by_type["I_out"][0][1]
+        assert(ports_by_type["W_out"][0][0]['width'] == ports_by_type["W_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB W ports)"
+        assert(ports_by_type["O_out"][0][0]['width'] == ports_by_type["O_in"][0][0]['width']), \
+                    "Input and output stream widths should be equal (MLB O ports)"
+        o_out = ports_by_type["O_out"][0][1]
+        assert(max(inner_bus_widths['W']) <= ports_by_type["W_in"][0][0]['width']),\
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
+        w_in = ports_by_type["W_in"][0][1]
+        assert(max(inner_bus_widths['I']) <= ports_by_type["I_in"][0][0]['width']), \
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
+        i_in = ports_by_type["I_in"][0][1]
+        assert(max(inner_bus_widths['O']) <= ports_by_type["O_in"][0][0]['width']), \
+                    "Specified MLB port width not wide enough for desired unrolling scheme"
+        o_in = ports_by_type["O_in"][0][1]
+        connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
+        connect(ports_by_type["W_out"][0][1][0:max(inner_bus_widths['W'])],s.sim_model.W_OUT)
+        connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
+        connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
+        if ("MODE_in" in ports_by_type):
+            connect(ports_by_type["MODE_in"][0][1], s.sim_model.sel)
+        else:
+            s.sim_model.sel //= 0
+        inner_projs = [proj['inner_projection'] for proj in projs]
+        inner_projs_new = [proj['inner_projection'] for proj in copy_projs]
+        connect(i_in[0:max(inner_bus_widths['I'])], s.sim_model.I_IN)
+        connect(i_out[0:max(inner_bus_widths['I'])], s.sim_model.I_OUT)                    
+        connect(w_in[0:max(inner_bus_widths['W'])], s.sim_model.W_IN)
+        connect(o_in[0:max(inner_bus_widths['O'])], s.sim_model.O_IN)
+        connect(o_out[0:max(inner_bus_widths['O'])], s.sim_model.O_OUT)
+
+class MLB_Wrapper_added_logic(Component):
+    """" This module represents some block, as specified in a json description
+         The point is to provide the interface of the actual hardware block
+         so that it can be instantiated in other modules, and a simulation
+         model.
+         Simulation type specifies which sim model to use.
+         Otherwise, the contents of this block is
+         empty, and all outputs are tied to zero.
+         One port is added for each port listed in the json port list.
+         The module will end up being named "HWB_Sim__<block_name>"
+    """
+    def construct(s, spec={}, projs={}, fast_gen=False):
+        """ Constructor for HWB
+
+         :param spec: Dictionary describing hardware block ports and
+                      functionality
+         :type spec: dict
+         :param proj: Dictionary describing projection of computations
+                            onto ML block
+         :type proj: dict
+        """
+        copy_projs = copy.deepcopy(projs)
+        
+        s._dsl.args = [spec.get('block_name', "unnamed")]
+        
+        inner_projs = [proj['inner_projection'] for proj in copy_projs]
+        outer_projs = [proj['outer_projection'] for proj in copy_projs]
         if ("possible_projections" in spec):
             spec_keys = copy.deepcopy(spec["possible_projections"])
             for ip in inner_projs:
@@ -174,11 +244,10 @@ class MLB_Wrapper(Component):
                 max_product = 1
                 for key in ["URW","URN","UE","UB","UG"]:
                     total_product *= ip[key]["value"]
-                    max_product *= spec_keys[key]
+                    max_product *= max(spec_keys[key],1)
                 assert (total_product <= max_product)
 
                 if (ip["URW"]["value"] > spec_keys["URW"]):
-                    assert(spec_keys["URW"] == 1)
                     if ("chans") in ip["URN"]:
                         ip["URN"]["y"] = ip["URN"]["y"]*ip["URW"]["value"]
                     ip["URN"]["value"] = ip["URN"]["value"]*ip["URW"]["value"]
@@ -221,7 +290,47 @@ class MLB_Wrapper(Component):
     
                 assert(ip["UG"]["value"] <= spec_keys["UG"])
         
-        s.sim_model = module_helper_classes.MLB(copy_projs, sim=sim, fast_gen=fast_gen)
+        s.curr_inst = MLB_Wrapper(spec, copy_projs, sim=True, fast_gen=fast_gen)
+        
+        i_out_inner = None
+        i_in_inner =  None
+        i_out_outer = None
+        i_in_outer =  None
+        i_en = None
+        for port in spec['ports']:
+            if ((port['type'] == 'C' or port['type'] == 'ADDRESS' or
+                 port['type'] == 'W_EN' or port['type'] == 'I_EN' or
+                 port['type'] == 'ACC_EN' or port['type'] == 'MODE')
+                    and port["direction"] == "in"):
+                instport = getattr(s.curr_inst, port["name"])
+                new_p = utils.AddInPort(s,  port['width'], port["name"])
+                instport //= new_p
+                if (port['type'] == 'I_EN'):
+                    i_en = new_p
+            elif port['type'] not in ('CLK', 'RESET'):
+                if (port['direction'] == "in"):
+                    if (port['type'] == 'I'):
+                        i_in_inner = getattr(s.curr_inst, port["name"])
+                        i_in_width = port["width"]
+                        i_in_name = port["name"]
+                        i_in_outer = utils.AddInPort(s,  port['width'], port["name"])
+                    else:
+                        utils.connect_in_to_top(s, getattr(s.curr_inst,
+                                                port["name"]), 
+                                                port["name"])
+                else:
+                    if (port['type'] == 'I'):
+                        i_out_inner =  getattr(s.curr_inst, port["name"])
+                        i_out_name = port["name"]
+                        i_out_width = port["width"]
+                        i_out_outer = utils.AddOutPort(s,  port['width'], port["name"])
+                    elif (port['type'] == 'I'):
+                        w_in_width = port["width"]
+                    else:
+                        utils.connect_out_to_top(s, getattr(s.curr_inst,
+                                            port["name"]),
+                                            port["name"])
+        
         MAC_datatypes = ['W', 'I', 'O']
         inner_bus_counts = {
             dtype: [utils.get_proj_stream_count(inner_proj, dtype)
@@ -230,42 +339,18 @@ class MLB_Wrapper(Component):
         inner_bus_widths = {dtype: [inner_bus_count * proj['stream_info'][dtype]
                 for (proj, inner_bus_count) in zip(copy_projs, inner_bus_counts[dtype])]
                 for dtype in MAC_datatypes}
-        assert(ports_by_type["I_out"][0][0]['width'] == ports_by_type["I_in"][0][0]['width']), \
-                    "Input and output stream widths should be equal (MLB I ports)"
-        i_out = ports_by_type["I_out"][0][1]
-        assert(ports_by_type["W_out"][0][0]['width'] == ports_by_type["W_in"][0][0]['width']), \
-                    "Input and output stream widths should be equal (MLB W ports)"
-        assert(ports_by_type["O_out"][0][0]['width'] == ports_by_type["O_in"][0][0]['width']), \
-                    "Input and output stream widths should be equal (MLB O ports)"
-        o_out = ports_by_type["O_out"][0][1]
-        assert(max(inner_bus_widths['W']) <= ports_by_type["W_in"][0][0]['width']),\
-                    "Specified MLB port width not wide enough for desired unrolling scheme"
-        w_in = ports_by_type["W_in"][0][1]
-        assert(max(inner_bus_widths['I']) <= ports_by_type["I_in"][0][0]['width']), \
-                    "Specified MLB port width not wide enough for desired unrolling scheme"
-        i_in = ports_by_type["I_in"][0][1]
-        assert(max(inner_bus_widths['O']) <= ports_by_type["O_in"][0][0]['width']), \
-                    "Specified MLB port width not wide enough for desired unrolling scheme"
-        o_in = ports_by_type["O_in"][0][1]
-        connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
-        connect(ports_by_type["W_out"][0][1][0:max(inner_bus_widths['W'])],s.sim_model.W_OUT)
-        connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
-        connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
-        if ("MODE_in" in ports_by_type):
-            connect(ports_by_type["MODE_in"][0][1], s.sim_model.sel)
-        else:
-            s.sim_model.sel //= 0
         inner_projs = [proj['inner_projection'] for proj in projs]
         inner_projs_new = [proj['inner_projection'] for proj in copy_projs]
         if ("possible_projections" in spec):
             ip = inner_projs[0]
+            op = outer_projs[0]
             ip_new = inner_projs_new[0]
             dataw = projs[0]['stream_info']['I']
             
             if (ip["UE"]["value"] > spec_keys["UE"]):
                 reqd_ue = ip["UE"]["value"]
                 assert(spec_keys["UE"] == 1)
-                s.ue_in = Wire(ports_by_type["I_in"][0][0]['width']*reqd_ue)
+                s.ue_in = Wire(i_in_width*reqd_ue)
                 for urny in range(ip["URN"].get("y",1)):
                     for urnc in range(ip["URN"].get("chans",ip["URN"].get("value",1))):
                         for ug in range(ip["UG"].get("value",1)):
@@ -280,8 +365,8 @@ class MLB_Wrapper(Component):
                                                 {'URN': {'y':urny, 'chans':urnc}, 'UB': {'y':uby, 'batches':ubb}, 'UG': {'value': ug*reqd_ue+ue}},
                                                 order=utils.input_order,
                                                 default=['batches','chans'])
-                                        s.ue_in[out_chain*dataw:(out_chain+1)*dataw] //= i_in[(in_chain*dataw):(in_chain+1)*dataw]
-                i_in = s.ue_in
+                                        s.ue_in[out_chain*dataw:(out_chain+1)*dataw] //= i_in_outer[(in_chain*dataw):(in_chain+1)*dataw]
+                i_in_outer = s.ue_in
                 
             preload = False
             preload_bus_count = 0
@@ -292,7 +377,7 @@ class MLB_Wrapper(Component):
             if ((ip["UB"]["value"] > spec_keys["UB"]) and not preload):
                 reqd_ub = ip["UB"]["value"]
                 assert(spec_keys["UB"] == 1)
-                s.ub_in = Wire(ports_by_type["W_in"][0][0]['width']*reqd_ub)
+                s.ub_in = Wire(w_in_width*reqd_ub)
                 for urw in range(ip["URW"].get("value",1)):
                     for urn in range(ip["URN"].get("value",1)):
                         for ug in range(ip["UG"].get("value",1)):
@@ -307,8 +392,34 @@ class MLB_Wrapper(Component):
                                     s.ub_in[out_chain*dataw:(out_chain+1)*dataw] //= w_in[(in_chain*dataw):(in_chain+1)*dataw]
                 w_in = s.ub_in
                 
+            #if (spec_keys["URW"] == 0) and (op["URW"]["value"] > 0) and (ip["URW"]["value"] == 1):
+            #    reqd_urw = ip["URW"]["value"]
+            #    assert(ip["URW"]["value"] <= spec_keys["URN"])
+            #    num_chains = ip["URN"]["value"]*ip["UB"]["value"]*ip["UG"]["value"]
+            #    dataw = projs[0]['stream_info']['I']
+            #    for urny in range(ip["URN"].get("y",1)):
+            #        for urnc in range(ip["URN"].get("chans",ip["URN"].get("value",1))):
+            #            for ug in range(ip["UG"].get("value",1)):
+            #                for ubb in range(ip["UB"].get("batches",ip["UB"].get("value",1))):
+            #                    for uby in range(ip["UB"].get("y",1)):
+            #                        chain = utils.get_overall_idx_new(ip,
+            #                                    {'URN': {'y':urny, 'chans':urnc}, 'UB': {'y':uby, 'batches':ubb}, 'UG': {'value': ug}},
+            #                                    order=utils.input_order,
+            #                                    default=['batches','chans'])
+            #                        # Instantiate a reg. chain
+            #                        # Connect the reg. chain outputs to different parts of s.sim_model.I_IN
+            #                        curr_reg = module_helper_classes.Register(
+            #                            reg_width=dataw, sim=False)
+            #                        setattr(s,"SR"+str(chain), curr_reg)
+            #                        curr_reg.input_data //= i_in_outer[dataw*chain:dataw*(chain+1)]
+            #                        curr_reg.ena //= i_en
+            #                        i_out_outer[dataw*chain:dataw*(chain+1)] //= curr_reg.output_data
+            #                        stream_idx = utils.get_overall_idx_new(ip_new,
+            #                                {'URN': {'y':urny*reqd_urw, 'chans':urnc}, 'UB': {'y':uby, 'batches':ubb}, 'UG': {'value': ug}},
+            #                                order=utils.input_order,
+            #                                default=['batches','chans'])
+            #                        i_in_inner[stream_idx*dataw:(stream_idx+1)*dataw] //= i_in_outer[chain*dataw:(chain+1)*dataw]
             if (ip["URW"]["value"] > spec_keys["URW"]):
-                assert(spec_keys["URW"] == 1)
                 reqd_urw = ip["URW"]["value"]
                 assert(ip["URW"]["value"] <= spec_keys["URN"])
                 num_chains = ip["URN"]["value"]*ip["UB"]["value"]*ip["UG"]["value"]
@@ -324,34 +435,44 @@ class MLB_Wrapper(Component):
                                                 default=['batches','chans'])
                                     # Instantiate a reg. chain
                                     # Connect the reg. chain outputs to different parts of s.sim_model.I_IN
-                                    curr_shift_reg = module_helper_classes.ShiftRegister(
-                                        reg_width=dataw,
-                                        length=reqd_urw, sim=False)
-                                    setattr(s,"SR"+str(chain), curr_shift_reg)
-                                    curr_shift_reg.input_data //= i_in[dataw*chain:dataw*(chain+1)]
-                                    curr_shift_reg.ena //= ports_by_type["I_EN_in"][0][1]
-                                    i_out[dataw*chain:dataw*(chain+1)] //= curr_shift_reg.output_data
+                                    #curr_shift_reg = module_helper_classes.ShiftRegister(
+                                    #    reg_width=dataw,
+                                    #    length=reqd_urw, sim=False)
+                                    #setattr(s,"SR"+str(chain), curr_shift_reg)
+                                    for shift_reg in range(reqd_urw):
+                                        newreg = module_helper_classes.Register(dataw, sim=False)
+                                        setattr(s, "SR_" + str(chain) + "_" + str(shift_reg), newreg)
+                                        connect(newreg.ena, i_en)
+                                    
+                                    first_reg = getattr(s, "SR_" + str(chain) + "_0")
+                                    connect(first_reg.input_data, i_in_outer[dataw*chain:dataw*(chain+1)])
+                                    last_reg = getattr(s, "SR_" + str(chain) + "_" + str(reqd_urw - 1))
+                                    i_out_outer[dataw*chain:dataw*(chain+1)] //= last_reg.output_data
+                                    
+                                    for shift_reg in range(1, reqd_urw):
+                                        SR = getattr(s, "SR_" + str(chain) + "_" +str(shift_reg))
+                                        PREV_SR = getattr(s, "SR_" +  str(chain) +"_" +str(shift_reg - 1))
+                                        connect(SR.input_data, PREV_SR.output_data)
+                                        
                                     for reg in range(reqd_urw):
                                         stream_idx = utils.get_overall_idx_new(ip_new,
-                                                {'URN': {'y':urny*reqd_urw+reg, 'chans':urnc}, 'UB': {'y':uby, 'batches':ubb}, 'UG': {'value': ug}},
+                                                {'URN': {'y':urny*reqd_urw+reg, 'chans':urnc},
+                                                 'UB': {'y':uby, 'batches':ubb}, 'UG': {'value': ug}},
                                                 order=utils.input_order,
                                                 default=['batches','chans'])
                                         if (reg == 0):
-                                            s.sim_model.I_IN[stream_idx*dataw:(stream_idx+1)*dataw] //= i_in[chain*dataw:(chain+1)*dataw]
+                                            i_in_inner[stream_idx*dataw:(stream_idx+1)*dataw] //= i_in_outer[chain*dataw:(chain+1)*dataw]
                                         else:
-                                            regout = getattr(curr_shift_reg, "out"+str(reg-1))
-                                            s.sim_model.I_IN[stream_idx*dataw:(stream_idx+1)*dataw] //= regout
+                                            curr_reg = getattr(s, "SR_" + str(chain) + "_" + str(reg-1))
+                                            i_in_inner[stream_idx*dataw:(stream_idx+1)*dataw] //=curr_reg.output_data
             else:
-                connect(i_in[0:max(inner_bus_widths['I'])], s.sim_model.I_IN)
-                connect(i_out[0:max(inner_bus_widths['I'])], s.sim_model.I_OUT)
+                i_in_inner //= i_in_outer
+                i_out_outer //= i_out_inner
+                
             
         else:
-            connect(i_in[0:max(inner_bus_widths['I'])], s.sim_model.I_IN)
-            connect(i_out[0:max(inner_bus_widths['I'])], s.sim_model.I_OUT)
-                        
-        connect(w_in[0:max(inner_bus_widths['W'])], s.sim_model.W_IN)
-        connect(o_in[0:max(inner_bus_widths['O'])], s.sim_model.O_IN)
-        connect(o_out[0:max(inner_bus_widths['O'])], s.sim_model.O_OUT)
+            i_in_inner //= i_in_outer
+            i_out_outer //= i_out_inner
 
         
 class HWB_Sim(Component):
@@ -380,7 +501,7 @@ class HWB_Sim(Component):
         if "simulation_model" in spec:
            special_outs=["DATA", "W", "I", "O", "AVALON_READDATA", "AVALON_WAITREQUEST",
                          "AVALON_READDATAVALID"]
-        
+        assert 'ports' in spec
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
                 if (port["direction"] == "in"):
@@ -398,10 +519,6 @@ class HWB_Sim(Component):
                     ports_by_type[typename] = [[port, newport]]
         s._dsl.args = [spec.get('block_name', "unnamed")]
         
-        # If this is an ML block, add behavioural info
-        #if "simulation_model" not in spec:
-        #    utils.print_warning(il, "HW block " + spec.get("block_name","unnamed") + \
-        #          "has no sim model - all outputs tied off")
         if "simulation_model" in spec:
             if spec.get("simulation_model","") == "Buffer":
                 for req in ["ADDRESS_in", "WEN_in", "DATA_in", "DATA_out"]:
@@ -542,7 +659,7 @@ class HWB_Wrapper(Component):
         for i in range(count):
             if  (spec.get("simulation_model","") == "MLB" or \
                  spec.get("simulation_model","") == "ML_Block"):
-                curr_inst = MLB_Wrapper(spec, projections, sim=True, fast_gen=fast_gen)
+                curr_inst = MLB_Wrapper_added_logic(spec, projections, fast_gen=fast_gen)
             else:
                 curr_inst = HWB_Sim(spec, projections, sim=True, fast_gen=fast_gen)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
@@ -972,6 +1089,7 @@ class InputInterconnect(Component):
         # Add input and output ports from each MLB
         mux_count = 0
         #print(" - Interconnect")
+        mlb_chains = []
         for ug in range(projection['UG']['value']):
             for ue in range(projection['UE']['value']):
                 for ubb in range(int(projection['UB']['value']/projection['UB'].get('y',1))):
@@ -998,6 +1116,7 @@ class InputInterconnect(Component):
                                 newout, newin = utils.chain_ports(s, start_idx,
                                     end_idx, "inputs_from_mlb_{}",
                                     "outputs_to_mlb_{}", mlb_width)
+                                mlb_chains += [list(range(start_idx, end_idx+1))]
                                   
                                 # Connect the chain's input
                                 stream_idx = utils.get_overall_idx_new(projection,
@@ -1090,6 +1209,10 @@ class InputInterconnect(Component):
                 newout //= 0
             utils.AddInPort(s, mlb_width, "inputs_from_mlb_" + str(i))
         utils.tie_off_clk_reset(s)
+
+        with open('chain_list_for_placement.yaml', 'w') as file:
+            docs = yaml.dump(mlb_chains, file)
+        print(mlb_chains)
 
 
 class OutputPSInterconnect(Component):

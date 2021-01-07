@@ -1,6 +1,6 @@
 """"
 PYM-TL Component Classes Implementing different parts of the dataflow
-ASSUMPTIONS:
+Test ASSUMPTIONS:
 - Weights are always preloaded
 - Weight stationary flow
 - Inputs don't require muxing
@@ -694,12 +694,12 @@ class StateMachine_old(Component):
         s.stream_inputs = SM_IterateThruAddresses_old(obuf_len, addri_ports[0]["width"])
         s.stream_outputs = SM_IterateThruAddresses_old(obuf_len, addri_ports[0]["width"],
                                                    initial_address=-1)
-        s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
+        i_en_port //= s.stream_inputs.wen
         connected_ins += utils.connect_ports_by_name(s.stream_outputs,
                                                      r"wen",
                                                      s.datapath,
                                                      r"output_act_modules_portawe_(\d+)_top")
-        s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
+        w_en_port //= s.preload_weights.wen
         
         # Now read the outputs out to off-chip memory       
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA', ["out"]))
@@ -1106,13 +1106,18 @@ class StateMachineEMIF(Component):
         s.datapath.weight_datain //= s.load_wbufs_emif.buf_writedata
         connected_ins += [s.datapath.weight_modules_portaaddr_top,
                          s.datapath.input_act_modules_portaaddr_top,
-                         s.datapath.mlb_modules_a_en_top,
-                         s.datapath.mlb_modules_b_en_top,
-                          s.datapath.mlb_modules_acc_en_top,
                           s.datapath.output_act_modules_portaaddr_top,
                           s.datapath.weight_datain,
                           s.datapath.input_datain
                          ]
+        acc_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'ACC_EN', ["in"]))
+        acc_en_port = getattr(s.datapath, "mlb_modules_" + acc_en_port_name[0]["name"] + "_top")
+        w_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'W_EN', ["in"]))
+        w_en_port = getattr(s.datapath, "mlb_modules_" + w_en_port_name[0]["name"] + "_top")
+        i_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'I_EN', ["in"]))
+        i_en_port = getattr(s.datapath, "mlb_modules_" + i_en_port_name[0]["name"] + "_top")
+        connected_ins += [w_en_port, i_en_port, acc_en_port]
+        
         wen_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'WEN', ["in"]))
         connected_ins += utils.connect_ports_by_name(s.load_wbufs_emif,
                                                      r"wen_(\d+)",
@@ -1207,15 +1212,15 @@ class StateMachineEMIF(Component):
         s.stream_outputs.start_address //= s.ostart_address_wide[0:addri_ports[0]["width"]]
         s.stream_weights = SM_IterateThruAddresses(weight_count+1, addrw_ports[0]["width"], repeat_x=repeat_xw, repeat_len=unt,debug_name="weight")
         s.stream_weights.start_address //= 0
-        s.datapath.mlb_modules_b_en_top //= s.stream_inputs.wen
+        i_en_port //= s.stream_inputs.wen
         connected_ins += utils.connect_ports_by_name(s.stream_outputs,
                                                      r"wen",
                                                      s.datapath,
                                                      r"output_act_modules_portawe_(\d+)_top")
         if (ws):
-            s.datapath.mlb_modules_a_en_top //= s.preload_weights.wen
+            w_en_port //= s.preload_weights.wen
         else:
-            s.datapath.mlb_modules_a_en_top //= s.stream_weights.wen     
+            w_en_port //= s.stream_weights.wen     
         s.pstart_address_wide = Wire(max(int(math.log(ubt*ubt+1,2)),addrw_ports[0]["width"])+addri_ports[0]["width"]+1)
         s.preload_weights.start_address //= s.pstart_address_wide[0:addrw_ports[0]["width"]]
        
@@ -1308,9 +1313,9 @@ class StateMachineEMIF(Component):
                 elif s.state == DONE:
                     s.done <<= 1
                 if (ws):
-                    s.datapath.mlb_modules_acc_en_top <<= 0
+                    acc_en_port <<= 0
                 else:
-                    s.datapath.mlb_modules_acc_en_top <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
+                    acc_en_port <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
                     
         @update
         def connect_weight_address():
@@ -1793,8 +1798,7 @@ class MultipleLayerSystem(Component):
         connected_ins += [s.datapath.output_act_modules_portaaddr_top,
                          s.datapath.input_act_modules_portaaddr_top,
                          s.datapath.weight_modules_portaaddr_top,
-                         s.datapath.mlb_modules_acc_en_top, s.datapath.mlb_modules_a_en_top,
-                         s.datapath.mlb_modules_b_en_top, s.datapath.weight_datain,
+                         s.datapath.weight_datain,
                          s.datapath.input_datain, s.emif_inst.address, s.emif_inst.read,
                          s.emif_inst.write,
                          s.emif_inst.writedata,
@@ -1803,6 +1807,14 @@ class MultipleLayerSystem(Component):
                          s.emif_inst.waitrequest,
                          s.datapath.sel]
     
+        acc_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'ACC_EN', ["in"]))
+        acc_en_port = getattr(s.datapath, "mlb_modules_" + acc_en_port_name[0]["name"] + "_top")
+        w_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'W_EN', ["in"]))
+        w_en_port = getattr(s.datapath, "mlb_modules_" + w_en_port_name[0]["name"] + "_top")
+        i_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'I_EN', ["in"]))
+        i_en_port = getattr(s.datapath, "mlb_modules_" + i_en_port_name[0]["name"] + "_top")
+        connected_ins += [w_en_port, i_en_port, acc_en_port]
+        
         connected_ins += utils.mux_ports_by_name(s,statemachines, "urn_sel", s.datapath,
             "input_act_modules_addr_sel_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "urn_sel", s.datapath,
@@ -1816,11 +1828,11 @@ class MultipleLayerSystem(Component):
         connected_ins += utils.mux_ports_by_name(s,statemachines, "weight_addr_top", s.datapath,
             "weight_modules_portaaddr_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "acc_en_top", s.datapath,
-            "mlb_modules_acc_en_top", insel=s.sel)
+            "mlb_modules_" + acc_en_port_name[0]["name"] + "_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "stream_weights_wen", s.datapath,
-            "mlb_modules_a_en_top", insel=s.sel)
+            "mlb_modules_" + w_en_port_name[0]["name"] + "_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "stream_inputs_wen", s.datapath,
-            "mlb_modules_b_en_top", insel=s.sel)
+            "mlb_modules_" + i_en_port_name[0]["name"] + "_top", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "wbuf_writedata", s.datapath,
             "weight_datain", insel=s.sel)
         connected_ins += utils.mux_ports_by_name(s,statemachines, "ibuf_writedata", s.datapath,

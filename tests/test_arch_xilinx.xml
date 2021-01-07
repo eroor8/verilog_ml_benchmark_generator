@@ -35,24 +35,40 @@
 		<port name="reset" clock="clk" combinational_sink_ports=""/>
 		
                 <!-- Input activations and weights -->
-                <port name="data_in_w"   clock="clk" combinational_sink_ports=""/>
-		<port name="data_in_i" clock="clk" combinational_sink_ports=""/>
-		<port name="cascade_data_in" clock="clk" combinational_sink_ports=""/>
+                <port name="data_in_AD"   clock="clk" combinational_sink_ports=""/>
+		<port name="data_in_B" clock="clk" combinational_sink_ports=""/>
+		<port name="P_cin" clock="clk" combinational_sink_ports=""/>
 		
                 <!-- Control signals -->
-		<port name="a_en" clock="clk" combinational_sink_ports=""/>
-		<port name="b_en" clock="clk" combinational_sink_ports=""/>
-		<port name="acc_en" clock="clk" combinational_sink_ports=""/>
-		<port name="zero_en" clock="clk" combinational_sink_ports=""/>
-		<port name="feed_sel0" clock="clk" combinational_sink_ports=""/>
-		<port name="feed_sel1" clock="clk" combinational_sink_ports=""/>
-		<port name="load_buf_sel" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode0" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode1" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode2" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode3" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode4" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode5" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode6" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode7" clock="clk" combinational_sink_ports=""/>
+		<port name="opmode8" clock="clk" combinational_sink_ports=""/>
+		<port name="alumode0" clock="clk" combinational_sink_ports=""/>
+		<port name="alumode1" clock="clk" combinational_sink_ports=""/>
+		<port name="alumode2" clock="clk" combinational_sink_ports=""/>
+		<port name="alumode3" clock="clk" combinational_sink_ports=""/>
+		<port name="inmode0" clock="clk" combinational_sink_ports=""/>
+		<port name="inmode1" clock="clk" combinational_sink_ports=""/>
+		<port name="inmode2" clock="clk" combinational_sink_ports=""/>
+		<port name="inmode3" clock="clk" combinational_sink_ports=""/>
+		<port name="inmode4" clock="clk" combinational_sink_ports=""/>
+		<port name="carryinsel0" clock="clk" combinational_sink_ports=""/>
+		<port name="carryinsel1" clock="clk" combinational_sink_ports=""/>
+		<port name="CEAD" clock="clk" combinational_sink_ports=""/>
+		<port name="CEB" clock="clk" combinational_sink_ports=""/>
+		<port name="CECONFIG" clock="clk" combinational_sink_ports=""/>
 	    </input_ports>
             <output_ports> 
                 <!-- Output activations and weights -->
-                <port name="weight_cascade_out" clock="clk"/>
-                <port name="b_cas_out" clock="clk"/>
-                <port name="cascade_data_out" clock="clk"/>
+                <port name="AD_cascade_out" clock="clk"/>
+                <port name="B_cascade_out" clock="clk"/>
+                <port name="P_cout" clock="clk"/>
             </output_ports> 
     </model>
     
@@ -695,20 +711,12 @@
   </segmentlist>
   <directlist>
       <!--EJR: Add direct connections between adjacent ML blocks for cascaded activations -->
-       <direct name="ml_cout0_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-1" z_offset="0"/>
-       <direct name="ml_cout1_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-2" z_offset="0"/>
-       <direct name="ml_cout2_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-3" z_offset="0"/>
-       <direct name="ml_cout3_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-4" z_offset="0"/>
-       <direct name="ml_cout4_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-5" z_offset="0"/>
-       <direct name="ml_cout5_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-6" z_offset="0"/>
-       <direct name="ml_cout6_b_dn"  from_pin="ML_outer.b_cas_out" to_pin="ML_outer.data_in_i" x_offset="0" y_offset="-7" z_offset="0"/>
-       <direct name="ml_cout7_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-1" z_offset="0"/>
-       <direct name="ml_cout8_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-2" z_offset="0"/>
-       <direct name="ml_cout9_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-3" z_offset="0"/>
-       <direct name="ml_cout10_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-4" z_offset="0"/>
-       <direct name="ml_cout11_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-5" z_offset="0"/>
-       <direct name="ml_cout12_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-6" z_offset="0"/>
-       <direct name="ml_cout13_res_dn"  from_pin="ML_outer.cascade_data_out" to_pin="ML_outer.cascade_data_in" x_offset="0" y_offset="-7" z_offset="0"/>
+       <direct name="ml_cout_b_dn0"  from_pin="ML_outer.B_cascade_out" to_pin="ML_outer.data_in_B" x_offset="0" y_offset="-1" z_offset="0"/>
+       <direct name="ml_cout_b_dn1"  from_pin="ML_outer.B_cascade_out" to_pin="ML_outer.data_in_B" x_offset="0" y_offset="-2" z_offset="0"/>
+       <direct name="ml_cout_b_dn2"  from_pin="ML_outer.B_cascade_out" to_pin="ML_outer.data_in_B" x_offset="0" y_offset="-3" z_offset="0"/>
+       <direct name="ml_cout_res_dn1"  from_pin="ML_outer.P_cout" to_pin="ML_outer.P_cin" x_offset="0" y_offset="-1" z_offset="0"/>
+       <direct name="ml_cout_res_dn2"  from_pin="ML_outer.P_cout" to_pin="ML_outer.P_cin" x_offset="0" y_offset="-2" z_offset="0"/> 
+       <direct name="ml_cout_res_dn3"  from_pin="ML_outer.P_cout" to_pin="ML_outer.P_cin" x_offset="0" y_offset="-3" z_offset="0"/>
        
       <!--Carry chain propogates downward between LAB blocks-->
       <direct name="LAB_carry_chain" from_pin="LAB.cout" to_pin="LAB.cin" x_offset="0" y_offset="-1" z_offset="0"/>
@@ -782,112 +790,210 @@
        AI Tensor Block.
   -->
   <complexblocklist>   
-    <pb_type name="ML_outer" height="4">
+    <pb_type name="ML_outer" height="2">
       
-        <input name="data_in_w" num_pins="16"/>
-        <output name="weight_cascade_out" num_pins="16"/>
+        <input name="data_in_AD" num_pins="57"/>
+        <output name="AD_cascade_out" num_pins="57"/>
 	
-        <input name="data_in_i" num_pins="80"/>
-        <output name="b_cas_out" num_pins="80"/>		 
+        <input name="data_in_B" num_pins="18"/>
+        <output name="B_cascade_out" num_pins="18"/>		 
         
-	<input name="cascade_data_in" num_pins="96"/>
-        <output name="cascade_data_out" num_pins="96"/>
-	
+	<input name="P_cin" num_pins="48"/>
+        <output name="P_cout" num_pins="48"/>
+        	
         <clock name="clk" num_pins="1"/>
         <input name="reset" num_pins="1"/>
-        <input name="feed_sel0" num_pins="1"/>
-        <input name="feed_sel1" num_pins="1"/>
-        <input name="a_en" num_pins="1"/>
-        <input name="b_en" num_pins="1"/>
-        <input name="acc_en" num_pins="1"/>
-        <input name="zero_en" num_pins="1"/>
-        <input name="load_buf_sel" num_pins="1"/>
+        <input name="CEAD" num_pins="1"/>
+        <input name="CEB" num_pins="1"/>
+        <input name="CECONFIG" num_pins="1"/>
+        <input name="opmode0" num_pins="1"/>
+        <input name="opmode1" num_pins="1"/>
+        <input name="opmode2" num_pins="1"/>
+        <input name="opmode3" num_pins="1"/>
+        <input name="opmode4" num_pins="1"/>
+        <input name="opmode5" num_pins="1"/>
+        <input name="opmode6" num_pins="1"/>
+        <input name="opmode7" num_pins="1"/>
+        <input name="opmode8" num_pins="1"/>
+        <input name="alumode0" num_pins="1"/>
+        <input name="alumode1" num_pins="1"/>
+        <input name="alumode2" num_pins="1"/>
+        <input name="alumode3" num_pins="1"/>
+        <input name="inmode0" num_pins="1"/>
+        <input name="inmode1" num_pins="1"/>
+        <input name="inmode2" num_pins="1"/>
+        <input name="inmode3" num_pins="1"/>
+        <input name="inmode4" num_pins="1"/>
+        <input name="carryinsel0" num_pins="1"/>
+        <input name="carryinsel1" num_pins="1"/>
 
         <mode name="ML_outer">
             <pb_type name="ML_inner" num_pb="1">
-                <input name="data_in_w" num_pins="16"/>
-                <output name="weight_cascade_out" num_pins="16"/>
+                <input name="data_in_AD" num_pins="57"/>
+                <output name="AD_cascade_out" num_pins="57"/>
         	
-                <input name="data_in_i" num_pins="80"/>
-                <output name="b_cas_out" num_pins="80"/>		 
+                <input name="data_in_B" num_pins="18"/>
+                <output name="B_cascade_out" num_pins="18"/>		 
                 
-        	<input name="cascade_data_in" num_pins="96"/>
-                <output name="cascade_data_out" num_pins="96"/>
+        	<input name="P_cin" num_pins="48"/>
+                <output name="P_cout" num_pins="48"/>
         	
                 <clock name="clk" num_pins="1"/>
                 <input name="reset" num_pins="1"/>
-                <input name="feed_sel0" num_pins="1"/>
-                <input name="feed_sel1" num_pins="1"/>
-                <input name="a_en" num_pins="1"/>
-                <input name="b_en" num_pins="1"/>
-                <input name="acc_en" num_pins="1"/>
-                <input name="zero_en" num_pins="1"/>
-                <input name="load_buf_sel" num_pins="1"/>
+                <input name="CEAD" num_pins="1"/>
+                <input name="CEB" num_pins="1"/>
+                <input name="CECONFIG" num_pins="1"/>
+                <input name="opmode0" num_pins="1"/>
+                <input name="opmode1" num_pins="1"/>
+                <input name="opmode2" num_pins="1"/>
+                <input name="opmode3" num_pins="1"/>
+                <input name="opmode4" num_pins="1"/>
+                <input name="opmode5" num_pins="1"/>
+                <input name="opmode6" num_pins="1"/>
+                <input name="opmode7" num_pins="1"/>
+                <input name="opmode8" num_pins="1"/>
+                <input name="alumode0" num_pins="1"/>
+                <input name="alumode1" num_pins="1"/>
+                <input name="alumode2" num_pins="1"/>
+                <input name="alumode3" num_pins="1"/>
+                <input name="inmode0" num_pins="1"/>
+                <input name="inmode1" num_pins="1"/>
+                <input name="inmode2" num_pins="1"/>
+                <input name="inmode3" num_pins="1"/>
+                <input name="inmode4" num_pins="1"/>
+                <input name="carryinsel0" num_pins="1"/>
+                <input name="carryinsel1" num_pins="1"/>
 
 		<pb_type name="FM1" blif_model=".subckt ml_block" num_pb="1">
-                    <input name="data_in_w" num_pins="16"/>
-                    <output name="weight_cascade_out" num_pins="16"/>
+                    <input name="data_in_AD" num_pins="57"/>
+                    <output name="AD_cascade_out" num_pins="57"/>
             	
-                    <input name="data_in_i" num_pins="80"/>
-                    <output name="b_cas_out" num_pins="80"/>		 
+                    <input name="data_in_B" num_pins="18"/>
+                    <output name="B_cascade_out" num_pins="18"/>		 
                     
-                    <input name="cascade_data_in" num_pins="96"/>
-                    <output name="cascade_data_out" num_pins="96"/>
-            	
+                    <input name="P_cin" num_pins="48"/>
+                    <output name="P_cout" num_pins="48"/>
+        	
                     <clock name="clk" num_pins="1"/>
                     <input name="reset" num_pins="1"/>
-                    <input name="feed_sel0" num_pins="1"/>
-                    <input name="feed_sel1" num_pins="1"/>
-                    <input name="a_en" num_pins="1"/>
-                    <input name="b_en" num_pins="1"/>
-                    <input name="acc_en" num_pins="1"/>
-                    <input name="zero_en" num_pins="1"/>
-                    <input name="load_buf_sel" num_pins="1"/>
+                    <input name="CEAD" num_pins="1"/>
+                    <input name="CEB" num_pins="1"/>
+                    <input name="CECONFIG" num_pins="1"/>
+                    <input name="opmode0" num_pins="1"/>
+                    <input name="opmode1" num_pins="1"/>
+                    <input name="opmode2" num_pins="1"/>
+                    <input name="opmode3" num_pins="1"/>
+                    <input name="opmode4" num_pins="1"/>
+                    <input name="opmode5" num_pins="1"/>
+                    <input name="opmode6" num_pins="1"/>
+                    <input name="opmode7" num_pins="1"/>
+                    <input name="opmode8" num_pins="1"/>
+                    <input name="alumode0" num_pins="1"/>
+                    <input name="alumode1" num_pins="1"/>
+                    <input name="alumode2" num_pins="1"/>
+                    <input name="alumode3" num_pins="1"/>
+                    <input name="inmode0" num_pins="1"/>
+                    <input name="inmode1" num_pins="1"/>
+                    <input name="inmode2" num_pins="1"/>
+                    <input name="inmode3" num_pins="1"/>
+                    <input name="inmode4" num_pins="1"/>
+                    <input name="carryinsel0" num_pins="1"/>
+                    <input name="carryinsel1" num_pins="1"/>
 
-                    <T_setup value="527e-12" port="FM1.data_in_w" clock="clk"/>
-                    <T_setup value="527e-12" port="FM1.data_in_i" clock="clk"/>
-                    <T_setup value="527e-12" port="FM1.cascade_data_in" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.feed_sel0" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.feed_sel1" clock="clk"/>
+                    <T_setup value="527e-12" port="FM1.data_in_AD" clock="clk"/>
+                    <T_setup value="527e-12" port="FM1.data_in_B" clock="clk"/>
+                    <T_setup value="527e-12" port="FM1.P_cin" clock="clk"/>
                     <T_setup value="99e-12" port="FM1.reset" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.a_en" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.b_en" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.acc_en" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.zero_en" clock="clk"/>
-                    <T_setup value="99e-12" port="FM1.load_buf_sel" clock="clk"/>
-                    <T_setup value="527e-12" port="FM1.weight_cascade_out" clock="clk"/>
-		    <T_setup value="527e-12" port="FM1.b_cas_out" clock="clk"/>
-		    <T_setup value="527e-12" port="FM1.cascade_data_out" clock="clk"/>
-
-                    <T_hold value="-157e-12" port="FM1.data_in_w" clock="clk"/>
-                    <T_hold value="-157e-12" port="FM1.data_in_i" clock="clk"/>
-                    <T_hold value="-157e-12" port="FM1.cascade_data_in" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.feed_sel0" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.feed_sel1" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.reset" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.a_en" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.b_en" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.acc_en" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.zero_en" clock="clk"/>
-                    <T_hold value="48e-12" port="FM1.load_buf_sel" clock="clk"/>
-                    <T_hold value="-157e-12" port="FM1.weight_cascade_out" clock="clk"/>
-		    <T_hold value="-157e-12" port="FM1.b_cas_out" clock="clk"/>
-		    <T_hold value="-157e-12" port="FM1.cascade_data_out" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.CEAD" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.CEB" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.CECONFIG" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode0" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode1" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode2" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode3" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode4" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode5" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode6" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode7" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.opmode8" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.alumode0" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.alumode1" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.alumode2" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.alumode3" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.inmode0" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.inmode1" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.inmode2" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.inmode3" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.inmode4" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.carryinsel0" clock="clk"/>
+                    <T_setup value="99e-12" port="FM1.carryinsel1" clock="clk"/>
 		    
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.data_in_w" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.data_in_i" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.cascade_data_in" clock="clk"/>
+                    <T_setup value="527e-12" port="FM1.AD_cascade_out" clock="clk"/>
+		    <T_setup value="527e-12" port="FM1.B_cascade_out" clock="clk"/>
+		    <T_setup value="527e-12" port="FM1.P_cout" clock="clk"/>
+
+                    <T_hold value="-157e-12" port="FM1.data_in_AD" clock="clk"/>
+                    <T_hold value="-157e-12" port="FM1.data_in_B" clock="clk"/>
+                    <T_hold value="-157e-12" port="FM1.P_cin" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.reset" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.CEAD" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.CEB" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.CECONFIG" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode0" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode1" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode2" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode3" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode4" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode5" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode6" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode7" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.opmode8" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.alumode0" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.alumode1" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.alumode2" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.alumode3" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.inmode0" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.inmode1" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.inmode2" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.inmode3" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.inmode4" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.carryinsel0" clock="clk"/>
+                    <T_setup value="48e-12" port="FM1.carryinsel1" clock="clk"/>
+		    
+                    <T_hold value="-157e-12" port="FM1.AD_cascade_out" clock="clk"/>
+		    <T_hold value="-157e-12" port="FM1.B_cascade_out" clock="clk"/>
+		    <T_hold value="-157e-12" port="FM1.P_cout" clock="clk"/>
+		    
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.data_in_AD" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.data_in_B" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.P_cout" clock="clk"/>
                     <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.reset" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.feed_sel0" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.feed_sel1" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.a_en" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.b_en" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.acc_en" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.zero_en" clock="clk"/>
-                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.load_buf_sel" clock="clk"/>
-                    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.weight_cascade_out" clock="clk"/>
-		    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.b_cas_out" clock="clk"/>
-		    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.cascade_data_out" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.CEAD" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.CEB" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.CECONFIG" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode0" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode1" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode2" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode3" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode4" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode5" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode6" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode7" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.opmode8" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.alumode0" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.alumode1" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.alumode2" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.alumode3" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.inmode0" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.inmode1" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.inmode2" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.inmode3" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.inmode4" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.carryinsel0" clock="clk"/>
+                    <T_clock_to_Q max="97e-12" min="97e-12" port="FM1.carryinsel1" clock="clk"/>
+                    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.AD_cascade_out" clock="clk"/>
+		    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.B_cascade_out" clock="clk"/>
+		    <T_clock_to_Q max="464e-12" min="280e-12" port="FM1.P_cout" clock="clk"/>
 
 		    <!-- Internal combinational delay -->
                     <!-- <delay_constant in_port="FM1.data_in_w" out_port="FM1.weight_cascade_out" max="1185e-12" min="487e-12"/> -->
@@ -897,20 +1003,36 @@
               <interconnect>
 
                     <!--############# FM1 ##############-->		
-                    <direct name="ML_out_in_mux0"  input="ML_inner.data_in_w"   output="FM1.data_in_w"></direct>
-		    <direct name="ML_out_in_mux1"  input="ML_inner.a_en"   output="FM1.a_en"></direct>
-		    <direct name="ML_out_in_mux3"  input="ML_inner.b_en"   output="FM1.b_en"></direct>
-		    <direct name="ML_out_in_mux4"  input="ML_inner.data_in_i"   output="FM1.data_in_i"></direct>
-		    <direct name="ML_out_in_mux5"  input="ML_inner.acc_en"   output="FM1.acc_en"></direct>
-		    <direct name="ML_out_in_mux6"  input="ML_inner.cascade_data_in"   output="FM1.cascade_data_in"></direct>
-		    <direct name="ML_out_in_mux7"  input="ML_inner.zero_en"   output="FM1.zero_en"></direct>
-		    <direct name="ML_out_in_mux8"  input="ML_inner.load_buf_sel"   output="FM1.load_buf_sel"></direct>
-		    <direct name="ML_out_in_mux9"  input="ML_inner.reset"   output="FM1.reset"></direct>
-		    <direct name="ML_out_in_mux10"  input="ML_inner.feed_sel0"   output="FM1.feed_sel0"></direct>
-                    <direct name="ML_out_in_mux10b"  input="ML_inner.feed_sel1"   output="FM1.feed_sel1"></direct>
-                    <direct name="ML_out_out_mux0"  input="FM1.weight_cascade_out"   output="ML_inner.weight_cascade_out"></direct>
-		    <direct name="ML_out_out_mux2"  input="FM1.b_cas_out"   output="ML_inner.b_cas_out"></direct>
-		    <direct name="ML_out_out_mux4"  input="FM1.cascade_data_out"   output="ML_inner.cascade_data_out"></direct>
+                    <direct name="ML_out_in_mux25"  input="ML_inner.data_in_AD"   output="FM1.data_in_AD"></direct>
+		    <direct name="ML_out_in_mux26"  input="ML_inner.CEAD"   output="FM1.CEAD"></direct>
+		    <direct name="ML_out_in_mux27"  input="ML_inner.CEB"   output="FM1.CEB"></direct>
+		    <direct name="ML_out_in_mux1"  input="ML_inner.CECONFIG"   output="FM1.CECONFIG"></direct>
+		    <direct name="ML_out_in_mux2"  input="ML_inner.data_in_B"   output="FM1.data_in_B"></direct>
+		    <direct name="ML_out_in_mux3"  input="ML_inner.reset"   output="FM1.reset"></direct>
+		    <direct name="ML_out_in_mux4"  input="ML_inner.P_cin"   output="FM1.P_cin"></direct>
+		    <direct name="ML_out_in_mux5"  input="ML_inner.opmode0"   output="FM1.opmode0"></direct>
+		    <direct name="ML_out_in_mux6"  input="ML_inner.opmode1"   output="FM1.opmode1"></direct>
+		    <direct name="ML_out_in_mux7"  input="ML_inner.opmode2"   output="FM1.opmode2"></direct>
+		    <direct name="ML_out_in_mux8"  input="ML_inner.opmode3"   output="FM1.opmode3"></direct>
+		    <direct name="ML_out_in_mux9"  input="ML_inner.opmode4"   output="FM1.opmode4"></direct>
+		    <direct name="ML_out_in_mux10"  input="ML_inner.opmode5"   output="FM1.opmode5"></direct>
+		    <direct name="ML_out_in_mux11"  input="ML_inner.opmode6"   output="FM1.opmode6"></direct>
+		    <direct name="ML_out_in_mux12"  input="ML_inner.opmode7"   output="FM1.opmode7"></direct>
+		    <direct name="ML_out_in_mux13"  input="ML_inner.opmode8"   output="FM1.opmode8"></direct>
+		    <direct name="ML_out_in_mux14"  input="ML_inner.alumode0"   output="FM1.alumode0"></direct>
+		    <direct name="ML_out_in_mux15"  input="ML_inner.alumode1"   output="FM1.alumode1"></direct>
+		    <direct name="ML_out_in_mux16"  input="ML_inner.alumode2"   output="FM1.alumode2"></direct>
+		    <direct name="ML_out_in_mux17"  input="ML_inner.alumode3"   output="FM1.alumode3"></direct>
+		    <direct name="ML_out_in_mux18"  input="ML_inner.inmode0"   output="FM1.inmode0"></direct>
+		    <direct name="ML_out_in_mux19"  input="ML_inner.inmode1"   output="FM1.inmode1"></direct>
+		    <direct name="ML_out_in_mux20"  input="ML_inner.inmode2"   output="FM1.inmode2"></direct>
+		    <direct name="ML_out_in_mux21"  input="ML_inner.inmode3"   output="FM1.inmode3"></direct>
+		    <direct name="ML_out_in_mux22"  input="ML_inner.inmode4"   output="FM1.inmode4"></direct>
+		    <direct name="ML_out_in_mux23"  input="ML_inner.carryinsel0"   output="FM1.carryinsel0"></direct>
+		    <direct name="ML_out_in_mux24"  input="ML_inner.carryinsel1"   output="FM1.carryinsel1"></direct>
+                    <direct name="ML_out_out_mux28"  input="FM1.AD_cascade_out"   output="ML_inner.AD_cascade_out"></direct>
+		    <direct name="ML_out_out_mux29"  input="FM1.B_cascade_out"   output="ML_inner.B_cascade_out"></direct>
+		    <direct name="ML_out_out_mux30"  input="FM1.P_cout"   output="ML_inner.P_cout"></direct>
 		    
                     <complete name="complete1" input="ML_inner.clk" output="FM1.clk"/>			
                 </interconnect>
@@ -918,21 +1040,36 @@
             <interconnect>
 
                 <!--############# FM1 ##############-->		
-                <direct name="FM1_in_mux0"  input="ML_outer.data_in_w"   output="ML_inner.data_in_w"></direct>
-	        <direct name="FM1_in_mux1"  input="ML_outer.a_en"   output="ML_inner.a_en"></direct>
-	        <direct name="FM1_in_mux3"  input="ML_outer.b_en"   output="ML_inner.b_en"></direct>
-	        <direct name="FM1_in_mux4"  input="ML_outer.data_in_i"   output="ML_inner.data_in_i"></direct>
-	        <direct name="FM1_in_mux5"  input="ML_outer.acc_en"   output="ML_inner.acc_en"></direct>
-	        <direct name="FM1_in_mux6"  input="ML_outer.cascade_data_in"   output="ML_inner.cascade_data_in"></direct>
-	        <direct name="FM1_in_mux7"  input="ML_outer.zero_en"   output="ML_inner.zero_en"></direct>
-	        <direct name="FM1_in_mux8"  input="ML_outer.load_buf_sel"   output="ML_inner.load_buf_sel"></direct>
-	        <direct name="FM1_in_mux9"  input="ML_outer.reset"   output="ML_inner.reset"></direct>
-	        <direct name="FM1_in_mux10"  input="ML_outer.feed_sel0"   output="ML_inner.feed_sel0"></direct>
-                <direct name="FM1_in_mux10b"  input="ML_outer.feed_sel1"   output="ML_inner.feed_sel1"></direct>
-	        
-	        <direct name="FM1_out_mux0"  input="ML_inner.weight_cascade_out"   output="ML_outer.weight_cascade_out"></direct>
-	        <direct name="FM1_out_mux2"  input="ML_inner.b_cas_out"   output="ML_outer.b_cas_out"></direct>
-	        <direct name="FM1_out_mux4"  input="ML_inner.cascade_data_out"   output="ML_outer.cascade_data_out"></direct>
+                <direct name="FM1_in_mux0"  input="ML_outer.data_in_AD"   output="ML_inner.data_in_AD"></direct>
+		<direct name="FM1_in_mux1"  input="ML_outer.CEAD"   output="ML_inner.CEAD"></direct>
+		<direct name="FM1_in_mux2"  input="ML_outer.CEB"   output="ML_inner.CEB"></direct>
+		<direct name="FM1_in_mux3"  input="ML_outer.CECONFIG"   output="ML_inner.CECONFIG"></direct>
+		<direct name="FM1_in_mux4"  input="ML_outer.data_in_B"   output="ML_inner.data_in_B"></direct>
+		<direct name="FM1_in_mux5"  input="ML_outer.reset"   output="ML_inner.reset"></direct>
+		<direct name="FM1_in_mux6"  input="ML_outer.P_cin"   output="ML_inner.P_cin"></direct>
+		<direct name="FM1_in_mux7"  input="ML_outer.opmode0"   output="ML_inner.opmode0"></direct>
+		<direct name="FM1_in_mux8"  input="ML_outer.opmode1"   output="ML_inner.opmode1"></direct>
+		<direct name="FM1_in_mux9"  input="ML_outer.opmode2"   output="ML_inner.opmode2"></direct>
+		<direct name="FM1_in_mux10"  input="ML_outer.opmode3"   output="ML_inner.opmode3"></direct>
+		<direct name="FM1_in_mux11"  input="ML_outer.opmode4"   output="ML_inner.opmode4"></direct>
+		<direct name="FM1_in_mux12"  input="ML_outer.opmode5"   output="ML_inner.opmode5"></direct>
+		<direct name="FM1_in_mux13"  input="ML_outer.opmode6"   output="ML_inner.opmode6"></direct>
+		<direct name="FM1_in_mux14"  input="ML_outer.opmode7"   output="ML_inner.opmode7"></direct>
+		<direct name="FM1_in_mux15"  input="ML_outer.opmode8"   output="ML_inner.opmode8"></direct>
+		<direct name="FM1_in_mux16"  input="ML_outer.alumode0"   output="ML_inner.alumode0"></direct>
+		<direct name="FM1_in_mux17"  input="ML_outer.alumode1"   output="ML_inner.alumode1"></direct>
+		<direct name="FM1_in_mux18"  input="ML_outer.alumode2"   output="ML_inner.alumode2"></direct>
+		<direct name="FM1_in_mux19"  input="ML_outer.alumode3"   output="ML_inner.alumode3"></direct>
+		<direct name="FM1_in_mux20"  input="ML_outer.inmode0"   output="ML_inner.inmode0"></direct>
+		<direct name="FM1_in_mux21"  input="ML_outer.inmode1"   output="ML_inner.inmode1"></direct>
+		<direct name="FM1_in_mux22"  input="ML_outer.inmode2"   output="ML_inner.inmode2"></direct>
+		<direct name="FM1_in_mux23"  input="ML_outer.inmode3"   output="ML_inner.inmode3"></direct>
+		<direct name="FM1_in_mux24"  input="ML_outer.inmode4"   output="ML_inner.inmode4"></direct>
+		<direct name="FM1_in_mux25"  input="ML_outer.carryinsel0"   output="ML_inner.carryinsel0"></direct>
+		<direct name="FM1_in_mux26"  input="ML_outer.carryinsel1"   output="ML_inner.carryinsel1"></direct>
+                <direct name="FM1_out_mux27"  input="ML_inner.AD_cascade_out"   output="ML_outer.AD_cascade_out"></direct>
+		<direct name="FM1_out_mux28"  input="ML_inner.B_cascade_out"   output="ML_outer.B_cascade_out"></direct>
+		<direct name="FM1_out_mux29"  input="ML_inner.P_cout"   output="ML_outer.P_cout"></direct>
 	        
                 <complete name="complete1" input="ML_outer.clk" output="ML_inner.clk"/>	
             </interconnect>

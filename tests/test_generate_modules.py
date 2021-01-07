@@ -14,6 +14,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_helpers import *
 
 VTR_FLOW_PATH = os.getenv('VTR_FLOW_PATH')
+NUMX = 1976
+NUMI = 988
+HEIGHT = 177
+WIDTH = 149
 
 filesets = [# EMIF, input, MLB interface same width
             # Preload weights from wide buffer
@@ -118,6 +122,7 @@ def test_yaml_schemas():
 
 
 @pytest.mark.requiresodin
+@pytest.mark.skip
 def test_odinify_statemachine():
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to " + \
         "location of VTR flow scripts"
@@ -144,7 +149,7 @@ def test_odinify_statemachine():
         wb_yaml = yaml.safe_load(stream)
     with open(proj_spec) as stream:
         proj_yaml = yaml.safe_load(stream)
-    outtxt = generate_modules.generate_statemachine("test_odin_sm", 
+    outtxt = generate_modules.generate_accelerator_given_mapping("test_odin_sm", 
                                             mlb_yaml, wb_yaml,
                                             ab_yaml, proj_yaml, False)
     with open(outfile, 'w') as file:
@@ -947,8 +952,8 @@ def test_simulate_emif_statemachine(
     # Check that the right data is in the MLBs
     #if (ws):
     print("okkkk...")
-    print(testinst.datapath.mlb_modules.ml_block_inst_0.sim_model.mac_modules.input_out_0)
-    print(testinst.datapath.mlb_modules.ml_block_inst_0.sim_model.mac_modules.sum_out_0)
+    print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.input_out_0)
+    print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.sum_out_0)
     #if (ws):
     #    assert(check_weight_contents(
     #        testinst.datapath, proj_yaml,
@@ -1142,7 +1147,7 @@ def test_odinify_emif_statemachine():
         proj_yaml = yaml.safe_load(stream)
     with open(emif_spec) as stream:
         emif_yaml = yaml.safe_load(stream)
-    outtxt = generate_modules.generate_statemachine(module_name="test_odin_emif_sm", 
+    outtxt = generate_modules.generate_accelerator_given_mapping(module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml, wb_spec=wb_yaml,
                                                     ab_spec=ab_yaml, projection=proj_yaml,
                                                     write_to_file=False,
@@ -1296,10 +1301,11 @@ def test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow"):
        }
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel.yaml",
-                        "weight_spec_3.yaml",
+                        "input_spec_intel.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
+                        False, False, NUMI, -1, 2, layer_name=layer_name, run_odin=False)
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l1.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
     
 @pytest.mark.longtest
 def test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow"):
@@ -1316,10 +1322,11 @@ def test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow"):
        }
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel.yaml",
-                        "weight_spec_3.yaml",
+                        "input_spec_intel.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
+                        False, False, NUMI, -1, 2, layer_name=layer_name, run_odin=False)
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l2.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
 
 @pytest.mark.longtest
 def test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow"):
@@ -1339,10 +1346,82 @@ def test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow"):
                         "input_spec_intel.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 1000, -1, 2, layer_name=layer_name, run_odin=False)
-
+                        False, False, NUMI, -1, 2, layer_name=layer_name, run_odin=False)
+    
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l3.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+    
 @pytest.mark.longtest
 def test_generate_layer_intel():
     test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow_l1")
     test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow_l2")
     test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow_l3")
+
+@pytest.mark.longtest
+def test_generate_layer_xilinx_l1(layer_name="test_full_layer_flow_x1"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':1, 'C':1024, 
+                            'E':1000, 'PX':1,
+                            'PY':1, 'RX':1,
+                            'RY':1},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_xilinx_mode2.yaml",
+                        "input_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False, NUMX, -1, -1, layer_name=layer_name, run_odin=False)
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_x1.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-2,2)), portname="P_cout")
+    #assert 4==9
+
+@pytest.mark.longtest
+def test_generate_layer_xilinx_l2(layer_name="test_full_layer_flow_x2"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':1, 'C':64,
+                            'E':128, 'PX':56,
+                            'PY':56, 'RX':1,
+                            'RY':1},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_xilinx_mode2.yaml",
+                        "input_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False, NUMX, -1, -1, layer_name=layer_name, run_odin=False)
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_x2.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-2,2)), portname="P_cout")
+    
+@pytest.mark.longtest
+def test_generate_layer_xilinx_l3(layer_name="test_full_layer_flow_x3"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':1,'C':3,
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_xilinx_mode2.yaml",
+                        "input_spec_intel.yaml",
+                        "input_spec_intel.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False, NUMX, -1, -1, layer_name=layer_name, run_odin=False)
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_x3.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-2,2)), portname="P_cout")
+
+@pytest.mark.longtest
+def test_generate_layer_xilinx():
+    test_generate_layer_xilinx_l1(layer_name="test_full_layer_flow_x1")
+    test_generate_layer_xilinx_l2(layer_name="test_full_layer_flow_x2")
+    test_generate_layer_xilinx_l3(layer_name="test_full_layer_flow_x3")

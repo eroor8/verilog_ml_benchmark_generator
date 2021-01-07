@@ -3,6 +3,7 @@ import numpy
 import pytest
 import random
 import math
+import yaml
 import os
 import sys
 from pymtl3 import *
@@ -83,7 +84,7 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
         ubi = proj_yaml["inner_projection"]["UB"]["value"]
         buflen = len(buffer_values)
         for r in range(mac_count-1,-1,-1):
-            curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
+            curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules, weight_out_name.format(r))
             mac_idx = mac_count-r-1
             
             # Calculate expected buffer value
@@ -99,7 +100,7 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                         for uwi in range(proj_yaml["inner_projection"]["URW"]["value"]):
                             mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UB': ubi, 'UG': ugi, 'UE': uei, 'URW':uwi})
-                            curr_out = getattr(curr_mlb.sim_model.mac_modules,
+                            curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules,
                                                weight_out_name.format(mac_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'URN': uni, 'UG': ugi, 'UE': uei, 'URW':uwi})
@@ -139,7 +140,7 @@ def check_mlb_chain_values(testinst,
 
             for r in range(mac_count-1,-1,-1):
                 mac_idx = t*mac_count + r
-                curr_out = getattr(curr_mlb.sim_model.mac_modules, weight_out_name.format(r))
+                curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules, weight_out_name.format(r))
                 
                 # Inner weight buffer index
                 total_mac_idx = mac_count*mlb_count-mac_idx-1
@@ -632,3 +633,46 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                         [uby][ubx] = \
                                                                         outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]
     return outarray
+
+def gen_constraint_file(chain_file, outfile,
+                        xindices, yindices, portname="cascade_data_out"):
+    with open(chain_file) as file:
+        chain_list = yaml.safe_load(file)
+        
+    coords = [None]*len(chain_list)*len(chain_list[0])
+    full_chains_per_col = math.floor(len(yindices)/len(chain_list[0]))
+    curr_chain = 0
+    xincr = 0
+    yincr = -1
+    out_line_list = []
+    chain_idx = 0
+    for chain in chain_list:
+        if (curr_chain < full_chains_per_col):
+            curr_chain += 1
+        else:
+            curr_chain = 1
+            xincr += 1
+            yincr = -1
+        if (xincr >= len(xindices)):
+            #break
+            xincr = 0
+            yincr = -1*full_chains_per_col*len(chain_list[0])-1
+        for mlb in chain:
+            if (yincr < -1*len(yindices)):
+                yincr = -1*full_chains_per_col*len(chain_list[0])-1
+                xincr += 1
+                curr_chain = 0
+            coords[mlb] = {}
+            coords[mlb]['x'] = xindices[xincr]
+            coords[mlb]['y'] = yindices[yincr]
+            out_line_list += [".*ml_block_inst_" + str(mlb) + ".ml_block.*" + portname + ".0 " + str(coords[mlb]['x']) + " " +str(coords[mlb]['y']) + " 0"]
+            yincr -= 1
+        chain_idx += 1
+
+    filedata = '\n'.join(out_line_list)
+    with open(outfile, 'w') as file:
+        file.write(filedata)
+            
+    
+
+    

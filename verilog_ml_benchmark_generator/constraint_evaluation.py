@@ -2,11 +2,24 @@ import constraint
 import sys
 import os
 import math
+import copy
 il = 1
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 
+def validate_buffer_count():
+    inner_bus_counts = {dtype: [utils.get_proj_stream_count(inner_proj,
+                        dtype) for inner_proj in inner_projs]
+                        for dtype in MAC_datatypes}
+    inner_data_widths = {dtype: [proj_spec['stream_info'][dtype]
+                                 for proj_spec in proj_specs]
+                         for dtype in MAC_datatypes}
+    inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
+                        for (inner_bus_count,inner_data_width) in
+                                zip(inner_bus_counts[dtype],
+                                    inner_data_widths[dtype])]
+                        for dtype in MAC_datatypes}
 
 def get_factors(maxv, product):
     """ Make a list of factors of product, less than maxv.
@@ -40,9 +53,14 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
     num_used_PEs = get_product(
         solution,
         [loop_bound + 'O' for loop_bound in loop_bounds])
+    num_used_MACs = get_product(
+        solution,
+        [loop_bound + 'I' for loop_bound in loop_bounds])
     preload_o = min(preload_o, num_used_PEs)
     if (preload_o < 0):
         preload_o = num_used_PEs
+    if (preload_i < 0):
+        preload_i = num_used_MACs
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
         math.ceil(num_used_PEs/preload_o)
     preload_cycles = preload_chain_len * \
@@ -95,7 +113,8 @@ def get_product(var_dict, var_keys):
 
 def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                   suggested_solution=None, preload_o=1, preload_i=1,
-                  num_solutions=1, cost_function=score_solution):
+                  num_solutions=1, cost_function=score_solution,
+                  buffer_count=-1):
     """ Find the best set of mappings (according to a given cost function)
     that are achievable given the ML blocks available.
 
@@ -110,7 +129,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                  "This may take several minutes.")
     utils.printi(il, "Workload definition: " + str(workload))
     problem = constraint.Problem()
-    hwbp = hwb['possible_projections']
+    hwbp =  copy.deepcopy(hwb['possible_projections'])
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
     levels = ['O', 'I', 'T']
 
@@ -118,7 +137,8 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                        'UB': ['B', 'PX', 'PY'], 'UG': []}
     access_patterns_r = {'B': ['UB'], 'C': ['URN'], 'E': ['UE'], 'PX': ['UB'],
                          'PY': ['UB'], 'RX': ['URW'], 'RY': ['URN']}
-
+    if (hwbp['URW'] == 0):
+        hwbp['URW'] = 1
     if enable_soft_logic:
         if (hwbp['URW'] == 1):
             access_patterns['URN'] += access_patterns['URW']

@@ -5,7 +5,7 @@ MAC_info:
     data_widths:
         W: 8
         I: 8
-        O: 32
+        O: 16
 possible_projections:
     URW: 1
     URN: 1
@@ -13,58 +13,122 @@ possible_projections:
     UB: 2
     UG: 1
 ports:
-    -   name: a_en
-        width: 1
+    -   name: data_in_AD
+        width: 57
         direction: "in"
-        type: "W_EN"
-    -   name: load_buf_sel
-        width: 1
-        direction: "in"
-        type: "MODE"
-    -   name: b_en
+        type: "I"
+    -   name: AD_cascade_out
+        width: 57
+        direction: "out"
+        type: "I"
+    -   name: CEAD
         width: 1
         direction: "in"
         type: "I_EN"
-    -   name: feed_sel0
+    -   name: data_in_B
+        width: 18
+        direction: "in"
+        type: "W"
+    -   name: B_cascade_out
+        width: 18
+        direction: "out"
+        type: "W"
+    -   name: CEB
         width: 1
         direction: "in"
-        type: "C"
-    -   name: feed_sel1
-        width: 1
+        type: "W_EN"
+    -   name: P_cout
+        width: 48
+        direction: "out"
+        type: "O"
+    -   name: P_cin
+        width: 48
         direction: "in"
-        type: "C"
-    -   name: acc_en
+        type: "O"
+    -   name: opmode0
         width: 1
         direction: "in"
         type: "ACC_EN"
-    -   name: zero_en
+    -   name: opmode1
         width: 1
         direction: "in"
         type: "C"
-    -   name: data_in_w
-        width: 16
+    -   name: opmode2
+        width: 1
         direction: "in"
-        type: "W"
-    -   name: data_in_i
-        width: 80
+        type: "C"
+    -   name: opmode3
+        width: 1
         direction: "in"
-        type: "I"
-    -   name: cascade_data_in
-        width: 96
+        type: "C"
+    -   name: opmode4
+        width: 1
         direction: "in"
-        type: "O"
-    -   name: b_cas_out
-        width: 80
-        direction: "out"
-        type: "I"
-    -   name: weight_cascade_out
-        width: 16
-        direction: "out"
-        type: "W"
-    -   name: cascade_data_out
-        width: 96
-        direction: "out"
-        type: "O"
+        type: "C"
+    -   name: opmode5
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: opmode6
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: opmode7
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: opmode8
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: alumode0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: alumode1
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: alumode2
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: alumode3
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: inmode0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: inmode1
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: inmode2
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: inmode3
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: inmode4
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: carryinsel0
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: carryinsel1
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: CECONFIG
+        width: 1
+        direction: "in"
+        type: "C"
     -   name: clk
         width: 1
         direction: "in"

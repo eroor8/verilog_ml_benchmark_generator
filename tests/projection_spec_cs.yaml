@@ -1,16 +1,16 @@
 name: "test_proj"
 inner_projection:
     URW: 
-        value: 3
-        x: 3
+        value: 2
+        x: 2
         y: 1
     URN: 
-        value: 3
+        value: 2
         x: 1
-        y: 3
+        y: 2
         chans: 1
     UE: 
-        value: 3
+        value: 1
     UB: 
         value: 1
         x: 1
@@ -18,9 +18,6 @@ inner_projection:
         batches: 1
     UG: 
         value: 1
-    PRELOAD:
-    -   dtype: 'W'
-        bus_count: 2
 outer_projection:
     URW: 
         value: 1
@@ -32,7 +29,7 @@ outer_projection:
         y: 1
         chans: 1
     UE: 
-        value: 2
+        value: 1
     UB: 
         value: 1
         x: 1
@@ -49,9 +46,9 @@ temporal_projection:
     UE: 
         value: 1
     UB: 
-        value: 8
+        value: 16
         x: 4
-        y: 2
+        y: 4
         batches: 1
     UG: 
         value: 1
@@ -63,6 +60,6 @@ dilation:
     x: 1
     y: 1
 stream_info:
-    W: 8
+    W: 4
     I: 8
     O: 32

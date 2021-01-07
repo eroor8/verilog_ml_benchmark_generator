@@ -318,6 +318,9 @@ def odinify(filename_in):
     filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                       r"\2\4\5",
                       filedata)
+    filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(\S+)_inst(.*)",
+                      r"\4\3\4_inst\5",
+                      filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
 
     # Odin can't handle wide values
@@ -335,6 +338,8 @@ def odinify(filename_in):
     filedata = filedata.replace('310\'d', '62\'d')
     filedata = filedata.replace('110\'d', '62\'d')
     filedata = filedata.replace('210\'d', '62\'d')
+    filedata = filedata.replace('115\'d', '62\'d')
+    filedata = filedata.replace('315\'d', '62\'d')
     return filedata
 
 
@@ -700,6 +705,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
         layer["loop_dimensions"],
         pe_count,
         preload_o=preload_o,
+        preload_i=preload_i,
         suggested_solution=None
     )
     assert(len(mappings) == 1)
@@ -736,8 +742,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                                  mappings[0]["PXO"] *
                                                  mappings[0]["PYO"]),
                                        'x': 1,
-                                       'y': mappings[0]["PYO"],
-                                       'batches': mappings[0]["BO"]*mappings[0]["PXO"]},
+                                       'y': 1,
+                                       'batches': mappings[0]["BO"]*mappings[0]["PXO"]*mappings[0]["PYO"]},
                                 'UG': {'value': 1}}
     proj["inner_projection"] = {'URN': {'value': (mappings[0]["RYI"] *
                                                   mappings[0]["CI"]),

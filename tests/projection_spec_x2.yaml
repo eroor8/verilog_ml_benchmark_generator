@@ -62,4 +62,4 @@ dilation:
 stream_info:
     W: 8
     I: 8
-    O: 32
+    O: 16

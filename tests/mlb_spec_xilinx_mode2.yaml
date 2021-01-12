@@ -14,11 +14,11 @@ possible_projections:
     UG: 1
 ports:
     -   name: data_in_AD
-        width: 57
+        width: 16
         direction: "in"
         type: "W"
     -   name: AD_cascade_out
-        width: 57
+        width: 16
         direction: "out"
         type: "W"
     -   name: CEAD
@@ -26,11 +26,11 @@ ports:
         direction: "in"
         type: "W_EN"
     -   name: data_in_B
-        width: 18
+        width: 8
         direction: "in"
         type: "I"
     -   name: B_cascade_out
-        width: 18
+        width: 8
         direction: "out"
         type: "I"
     -   name: CEB
@@ -38,11 +38,11 @@ ports:
         direction: "in"
         type: "I_EN"
     -   name: P_cout
-        width: 48
+        width: 32
         direction: "out"
         type: "O"
     -   name: P_cin
-        width: 48
+        width: 32
         direction: "in"
         type: "O"
     -   name: opmode0

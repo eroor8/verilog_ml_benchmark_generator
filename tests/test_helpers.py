@@ -645,29 +645,40 @@ def gen_constraint_file(chain_file, outfile,
     xincr = 0
     yincr = -1
     out_line_list = []
-    chain_idx = 0
     for chain in chain_list:
-        if (curr_chain < full_chains_per_col):
-            curr_chain += 1
-        else:
-            curr_chain = 1
-            xincr += 1
-            yincr = -1
-        if (xincr >= len(xindices)):
-            #break
-            xincr = 0
-            yincr = -1*full_chains_per_col*len(chain_list[0])-1
-        for mlb in chain:
-            if (yincr < -1*len(yindices)):
-                yincr = -1*full_chains_per_col*len(chain_list[0])-1
+        if (full_chains_per_col >= 1):
+            if (curr_chain < full_chains_per_col):
+                curr_chain += 1
+            else:
+                curr_chain = 1
                 xincr += 1
-                curr_chain = 0
-            coords[mlb] = {}
-            coords[mlb]['x'] = xindices[xincr]
-            coords[mlb]['y'] = yindices[yincr]
-            out_line_list += [".*ml_block_inst_" + str(mlb) + ".ml_block.*" + portname + ".0 " + str(coords[mlb]['x']) + " " +str(coords[mlb]['y']) + " 0"]
-            yincr -= 1
-        chain_idx += 1
+                yincr = -1
+            if (xincr >= len(xindices)):
+                #break
+                xincr = 0
+                yincr = -1*full_chains_per_col*len(chain_list[0])-1
+            for mlb in chain:
+                if (yincr < -1*len(yindices)):
+                    yincr = -1*full_chains_per_col*len(chain_list[0])-1
+                    xincr += 1
+                    curr_chain = 0
+                coords[mlb] = {}
+                coords[mlb]['x'] = xindices[xincr]
+                coords[mlb]['y'] = yindices[yincr]
+                out_line_list += [".*ml_block_inst_" + str(mlb) + ".ml_block.*" + portname + ".0 " + str(coords[mlb]['x']) + " " +str(coords[mlb]['y']) + " 0"]
+                yincr -= 1
+        else:
+            for mlb in chain:
+                if (yincr < -1*len(yindices)):
+                    yincr = -1
+                    xincr += 1
+                    assert(xincr < len(xindices))
+                coords[mlb] = {}
+                coords[mlb]['x'] = xindices[xincr]
+                coords[mlb]['y'] = yindices[yincr]
+                out_line_list += [".*ml_block_inst_" + str(mlb) + ".ml_block.*" + portname + ".0 " + str(coords[mlb]['x']) + " " +str(coords[mlb]['y']) + " 0"]
+                yincr -= 1
+                
 
     filedata = '\n'.join(out_line_list)
     with open(outfile, 'w') as file:

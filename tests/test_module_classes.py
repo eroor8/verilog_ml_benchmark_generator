@@ -291,10 +291,7 @@ def test_WeightInterconnect():
                           'UG':{'value':2}}]}, # not enough mlbs
         {"ins":[8,8,3,4,1000,{'URN':{'value':1},'URW':{'value':2},
                           'UB':{'value':3},'UE':{'value':10},
-                          'UG':{'value':2}}]}, # not enough buffers
-        {"ins":[5,8,3,3,15,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':1},
-                          'UG':{'value':2}}]}, # buffer not wide enough
+                          'UG':{'value':2}}]} # not enough buffers
     ] 
     for testvec in illegal_test_vecs:
         with pytest.raises(AssertionError):

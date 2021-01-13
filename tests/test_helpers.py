@@ -645,7 +645,9 @@ def gen_constraint_file(chain_file, outfile,
     xincr = 0
     yincr = -1
     out_line_list = []
+    u = 0
     for chain in chain_list:
+        u = u + 1
         if (full_chains_per_col >= 1):
             if (curr_chain < full_chains_per_col):
                 curr_chain += 1
@@ -653,6 +655,13 @@ def gen_constraint_file(chain_file, outfile,
                 curr_chain = 1
                 xincr += 1
                 yincr = -1
+                print("NEW X1")
+                print(chain)
+                print(u)
+                print("of " + str(len(chain_list)))
+                print(xincr)
+               # print(xindices[xincr])
+                print(xindices)
             if (xincr >= len(xindices)):
                 #break
                 xincr = 0
@@ -672,6 +681,10 @@ def gen_constraint_file(chain_file, outfile,
                 if (yincr < -1*len(yindices)):
                     yincr = -1
                     xincr += 1
+                    print("NEW X2")
+                    print(xincr)
+                    print(xindices[xincr])
+                    print(xindices)
                     assert(xincr < len(xindices))
                 coords[mlb] = {}
                 coords[mlb]['x'] = xindices[xincr]

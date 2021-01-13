@@ -12,6 +12,7 @@ possible_projections:
     UE: 3
     UB: 1
     UG: 1
+output_accumulator: True
 ports:
     -   name: a_en
         width: 1

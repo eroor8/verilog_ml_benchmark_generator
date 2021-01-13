@@ -1112,6 +1112,8 @@ class StateMachineEMIF(Component):
                          ]
         acc_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'ACC_EN', ["in"]))
         acc_en_port = getattr(s.datapath, "mlb_modules_" + acc_en_port_name[0]["name"] + "_top")
+        s.acc_en = Wire(1)
+        acc_en_port //= s.acc_en
         w_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'W_EN', ["in"]))
         w_en_port = getattr(s.datapath, "mlb_modules_" + w_en_port_name[0]["name"] + "_top")
         i_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'I_EN', ["in"]))
@@ -1182,10 +1184,15 @@ class StateMachineEMIF(Component):
         stridex = proj_spec.get("stride",{}).get("x",1)
         stridey = proj_spec.get("stride",{}).get("y",1)
         if (ws):
-            assert unt == 1
-            input_count = ubt*(unt)
-            output_count = ubt*(unt)
-            weight_count = ubt*(unt)
+            #assert unt == 1
+            if (unt > 1):
+                input_count = 1
+                output_count = 1
+                weight_count = 1
+            else:
+                input_count = ubt*(unt)
+                output_count = ubt*(unt)
+                weight_count = ubt*(unt)
             repeat_xi = 1
             repeat_xo = 1
             repeat_xw = 1
@@ -1264,6 +1271,7 @@ class StateMachineEMIF(Component):
                 s.uet_cnt <<= 0
                 s.istart_address_wide <<= 0
                 s.ostart_address_wide <<= initial_val
+                s.acc_en <<= 0
             else:
                 if (s.state == INIT):
                     if s.sm_start:
@@ -1313,9 +1321,9 @@ class StateMachineEMIF(Component):
                 elif s.state == DONE:
                     s.done <<= 1
                 if (ws):
-                    acc_en_port <<= 0
+                    s.acc_en <<= 0
                 else:
-                    acc_en_port <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
+                    s.acc_en <<= (s.state == STREAMING_MLBS) & ~s.stream_outputs.wen
                     
         @update
         def connect_weight_address():
@@ -1539,10 +1547,25 @@ class StateMachineEMIFSeparate(Component):
                    proj_spec.get("outer_projection",{}).get('URN',{}).get('y',1) * \
                    proj_spec.get("inner_projection",{}).get('URN',{}).get('y',1)
         if (ws):
-            assert unt == 1
-            input_count = ubt*(unt)
-            output_count = ubt*(unt)
-            weight_count = ubt*(unt)
+            #assert unt == 1
+            if (unt > 1):
+                input_count = 1
+                output_count = 1
+                weight_count = 1
+                # If we accumulate inside the MLBs,
+                # then there is no weight reuse since they
+                # need to be reloaded. So effectively
+                # ubt => 1
+                uet = uet*unt*ubt
+                ubt = 1
+                unt = 1
+            else:
+                input_count = ubt*(unt)
+                output_count = ubt*(unt)
+                weight_count = ubt*(unt)
+            #input_count = ubt*(unt)
+            #output_count = ubt*(unt)
+            #weight_count = ubt*(unt)
             repeat_xi = 1
             repeat_xo = 1
             repeat_xw = 1

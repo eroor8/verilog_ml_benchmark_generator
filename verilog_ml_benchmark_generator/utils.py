@@ -742,11 +742,13 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1, inse
         connected_outs += [connectport]
     return connected_ins + connected_outs
 
-def get_max_input_bus_width(buf_width, projection, data_type):
+def get_max_input_bus_width(buf_width, projection, data_type, inner_width=-1):
     #buf_width = get_sum_datatype_width(buf_spec, "DATA", ["in"])
     max_vals_per_buf = get_var_product_new(projection.get("inner_projection",{}), [['UB','batches'], ['UG','value'], ['URN','chans']], defaults=['chans','batches'])
+    if inner_width < 0:
+        inner_width = projection["stream_info"][data_type]
     if ((projection.get('inner_projection',{}).get('URN',{}).get('y',1) > 1) and data_type ==  "I"):
-        buf_width = min(projection["stream_info"][data_type]*max_vals_per_buf, buf_width)
+        buf_width = min(inner_width*max_vals_per_buf, buf_width)
     #assert buf_width > 1
     return buf_width
 

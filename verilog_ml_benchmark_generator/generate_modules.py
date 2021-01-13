@@ -296,11 +296,11 @@ def odinify(filename_in):
 
     # pyMTL adds clk and reset to everything... but we dont want it
     # in some cases.
-    non_existant_ports = [r"ml_block_weights_inst_\d+__clk",
-                          r"ml_block_input_inst_\d+__clk",
-                          r"ml_block_weights_inst_\d+__reset",
-                          r"ml_block_input_inst_\d+__clk",
-                          r"ml_block_input_inst_\d+__reset"]
+    non_existant_ports = [r"ml_block_weight\S*_inst_\d+__clk",
+                          r"ml_block_input\S*_inst_\d+__clk",
+                          r"ml_block_weight\S*_inst_\d+__reset",
+                          r"ml_block_input\S*_inst_\d+__clk",
+                          r"ml_block_input\S*_inst_\d+__reset"]
 
     # Rename ML blocks to correct name
     line_list = filedata.splitlines()
@@ -689,6 +689,9 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     currstep = 1
     #if (preload_o < 1):
     #    preload_o = pe_count
+    soft_logic_required = False
+    if (mlb_spec['possible_projections']['URW'] == 0):
+        soft_logic_required = True
     
     suggested_soln = {'BO':1,'CO':1,
                 'EO':11,'PXO':14,
@@ -706,7 +709,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
         pe_count,
         preload_o=preload_o,
         preload_i=preload_i,
-        suggested_solution=None
+        suggested_solution=None,
+        enable_soft_logic=soft_logic_required
     )
     assert(len(mappings) == 1)
     #assert 1==0

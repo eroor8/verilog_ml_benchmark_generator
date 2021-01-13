@@ -10,6 +10,7 @@ import sys
 from pymtl3 import *
 
 from click.testing import CliRunner
+from verilog_ml_benchmark_generator import utils
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
@@ -27,6 +28,7 @@ def test_SM_InputSel():
     testinst.sim_tick()
     assert testinst.vout == 3
 
+@pytest.mark.skip
 def test_StateMachineSim():
     """Test Component class Statemachine"""
     projection = {"name": "test",

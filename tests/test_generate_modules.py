@@ -1299,13 +1299,17 @@ def test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow"):
                             'RY':1},
         "activation_function": 'RELU'
        }
+    #assert 5==7
     test_generate_layer(workload, "mlb_spec_intel.yaml",
                         "input_spec_intel_16.yaml",
                         "input_spec_intel_16.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
                         False, False, NUMI, -1, 2, layer_name=layer_name, run_odin=False)
-    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l1.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+    x_locs = list(range(8,WIDTH-2,7))+[81,95,67]
+    print(x_locs)
+    print(sorted(x_locs))
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l1.constraints", sorted(x_locs), list(range(2,HEIGHT-2-4,4)))
     
 @pytest.mark.longtest
 def test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow"):
@@ -1350,7 +1354,6 @@ def test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow"):
     
     gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l3.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
     
-@pytest.mark.longtest
 def test_generate_layer_intel():
     test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow_l1")
     test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow_l2")
@@ -1371,7 +1374,7 @@ def test_generate_layer_xilinx_l1(layer_name="test_full_layer_flow_x1"):
        }
     test_generate_layer(workload, "mlb_spec_xilinx_mode2.yaml",
                         "input_spec_intel_16.yaml",
-                        "input_spec_intel_16.yaml",
+                        "input_spec_intel_36.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
                         False, False, NUMX, -1, -1, layer_name=layer_name, run_odin=False)
@@ -1420,7 +1423,7 @@ def test_generate_layer_xilinx_l3(layer_name="test_full_layer_flow_x3"):
                         False, False, NUMX, -1, -1, layer_name=layer_name, run_odin=False)
     gen_constraint_file("chain_list_for_placement.yaml", "full_layer_x3.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-2,2)), portname="P_cout")
 
-@pytest.mark.longtest
+
 def test_generate_layer_xilinx():
     test_generate_layer_xilinx_l1(layer_name="test_full_layer_flow_x1")
     test_generate_layer_xilinx_l2(layer_name="test_full_layer_flow_x2")
@@ -1473,7 +1476,7 @@ def test_generate_layer_intel_soft_small(layer_name="test_full_layer_flow_soft_s
     gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
     
 @pytest.mark.longtest
-def test_generate_layer_intel_soft_smaller(layer_name="test_full_layer_flow_soft_smaller"):
+def test_generate_layer_intel_soft_small2(layer_name="test_full_layer_flow_soft_small2"):
     
     workload = {
         "stride": {"x":1, "y":1},
@@ -1490,9 +1493,75 @@ def test_generate_layer_intel_soft_smaller(layer_name="test_full_layer_flow_soft
                         "input_spec_intel_8.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False,200, -1, 2, layer_name=layer_name, run_odin=False)
+                        False, False,600, -1, 2, layer_name=layer_name, run_odin=False)
     
-    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_smaller.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small2.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+
+@pytest.mark.longtest
+def test_generate_layer_intel_soft_small3(layer_name="test_full_layer_flow_soft_small3"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1,'C':3,
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_intel_v2.yaml",
+                        "input_spec_intel_8.yaml",
+                        "input_spec_intel_8.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False,700, -1, 2, layer_name=layer_name, run_odin=False)
+    
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small3.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+
+@pytest.mark.longtest
+def test_generate_layer_intel_soft_small4(layer_name="test_full_layer_flow_soft_small4"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1,'C':3,
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_intel_v2.yaml",
+                        "input_spec_intel_8.yaml",
+                        "input_spec_intel_8.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False,800, -1, 2, layer_name=layer_name, run_odin=False)
+    
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small4.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
+
+@pytest.mark.longtest
+def test_generate_layer_intel_soft_small5(layer_name="test_full_layer_flow_soft_small5"):
+    
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "stream_info": {"W":8, "I":8, "O":32},
+        "loop_dimensions": {'B':1,'C':3,
+                            'E':32,'PX':224,
+                            'PY':224,'RX':3,
+                            'RY':3},
+        "activation_function": 'RELU'
+       }
+    test_generate_layer(workload, "mlb_spec_intel_v2.yaml",
+                        "input_spec_intel_8.yaml",
+                        "input_spec_intel_8.yaml",
+                        "emif_spec_intel.yaml",
+                        "projection_spec_cs.yaml", True,
+                        False, False,900, -1, 2, layer_name=layer_name, run_odin=False)
+    
+    gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small5.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
     
 @pytest.mark.longtest
 def test_generate_layer_xilinx_test(layer_name="test_full_layer_flow_x3"):

@@ -48,10 +48,10 @@ def test_find_mappings():
                 'RYT':1}
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, suggested_solution=None)
     print(len(mappings))
-    assert tp == 14098
+    assert tp == 14101
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv1, 288, True, suggested_solution=None)
     print(len(mappings))
-    assert tp == 15512
+    assert tp == 15519
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_fc1, 288, False, suggested_solution=None)
     print(len(mappings))
-    assert tp == 4090
+    assert tp == 4193

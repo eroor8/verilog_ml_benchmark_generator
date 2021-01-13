@@ -751,48 +751,48 @@ class MLB(Component):
         # Connect between interconnects, MACs and top level
         for i in range(len(proj_specs)):
             weight_interconnect = weight_interconnects[i]
-            utils.connect_ports_by_name(s.mac_modules, "weight_out_(\d+)",
+            utils.connect_ports_by_name(s.mac_modules, r"weight_out_(\d+)",
                                         weight_interconnect,
-                                        "inputs_from_mlb_(\d+)")
+                                        r"inputs_from_mlb_(\d+)")
             utils.connect_inst_ports_by_name(s, "W_IN", weight_interconnect,
                                              "inputs_from_buffer")
         utils.mux_ports_by_name(s, weight_interconnects,
-                                "outputs_to_mlb_(\d+)", s.mac_modules,
-                                "weight_in_(\d+)", insel=s.sel, sim=True)
+                                r"outputs_to_mlb_(\d+)", s.mac_modules,
+                                r"weight_in_(\d+)", insel=s.sel, sim=True)
         utils.mux_inst_ports_by_name(s, "W_OUT", weight_interconnects,
-                                     "outputs_to_buffer_(\d+)", insel=s.sel,
+                                     r"outputs_to_buffer_(\d+)", insel=s.sel,
                                      sim=True)
 
         for i in range(len(proj_specs)):
             input_interconnect = input_interconnects[i]
-            utils.connect_ports_by_name(s.mac_modules, "input_out_(\d+)",
+            utils.connect_ports_by_name(s.mac_modules, r"input_out_(\d+)",
                                         input_interconnect,
-                                        "inputs_from_mlb_(\d+)")
+                                        r"inputs_from_mlb_(\d+)")
             utils.connect_inst_ports_by_name(s, "I_IN", input_interconnect,
                                              "inputs_from_buffer")
         utils.mux_ports_by_name(s, input_interconnects,
-                                "outputs_to_mlb_(\d+)", s.mac_modules,
-                                "input_in_(\d+)", insel=s.sel, sim=True)
+                                r"outputs_to_mlb_(\d+)", s.mac_modules,
+                                r"input_in_(\d+)", insel=s.sel, sim=True)
         utils.mux_inst_ports_by_name(s, "I_OUT", input_interconnects,
-                                     "outputs_to_buffer_(\d+)", insel=s.sel,
+                                     r"outputs_to_buffer_(\d+)", insel=s.sel,
                                      sim=True)
 
         for i in range(len(proj_specs)):
             output_ps_interconnect = output_ps_interconnects[i]
             output_interconnect = output_interconnects[i]
-            utils.connect_ports_by_name(s.mac_modules, "sum_out_(\d+)",
+            utils.connect_ports_by_name(s.mac_modules, r"sum_out_(\d+)",
                                         output_ps_interconnect,
-                                        "inputs_from_mlb_(\d+)")
+                                        r"inputs_from_mlb_(\d+)")
             utils.connect_ports_by_name(output_ps_interconnect,
-                                        "outputs_to_afs_(\d+)",
-                                        output_interconnect, "input_(\d+)")
+                                        r"outputs_to_afs_(\d+)",
+                                        output_interconnect, r"input_(\d+)")
             utils.connect_inst_ports_by_name(s, "O_IN", output_ps_interconnect,
                                              "ps_inputs_from_buffer")
         utils.mux_ports_by_name(s, output_ps_interconnects,
-                                "outputs_to_mlb_(\d+)", s.mac_modules,
-                                "sum_in_(\d+)", insel=s.sel, sim=True)
+                                r"outputs_to_mlb_(\d+)", s.mac_modules,
+                                r"sum_in_(\d+)", insel=s.sel, sim=True)
         utils.mux_inst_ports_by_name(s, "O_OUT", output_interconnects,
-                                     "output_(\d+)", insel=s.sel, sim=True)
+                                     r"output_(\d+)", insel=s.sel, sim=True)
         utils.connect_inst_ports_by_name(s, "W_EN", s.mac_modules, "weight_en")
         utils.connect_inst_ports_by_name(s, "I_EN", s.mac_modules, "input_en")
         utils.connect_inst_ports_by_name(s, "ACC_EN", s.mac_modules, "acc_en")

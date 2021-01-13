@@ -63,20 +63,17 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
         preload_i = num_used_MACs
     preload_chain_len = math.ceil(num_MACs / preload_i) * \
         math.ceil(num_used_PEs/preload_o)
-    preload_cycles = preload_chain_len * \
-        get_product(solution, ['ET', 'RXT', 'RYT', 'CT'])
-    #print("PRELOAD")
-    #print(solution)
-    #print(product_cycles)
-    #print(preload_cycles)
-    #print(preload_o)
-    #print(preload_chain_len)
-    #print(math.ceil(num_MACs / preload_i))
-    #print(math.ceil(num_used_PEs/preload_o))
-    #print(preload_i)
-    #print(num_MACs)
-    total_cycles = product_cycles + preload_cycles
-    #print(total_cycles)
+    if (solution['CT']*solution['RYT']*solution['RXT'] > 1):
+        # In this case (output stationary) we
+        # need to reload the weights after every addition.
+        preload_cycles = preload_chain_len * \
+            get_product(solution, ['ET', 'RXT', 'RYT', 'CT', 'BT', 'PXT', 'PYT'])
+    else:    
+        preload_cycles = preload_chain_len * \
+            get_product(solution, ['ET', 'RXT', 'RYT', 'CT'])
+    pipeline_count = get_product(solution, ['RXO', 'RYO', 'CO'])
+    
+    total_cycles = product_cycles + preload_cycles + pipeline_count
     return total_cycles
 
 
@@ -111,7 +108,7 @@ def get_product(var_dict, var_keys):
     return product
 
 
-def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
+def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
                   suggested_solution=None, preload_o=1, preload_i=1,
                   num_solutions=1, cost_function=score_solution,
                   buffer_count=-1):
@@ -130,6 +127,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
     utils.printi(il, "Workload definition: " + str(workload))
     problem = constraint.Problem()
     hwbp =  copy.deepcopy(hwb['possible_projections'])
+    ws = not (hwb.get('output_accumulator', False))
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
     levels = ['O', 'I', 'T']
 
@@ -137,10 +135,9 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                        'UB': ['B', 'PX', 'PY'], 'UG': []}
     access_patterns_r = {'B': ['UB'], 'C': ['URN'], 'E': ['UE'], 'PX': ['UB'],
                          'PY': ['UB'], 'RX': ['URW'], 'RY': ['URN']}
-    if (hwbp['URW'] == 0):
-        hwbp['URW'] = 1
+
     if enable_soft_logic:
-        if (hwbp['URW'] == 1):
+        if (hwbp['URW'] < 2):
             access_patterns['URN'] += access_patterns['URW']
             for lb in access_patterns['URW']:
                 access_patterns_r[lb] += ['URN']
@@ -164,6 +161,8 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
                 access_patterns_r[lb] += ['UG']
                 access_patterns_r[lb].remove('UB')
             access_patterns['UB'] = []
+    if (hwbp['URW'] == 0):
+        hwbp['URW'] = 1
 
     # Windowing can't be done in both dimensions inside the PE or across PEs.
     # problem.addConstraint(constraint.InSetConstraint([1]), ['PXI'])
@@ -238,7 +237,10 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=False,
 
     problem.addConstraint(constraint.InSetConstraint([1]), ['RXT'])
     problem.addConstraint(constraint.InSetConstraint([1]), ['RYT'])
-    problem.addConstraint(constraint.InSetConstraint([1]), ['CT'])
+
+    # Only allow this if there is a single batch.
+    if ws:
+        problem.addConstraint(constraint.InSetConstraint([1]), ['CT'])
     
     solutions = problem.getSolutions()
     assert len(solutions) > 0

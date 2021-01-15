@@ -42,19 +42,7 @@ def test_get_mlb_count():
     #                          'UB':{'value':1},'UE':{'value':1}}
     #    utils.get_mlb_count(projection_example)
 
-def test_get_proj_chain_length():
-    """Test util function get_proj_stream_count"""
-    projection_example = {'URN':{'value':11},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':5},
-                          'UG':{'value':7}}
-    assert utils.get_proj_chain_length(projection_example,"W") == 2
-    assert utils.get_proj_chain_length(projection_example,"I") == 2
-    assert utils.get_proj_chain_length(projection_example,"O") == 11*2
-    assert utils.get_proj_chain_length(projection_example,"") == 0
-    #with pytest.raises(AssertionError):
-    #    utils.get_proj_chain_length(projection_example,"M")
-    
-
+ 
 def test_get_proj_stream_count():
     """Test util function get_proj_stream_count"""
     projection_example = {'URN':{'value':11},'URW':{'value':2},
@@ -131,22 +119,6 @@ def test_get_ports_of_type():
     assert list(utils.get_ports_of_type(example_hw, 'D')) == [pH, pI]
     assert list(utils.get_ports_of_type(example_hw, 'A',[])) == []
     assert list(utils.get_ports_of_type(example_hw, '')) == []
-
-def test_get_port_name():
-    """Test util function get_ports_of_type"""
-    pA = {"name": "testA", "width":3, "direction":"in", "type":"A"}
-    pB = {"name": "testB", "width":4, "direction":"in", "type":"A"}
-    pC = {"name": "testC", "width":5, "direction":"out", "type":"A"}
-    pJ = {"name": "testJ", "width":5, "direction":"out", "type":"A"}
-    pD = {"name": "testD", "width":6, "direction":"in", "type":"B"}
-    example_hw = [pA, pB, pC, pD, pJ]
-    assert utils.get_port_name(example_hw, 'B') == "testD"
-    
-    with pytest.raises(AssertionError):
-         utils.get_port_name(example_hw, 'A')
-    
-    with pytest.raises(AssertionError):
-         utils.get_port_name(example_hw, 'C')
 
 def test_get_sum_datatype_width():
     """Test util function get_sum_datatype_width"""

@@ -8,18 +8,6 @@ il = 1
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 
-def validate_buffer_count():
-    inner_bus_counts = {dtype: [utils.get_proj_stream_count(inner_proj,
-                        dtype) for inner_proj in inner_projs]
-                        for dtype in MAC_datatypes}
-    inner_data_widths = {dtype: [proj_spec['stream_info'][dtype]
-                                 for proj_spec in proj_specs]
-                         for dtype in MAC_datatypes}
-    inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
-                        for (inner_bus_count,inner_data_width) in
-                                zip(inner_bus_counts[dtype],
-                                    inner_data_widths[dtype])]
-                        for dtype in MAC_datatypes}
 
 def get_factors(maxv, product):
     """ Make a list of factors of product, less than maxv.
@@ -67,12 +55,13 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
         # In this case (output stationary) we
         # need to reload the weights after every addition.
         preload_cycles = preload_chain_len * \
-            get_product(solution, ['ET', 'RXT', 'RYT', 'CT', 'BT', 'PXT', 'PYT'])
-    else:    
+            get_product(solution, ['ET', 'RXT', 'RYT', 'CT', 'BT', 'PXT',
+                                   'PYT'])
+    else:
         preload_cycles = preload_chain_len * \
             get_product(solution, ['ET', 'RXT', 'RYT', 'CT'])
     pipeline_count = get_product(solution, ['RXO', 'RYO', 'CO'])
-    
+
     total_cycles = product_cycles + preload_cycles + pipeline_count
     return total_cycles
 
@@ -121,12 +110,14 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     :param suggested_solution: Proposed mapping vector
     :param preload_o: Information about weight preload method
     :param preload_i: Information about weight preload method
+    :param num_solutions: number of solutions to return
+    :param cost_function: function used to sort possible solutions
     """
     utils.printi(il, "Solving for optimal mapping vector. " +
                  "This may take several minutes.")
     utils.printi(il, "Workload definition: " + str(workload))
     problem = constraint.Problem()
-    hwbp =  copy.deepcopy(hwb['possible_projections'])
+    hwbp = copy.deepcopy(hwb['possible_projections'])
     ws = not (hwb.get('output_accumulator', False))
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
     levels = ['O', 'I', 'T']
@@ -216,7 +207,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
                               nested_bounds)
 
     # Ensure that product of outer tiling factors is <= # PEs
-    #print("Product of " + str([loop_bound + 'O' for loop_bound in loop_bounds]) + " < " + str(pe_count))
     problem.addConstraint(
         lambda val0=1, val1=1, val2=1, val3=1, val4=1, val5=1, val6=1,
         maxv=pe_count:
@@ -241,7 +231,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     # Only allow this if there is a single batch.
     if ws:
         problem.addConstraint(constraint.InSetConstraint([1]), ['CT'])
-    
+
     solutions = problem.getSolutions()
     assert len(solutions) > 0
 

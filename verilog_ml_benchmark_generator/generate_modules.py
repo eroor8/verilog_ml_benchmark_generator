@@ -13,9 +13,9 @@ import random
 import yaml
 import constraint_evaluation
 from jsonschema import validate
-from pymtl3 import *
-from pymtl3.passes.backends.verilog import *
-from pymtl3.passes.backends.verilog import *
+from pymtl3 import DefaultPassGroup
+from pymtl3.passes.backends.verilog import VerilogTranslationPass
+
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_classes
@@ -268,7 +268,7 @@ def remove_width_0_ranges(line_list):
             if (foundlp.group(1) == foundlp.group(2)):
                 line_list[lineidx] = re.sub(r"\[" + str(foundlp.group(1)) +
                                             ":" +
-                                            str(foundlp.group(1)) + "\]",
+                                            str(foundlp.group(1)) + r"\]",
                                             "[" + str(foundlp.group(1)) + "]",
                                             line_list[lineidx])
         lineidx += 1
@@ -369,8 +369,9 @@ def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec,
 
 
 def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
-                          projection, write_to_file, emif_spec={},
-                          waddr=0, iaddr=0, oaddr=0, ws=True, fast_gen=False):
+                                       projection, write_to_file, emif_spec={},
+                                       waddr=0, iaddr=0, oaddr=0, ws=True,
+                                       fast_gen=False):
     """ Validate input specifications, generate a system including both
         the statemachines and datapath.
 
@@ -532,13 +533,14 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
         utils.printi(il, "Actual " + str(emif_vals))
         for bufi in range(obuf_count):
             for olen in range(min(obuf_len, ibuf_len) - 1):
-                if (obuf[bufi][olen] != emif_vals[bufi *
-                                                     min(obuf_len, ibuf_len)
-                                                     + olen]):
-                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " + str(obuf[bufi][olen]))
-                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " + str(emif_vals[bufi *
-                                                     min(obuf_len, ibuf_len)
-                                                     + olen]))
+                if (obuf[bufi][olen] != emif_vals[bufi * min(obuf_len,
+                                                             ibuf_len)
+                                                  + olen]):
+                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " +
+                          str(obuf[bufi][olen]))
+                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " +
+                          str(emif_vals[bufi * min(obuf_len, ibuf_len) +
+                                        olen]))
                 assert obuf[bufi][olen] == emif_vals[bufi *
                                                      min(obuf_len, ibuf_len)
                                                      + olen]
@@ -580,9 +582,11 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
 
     utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
     if (gen_ver):
-        generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
-                              projections[0], write_to_file, emif_spec,
-                              waddrs[0], iaddrs[0], oaddrs[0], ws, fast_gen=True)
+        generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec,
+                                           ab_spec, projections[0],
+                                           write_to_file, emif_spec, waddrs[0],
+                                           iaddrs[0], oaddrs[0], ws,
+                                           fast_gen=True)
         if (not simulate):
             return
     emif_spec["simulation_model"] = "EMIF"
@@ -604,7 +608,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
         t.apply(DefaultPassGroup())
 
     # Simulate each of the layers
-    output_vals = [[] for l in range(max(layer_sel) + 1)]
+    output_vals = [[] for m in range(max(layer_sel) + 1)]
     for n in layer_sel:
         # Calculate buffer counts and dimensions
         wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
@@ -687,22 +691,10 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     utils.print_heading("Find an appropriate mapping vector for given layer " +
                         "specification", 1)
     currstep = 1
-    #if (preload_o < 1):
-    #    preload_o = pe_count
     soft_logic_required = False
     if (mlb_spec['possible_projections']['URW'] == 0):
         soft_logic_required = True
-    
-    suggested_soln = {'BO':1,'CO':1,
-                'EO':11,'PXO':14,
-                'PYO':4,'RXO':3,
-                'RYO':1,'BI':1,'CI':3,
-                'EI': 3,'PXI':1,
-                'PYI':1,'RXI':1,
-                'RYI':3,'BT':1,'CT':1,
-                'ET': 1,'PXT':16,
-                'PYT':56,'RXT':1,
-                'RYT':1}
+
     mappings, mapping_score = constraint_evaluation.find_mappings(
         mlb_spec,
         layer["loop_dimensions"],
@@ -713,7 +705,6 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
         enable_soft_logic=soft_logic_required
     )
     assert(len(mappings) == 1)
-    #assert 1==0
     proj = {}
     proj["activation_function"] = layer["activation_function"]
     proj["stride"] = layer["stride"]
@@ -747,7 +738,8 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                                  mappings[0]["PYO"]),
                                        'x': 1,
                                        'y': 1,
-                                       'batches': mappings[0]["BO"]*mappings[0]["PXO"]*mappings[0]["PYO"]},
+                                       'batches': mappings[0]["BO"] *
+                                       mappings[0]["PXO"]*mappings[0]["PYO"]},
                                 'UG': {'value': 1}}
     proj["inner_projection"] = {'URN': {'value': (mappings[0]["RYI"] *
                                                   mappings[0]["CI"]),
@@ -763,16 +755,18 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                                  mappings[0]["PYI"]),
                                        'x': 1,
                                        'y': mappings[0]["PYI"],
-                                       'batches': mappings[0]["BI"]*mappings[0]["PXI"]},
+                                       'batches': mappings[0]["BI"] *
+                                       mappings[0]["PXI"]},
                                 'UG': {'value': 1}}
     if (preload_o > 0):
-        proj['outer_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':preload_o}]
+        proj['outer_projection']['PRELOAD'] = [{'dtype': 'W',
+                                                'bus_count': preload_o}]
     if (preload_i > 0):
-        proj['inner_projection']['PRELOAD'] = [{'dtype':'W', 'bus_count':preload_i}]
+        proj['inner_projection']['PRELOAD'] = [{'dtype': 'W',
+                                                'bus_count': preload_i}]
     print(proj)
-    
+
     simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         False, [oaddr], [iaddr], [waddr], ws, simulate=simulate,
         gen_ver=True)
-

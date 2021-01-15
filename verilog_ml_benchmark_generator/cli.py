@@ -68,9 +68,9 @@ def generate_full_datapath(module_name, mlb_definition,
               help='YAML definition of some projection',
               type=click.File('rb'))
 def generate_accelerator_verilog(module_name, mlb_definition,
-                          act_buffer_definition, weight_buffer_definition,
-                          emif_definition,
-                          projection_definition):
+                                 act_buffer_definition,
+                                 weight_buffer_definition, emif_definition,
+                                 projection_definition):
     """Generate an activation function module -
        Currently only RELU is supported"""
     mlb_yaml = yaml.safe_load(mlb_definition)
@@ -78,10 +78,11 @@ def generate_accelerator_verilog(module_name, mlb_definition,
     ab_yaml = yaml.safe_load(act_buffer_definition)
     proj_yaml = yaml.safe_load(projection_definition)
     emif_yaml = yaml.safe_load(emif_definition)
-    generate_modules.generate_accelerator_given_mapping(module_name, mlb_yaml, wb_yaml,
-                                           ab_yaml, proj_yaml,
-                                           write_to_file=True,
-                                           emif_spec=emif_yaml)
+    generate_modules.generate_accelerator_given_mapping(module_name, mlb_yaml,
+                                                        wb_yaml, ab_yaml,
+                                                        proj_yaml,
+                                                        write_to_file=True,
+                                                        emif_spec=emif_yaml)
     print("Statemachine generation was successful")
     return 0
 

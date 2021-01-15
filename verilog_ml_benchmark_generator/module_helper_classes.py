@@ -7,17 +7,17 @@ PYMTL Helper modules for implementing statemachine, simmodels
 - SingleValueBuffer
 - Buffer
 """
-from pymtl3 import *
-from pymtl3.passes.backends.verilog import *
-from pymtl3.passes.backends.yosys import *
+from pymtl3 import InPort, Component, Wire, update, update_ff, connect, Bits5
 import sys
 import os
 import math
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import module_classes
 import random
 fast_generate = False
+
 
 class MUX_NXN(Component):
     """" Implements a crossbar of N N-input muxes.
@@ -26,7 +26,7 @@ class MUX_NXN(Component):
         """ Constructor for N-input MUX
 
          :param input_width: Bit-width of input
-         :param input_count: Number of inputs 
+         :param input_count: Number of inputs
          :param sim: Whether to skip synthesis
         """
         assert(input_width > 0)
@@ -46,7 +46,6 @@ class MUX_NXN(Component):
             else:
                 if not (input_count == 1):
                     print(input_count)
-                #assert (input_count == 1)
                 newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel
@@ -66,7 +65,7 @@ class MUX2(Component):
 
          :param input_width: Bit-width of input
          :param sel_width: Width of sel signal
-         :param threshold: If sel > threshold, choose second input 
+         :param threshold: If sel > threshold, choose second input
          :param sim: Whether to skip synthesis
         """
         assert(input_width > 0)
@@ -96,9 +95,10 @@ class MUX3(Component):
         """
         assert(input_width > 0)
         for i in range(3):
-            newin = utils.AddInPort(s, input_width, "in" + str(i))
+            utils.AddInPort(s, input_width, "in" + str(i))
         utils.AddOutPort(s, input_width, "out")
         utils.AddInPort(s, 2, "sel")
+
         @update
         def upblk_set_wen0():
             if (s.sel == 0):
@@ -108,6 +108,7 @@ class MUX3(Component):
             else:
                 s.out @= s.in2
         utils.tie_off_clk_reset(s)
+
 
 class MUX6(Component):
     """" Implements a single 6-input mux.
@@ -121,9 +122,10 @@ class MUX6(Component):
         """
         assert(input_width > 0)
         for i in range(6):
-            newin = utils.AddInPort(s, input_width, "in" + str(i))
+            utils.AddInPort(s, input_width, "in" + str(i))
         utils.AddOutPort(s, input_width, "out")
         utils.AddInPort(s, 3, "sel")
+
         @update
         def upblk_set_wen0():
             if (s.sel == 0):
@@ -140,6 +142,7 @@ class MUX6(Component):
                 s.out @= s.in5
         utils.tie_off_clk_reset(s)
 
+
 class MUX9(Component):
     """" Implements a single 6-input mux.
     """
@@ -152,9 +155,10 @@ class MUX9(Component):
         """
         assert(input_width > 0)
         for i in range(9):
-            newin = utils.AddInPort(s, input_width, "in" + str(i))
+            utils.AddInPort(s, input_width, "in" + str(i))
         utils.AddOutPort(s, input_width, "out")
         utils.AddInPort(s, 4, "sel")
+
         @update
         def upblk_set_wen0():
             if (s.sel == 0):
@@ -176,7 +180,8 @@ class MUX9(Component):
             else:
                 s.out @= s.in8
         utils.tie_off_clk_reset(s)
-        
+
+
 class MUX12(Component):
     """" Implements a single 6-input mux.
     """
@@ -189,9 +194,10 @@ class MUX12(Component):
         """
         assert(input_width > 0)
         for i in range(12):
-            newin = utils.AddInPort(s, input_width, "in" + str(i))
+            utils.AddInPort(s, input_width, "in" + str(i))
         utils.AddOutPort(s, input_width, "out")
         utils.AddInPort(s, 4, "sel")
+
         @update
         def upblk_set_wen0():
             if (s.sel == 0):
@@ -219,7 +225,7 @@ class MUX12(Component):
             else:
                 s.out @= s.in11
         utils.tie_off_clk_reset(s)
-        
+
 
 class MUXN(Component):
     """" Implements a single N-input mux.
@@ -242,7 +248,6 @@ class MUXN(Component):
         s.w_sel = Wire(math.ceil(math.log(max(input_width*input_count, 2), 2)))
         s.w_sel[0:math.ceil(math.log(max(input_count, 2), 2))] //= s.sel
         if (input_count > 1):
-            #print(input_count)
             @update
             def upblk_set_wen0():
                 s.out @= s.long_input[s.w_sel * input_width:(s.w_sel + 1) *
@@ -345,14 +350,13 @@ class EMIF(Component):
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
         if (fast_gen):
-            s.avalon_readdata //= 0  
-            s.avalon_readdatavalid //= 0  
-            s.avalon_waitrequest //= 0  
-            s.avalon_writeresponsevalid //= 0      
+            s.avalon_readdata //= 0
+            s.avalon_readdatavalid //= 0
+            s.avalon_waitrequest //= 0
+            s.avalon_writeresponsevalid //= 0
         else:
             s.buf = Buffer(datawidth, length, startaddr, preload_vector,
-                       keepdata=False,
-                       sim=True)
+                           keepdata=False, sim=True)
         INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE = \
             Bits5(1), Bits5(2), Bits5(3), Bits5(4), Bits5(5)
         s.state = Wire(5)
@@ -375,16 +379,6 @@ class EMIF(Component):
                 else:
                     num_pending_transfers = s.curr_pending_end - \
                         s.curr_pending_start
-                    # print("Pending " + str(pending_transfers))
-                    # print("Num pending" + str(num_pending_transfers))
-                    # print("Read " + str(s.avalon_read))
-                    # print("Address" + str(s.avalon_address))
-                    # print("Readdata " + str(s.avalon_readdata))
-                    # print("Writedata " + str(s.avalon_writedata))
-                    # print("Readdatavalid " + str(s.avalon_readdatavalid))
-                    # print("Waitrequest " + str(s.avalon_waitrequest))
-                    # print("Write " + str(s.avalon_write))
-                    # print("Countdown " + str(s.latency_countdown))
                     if pipelined:
                         if (s.avalon_read or s.avalon_write) and \
                            (num_pending_transfers < max_pipeline_transfers):
@@ -395,18 +389,22 @@ class EMIF(Component):
                                                    int(s.avalon_address),
                                                    int(s.avalon_writedata)]
                             s.curr_pending_end <<= s.curr_pending_end + 1
-            
+
                         if (s.latency_countdown == 0) and \
                            (num_pending_transfers > 0):
                             s.avalon_readdatavalid <<= pending_transfers[
-                                s.curr_pending_start % max_pipeline_transfers][0]
+                                s.curr_pending_start %
+                                max_pipeline_transfers][0]
                             s.curr_pending_start <<= s.curr_pending_start + 1
                             s.buf.address <<= pending_transfers[
-                                s.curr_pending_start % max_pipeline_transfers][2]
+                                s.curr_pending_start %
+                                max_pipeline_transfers][2]
                             s.buf.wen <<= pending_transfers[
-                                s.curr_pending_start % max_pipeline_transfers][1]
+                                s.curr_pending_start %
+                                max_pipeline_transfers][1]
                             s.buf.datain <<= pending_transfers[
-                                s.curr_pending_start % max_pipeline_transfers][3]
+                                s.curr_pending_start %
+                                max_pipeline_transfers][3]
                             s.latency_countdown <<= curr_rand
                         else:
                             if (s.latency_countdown > 0):
@@ -439,7 +437,7 @@ class EMIF(Component):
                                 s.state <<= DONE_WRITE
                         elif (s.state == DONE_WRITE):
                             s.state <<= INIT
-            
+
             @update
             def upblk0():
                 s.avalon_readdata @= s.buf.dataout
@@ -453,8 +451,9 @@ class EMIF(Component):
                         s.avalon_waitrequest @= 0
                 else:
                     if ((s.state == INIT) and (s.avalon_read == 0) and
-                        (s.avalon_write == 0)) \
-                        or (s.state == DONE_READ) or (s.state == DONE_WRITE):
+                            (s.avalon_write == 0)) \
+                            or (s.state == DONE_READ) \
+                            or (s.state == DONE_WRITE):
                         s.avalon_waitrequest @= 0
                     else:
                         s.avalon_waitrequest @= 1
@@ -483,7 +482,7 @@ class Buffer(Component):
         if (fast_gen):
             s.dataout //= 0
             return
-            
+
         if (keepdata):
             s.data = Wire(length * datawidth)
         s.waddress = Wire(math.ceil(math.log(datawidth * (length + startaddr),
@@ -532,7 +531,7 @@ class BufferValue(Component):
     def construct(s, datawidth=8, addrwidth=8, addr=0, preload_value=0,
                   sim=False):
         """ Constructor for BufferValue
-        
+
          :param datawidth: Bit-width of input, output data
          :param addrwidth: Bit-width of address
          :param preload_value: Initial value of buffer entry.
@@ -651,12 +650,15 @@ class MACWrapper(Component):
 class MLB(Component):
     """" This is the sim model for an MLB block with given projection.
     """
-    def construct(s, proj_specs, sim=False, register_input=True, fast_gen=False):
+    def construct(s, proj_specs, sim=False, register_input=True,
+                  fast_gen=False):
         """ Constructor for MLB
 
          :param proj_spec: Dictionary describing projection of computations
                             onto ML block
          :param sim: Whether to skip synthesis
+         :param register_input: Whether to register the input value
+         :param fast_gen: If true, create empty module (to speed up pymtl gen)
         """
         if ["inner_projection"] in proj_specs:
             proj_specs = [proj_specs]
@@ -677,7 +679,8 @@ class MLB(Component):
                     for (bus_count, data_width) in zip(bus_counts[dtype],
                                                        data_widths[dtype])]
             for dtype in MAC_datatypes}
-        
+
+        # Add input and output ports
         utils.AddInPort(s, max(bus_widths['W']), "W_IN")
         utils.AddOutPort(s, max(bus_widths['W']), "W_OUT")
         utils.AddInPort(s, 1, "W_EN")
@@ -693,14 +696,14 @@ class MLB(Component):
             s.W_OUT //= 0
             s.I_OUT //= 0
             s.O_OUT //= 0
-            return    
+            return
 
         # Instantiate MACs, IOs
         s.mac_modules = MACWrapper(max(MAC_counts),
                                    max(data_widths['I']),
                                    max(data_widths['W']),
                                    max(data_widths['O']), sim, register_input)
-        
+
         # Instantiate interconnects
         weight_interconnects = []
         input_interconnects = []
@@ -762,7 +765,6 @@ class MLB(Component):
         utils.mux_inst_ports_by_name(s, "W_OUT", weight_interconnects,
                                      r"outputs_to_buffer_(\d+)", insel=s.sel,
                                      sim=True)
-
         for i in range(len(proj_specs)):
             input_interconnect = input_interconnects[i]
             utils.connect_ports_by_name(s.mac_modules, r"input_out_(\d+)",
@@ -776,7 +778,6 @@ class MLB(Component):
         utils.mux_inst_ports_by_name(s, "I_OUT", input_interconnects,
                                      r"outputs_to_buffer_(\d+)", insel=s.sel,
                                      sim=True)
-
         for i in range(len(proj_specs)):
             output_ps_interconnect = output_ps_interconnects[i]
             output_interconnect = output_interconnects[i]
@@ -786,14 +787,15 @@ class MLB(Component):
             utils.connect_ports_by_name(output_ps_interconnect,
                                         r"outputs_to_afs_(\d+)",
                                         output_interconnect, r"input_(\d+)")
-            utils.connect_inst_ports_by_name(s, "O_IN", output_ps_interconnect,
+            utils.connect_inst_ports_by_name(s, "O_IN",
+                                             output_ps_interconnect,
                                              "ps_inputs_from_buffer")
         utils.mux_ports_by_name(s, output_ps_interconnects,
                                 r"outputs_to_mlb_(\d+)", s.mac_modules,
                                 r"sum_in_(\d+)", insel=s.sel, sim=True)
         utils.mux_inst_ports_by_name(s, "O_OUT", output_interconnects,
                                      r"output_(\d+)", insel=s.sel, sim=True)
-        utils.connect_inst_ports_by_name(s, "W_EN", s.mac_modules, "weight_en")
+        utils.connect_inst_ports_by_name(s, "W_EN", s.mac_modules,
+                                         "weight_en")
         utils.connect_inst_ports_by_name(s, "I_EN", s.mac_modules, "input_en")
         utils.connect_inst_ports_by_name(s, "ACC_EN", s.mac_modules, "acc_en")
-

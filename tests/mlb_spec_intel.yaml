@@ -1,5 +1,4 @@
 block_name: "ml_block"
-simulation_model: "MLB"
 MAC_info:
     num_units: 30
     data_widths:

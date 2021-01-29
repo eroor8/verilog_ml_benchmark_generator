@@ -15,7 +15,6 @@ def test_find_mappings():
     """Test yaml schema validation"""
     hwb = {
         "block_name": "ml_block",
-        "simulation_model": "MLB",
         "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
         "possible_projections": {"URW":1, "URN":10, "UE": 3, "UB": 1, "UG": 1},
         "ports": [

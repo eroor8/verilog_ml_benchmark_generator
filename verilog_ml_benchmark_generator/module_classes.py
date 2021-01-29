@@ -174,7 +174,7 @@ class MLB_Wrapper(Component):
                     for inner_proj in inner_projs]
             for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: [inner_bus_count *
-                                    proj['stream_info'][dtype]
+                                    proj['data_widths'][dtype]
                                     for (proj, inner_bus_count) in
                                     zip(copy_projs, inner_bus_counts[dtype])]
                             for dtype in MAC_datatypes}
@@ -339,7 +339,7 @@ class MLB_Wrapper_added_logic(Component):
         if ("possible_projections" in spec):
             ip = inner_projs[0]
             ip_new = inner_projs_new[0]
-            dataw = projs[0]['stream_info']['I']
+            dataw = projs[0]['data_widths']['I']
 
             if (ip["UE"]["value"] > spec_keys["UE"]):
                 reqd_ue = ip["UE"]["value"]
@@ -509,7 +509,7 @@ class HWB_Sim(Component):
                             for inner_proj in inner_projs]
                     for dtype in MAC_datatypes}
                 inner_bus_widths = {dtype: [inner_bus_count *
-                                            proj['stream_info'][dtype]
+                                            proj['data_widths'][dtype]
                                             for (proj, inner_bus_count) in
                                             zip(projs,
                                                 inner_bus_counts[dtype])]
@@ -567,10 +567,8 @@ class HWB_Sim(Component):
                     datawidth=wd_width,
                     length=2**ad_width,
                     startaddr=0,
-                    preload_vector=spec.get('parameters', {}).get('fill',
-                                                                  False),
-                    pipelined=spec.get('parameters', {}).get('pipelined',
-                                                             False),
+                    preload_vector=spec.get('fill', False),
+                    pipelined=spec.get('pipelined', False),
                     max_pipeline_transfers=spec.get(
                         'max_pipeline_transfers', {}).get(
                             'max_pipeline_transfers', 4),
@@ -873,7 +871,8 @@ class WeightInterconnect(Component):
         buffers_per_stream = math.ceil(mlb_width_used / buffer_width)
         assert mlb_width_used <= mlb_width
         assert num_mlbs >= utils.get_var_product(
-            projection, ['UG', 'UE', 'UB', 'URN', 'URW']), \
+            projection, [['UG', 'value'], ['UE', 'value'], ['UB', 'value'],
+                         ['URN', 'value'], ['URW', 'value']]), \
             "Insufficient number of MLBs"
         if (num_mlbs_used < 0):
             num_mlbs_used = num_mlbs
@@ -886,13 +885,11 @@ class WeightInterconnect(Component):
                     preload = True
                     preload_bus_count = pload_type["bus_count"]
 
-        print(num_buffers)
-        print(utils.get_var_product(
-                projection, ['UG', 'UE', 'URN', 'URW']))
-        print(mlb_width_used/buffer_width)
-        print(streams_per_buffer)
         assert preload or num_buffers >= math.ceil(
-            utils.get_var_product(projection, ['UG', 'UE', 'URN', 'URW']) *
+            utils.get_var_product(projection, [['UG', 'value'],
+                                               ['UE', 'value'],
+                                               ['URN', 'value'],
+                                               ['URW', 'value']]) *
             mlb_width_used / buffer_width),\
             "Insufficient number of weight buffers"
 
@@ -971,7 +968,9 @@ class WeightInterconnect(Component):
                     if (dilx > 1):
                         if (inner_projection):
                             num_weight_ins = utils.get_var_product(
-                                inner_projection, ['UG', 'UE', 'URN'])
+                                inner_projection, [['UG', 'value'],
+                                                   ['UE', 'value'],
+                                                   ['URN', 'value']])
                             for input_gen in range(num_weight_ins):
                                 urwx = inner_projection.get('URW').get('x', 1)
                                 for weight_x in range(urwx):
@@ -1081,8 +1080,12 @@ class InputInterconnect(Component):
             mlb_width = mlb_width_used
         streams_per_buffer = buffer_width/mlb_width_used
         assert mlb_width_used <= mlb_width
-        assert num_mlbs >= utils.get_var_product(projection, ['UG', 'UE', 'UB',
-                                                              'URN', 'URW']), \
+        assert num_mlbs >= utils.get_var_product(projection,
+                                                 [['UG', 'value'],
+                                                  ['UE', 'value'],
+                                                  ['UB', 'value'],
+                                                  ['URN', 'value'],
+                                                  ['URW', 'value']]), \
             "Insufficient number of MLBs"
 
         buffers_per_stream = math.ceil(1 / streams_per_buffer)
@@ -1092,11 +1095,6 @@ class InputInterconnect(Component):
             buffer_width = utils.get_max_input_bus_width(buffer_width,
                                                          full_projection, 'I',
                                                          inner_width)
-            print("******************************")
-            print("buffer_width:" + str(buffer_width))
-            print("num_buffers:" + str(num_buffers))
-            print("buf width :" + str(buffer_width))
-            print("inner width :" + str(inner_width))
             ins_per_buffer = buffer_width / inner_width
             buffers_per_stream = math.ceil((mlb_width_used / inner_width) /
                                            ins_per_buffer)
@@ -1317,12 +1315,13 @@ class OutputPSInterconnect(Component):
             "The activation input width should be a factor of the total " + \
             "output stream width"
         assert acts_per_stream > 0, "Activation function width too wide"
-        assert num_mlbs >= utils.get_var_product(projection,
-                                                 ['UG', 'UE', 'UB', 'URN',
-                                                  'URW']), \
+        assert num_mlbs >= utils.get_var_product(
+            projection, [['UG', 'value'], ['UE', 'value'], ['UB', 'value'],
+                         ['URN', 'value'], ['URW', 'value']]), \
             "Insufficient number of MLBs"
         assert num_afs >= math.ceil(utils.get_var_product(
-            projection, ['UG', 'UB', 'UE']) * acts_per_stream), \
+            projection, [['UG', 'value'], ['UB', 'value'], ['UE', 'value']])
+            * acts_per_stream), \
             "Insufficient number of activation functions"
 
         # Add outputs to activation functions
@@ -1452,7 +1451,7 @@ class Datapath(Component):
                                                                 dtype)
                                     for inner_proj in inner_projs]
                             for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: [proj_spec['stream_info'][dtype]
+        inner_data_widths = {dtype: [proj_spec['data_widths'][dtype]
                                      for proj_spec in proj_specs]
                              for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
@@ -1460,7 +1459,7 @@ class Datapath(Component):
                                     in zip(inner_bus_counts[dtype],
                                            inner_data_widths[dtype])]
                             for dtype in MAC_datatypes}
-        print(inner_bus_counts)
+
         for (proj_spec, MAC_count, inner_bus_count, inner_data_width,
              inner_bus_width) in zip(proj_specs, MAC_counts, inner_bus_counts,
                                      inner_data_widths, inner_bus_widths):
@@ -1468,7 +1467,7 @@ class Datapath(Component):
                                     proj_spec.get("name", "unnamed"),
                                     [["Num MACs", MAC_count,
                                       "(MACs within each MLB)"],
-                                     ["bandwidth by type", inner_bus_counts,
+                                     ["values/MLB, by type", inner_bus_counts,
                                       "(number of in and out values / MLB)"],
                                      ["data widths by type", inner_data_widths,
                                       "(bit-width of each value)"],
@@ -1544,7 +1543,8 @@ class Datapath(Component):
                                      ["total data widths by type",
                                       outer_bus_widths,
                                       "(total data width from buffers)"],
-                                     ["bandwidth, by type", total_bus_counts,
+                                     ["total values, by type",
+                                      total_bus_counts,
                                       "(total # values from buffers)"]],
                                     il) + "\n")
 

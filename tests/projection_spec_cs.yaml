@@ -59,7 +59,7 @@ stride:
 dilation:
     x: 1
     y: 1
-stream_info:
+data_widths:
     W: 4
     I: 8
     O: 32

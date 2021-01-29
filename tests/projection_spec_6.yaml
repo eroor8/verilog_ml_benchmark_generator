@@ -31,7 +31,7 @@ temporal_projection:
     UG: 
         value: 2
 activation_function: 'RELU'
-stream_info:
+data_widths:
     W: 4
     I: 4
     O: 16

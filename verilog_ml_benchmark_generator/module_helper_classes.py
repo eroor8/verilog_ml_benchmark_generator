@@ -380,7 +380,7 @@ class EMIF(Component):
                     num_pending_transfers = s.curr_pending_end - \
                         s.curr_pending_start
                     if pipelined:
-                        if (s.avalon_read or s.avalon_write) and \
+                        if (s.avalon_read | s.avalon_write) and \
                            (num_pending_transfers < max_pipeline_transfers):
                             pending_transfers[s.curr_pending_end %
                                               max_pipeline_transfers] = \
@@ -444,16 +444,16 @@ class EMIF(Component):
                 if (pipelined):
                     num_pending_transfers = s.curr_pending_end - \
                         s.curr_pending_start
-                    if (s.avalon_read or s.avalon_write) and \
+                    if (s.avalon_read | s.avalon_write) & \
                        (num_pending_transfers == max_pipeline_transfers):
                         s.avalon_waitrequest @= 1
                     else:
                         s.avalon_waitrequest @= 0
                 else:
-                    if ((s.state == INIT) and (s.avalon_read == 0) and
+                    if ((s.state == INIT) & (s.avalon_read == 0) &
                             (s.avalon_write == 0)) \
-                            or (s.state == DONE_READ) \
-                            or (s.state == DONE_WRITE):
+                            | (s.state == DONE_READ) \
+                            | (s.state == DONE_WRITE):
                         s.avalon_waitrequest @= 0
                     else:
                         s.avalon_waitrequest @= 1
@@ -671,7 +671,7 @@ class MLB(Component):
         bus_counts = {dtype: [utils.get_proj_stream_count(proj, dtype)
                               for proj in projs]
                       for dtype in MAC_datatypes}
-        data_widths = {dtype: [proj_spec['stream_info'][dtype]
+        data_widths = {dtype: [proj_spec['data_widths'][dtype]
                                for proj_spec in proj_specs]
                        for dtype in MAC_datatypes}
         bus_widths = {

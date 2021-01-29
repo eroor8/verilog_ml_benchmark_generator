@@ -88,10 +88,8 @@ def test_HWB():
             {"name":"waitrequest", "width": 1, "direction": "out", "type": "AVALON_WAITREQUEST"},
             {"name":"readdatavalid", "width": 1, "direction": "out", "type": "AVALON_READDATAVALID"}
         ],
-        "parameters": {
-            "pipelined":"True",
-            "fill": []
-        }
+        "pipelined":"True",
+        "fill": []
     }
     testinst = module_classes.HWB_Sim(spec)
     testinst.elaborate()
@@ -134,7 +132,7 @@ def test_MLB_Wrapper():
     }
     projection = {"name": "test",
                   "activation_function": "RELU",
-                  "stream_info": {"W": 4,
+                  "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
                   "inner_projection": {'URN':{'y':2, 'value':2, 'chans':1},'URW':{'value':2},
@@ -358,7 +356,7 @@ def test_Datapath():
     """Test Component class Datapath"""
     projection = {"name": "test",
                   "activation_function": "RELU",
-                  "stream_info": {"W": 4,
+                  "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
                   "inner_projection": {'URN':{'value':2},'URW':{'value':3},
@@ -439,29 +437,29 @@ def test_Datapath():
     wbuf_count = 1
     weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
     wvalues_per_stream = utils.get_proj_stream_count(projection["inner_projection"], 'W')
-    wstream_bitwidth = wvalues_per_stream*projection["stream_info"]["W"]
+    wstream_bitwidth = wvalues_per_stream*projection["data_widths"]["W"]
     wstreams_per_buf = math.floor(wb_spec["ports"][1]["width"]/wstream_bitwidth)
     wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
     wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
     
-    wbuf = [[[random.randint(0,(2**projection["stream_info"]["W"])-1)
+    wbuf = [[[random.randint(0,(2**projection["data_widths"]["W"])-1)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
             for j in range(wbuf_count)]         # buffer count
     load_buffers(testinst, "weight_modules_portawe_{}_top",
                 "weight_modules_portaaddr_top", "weight_datain",
-                wbuf, projection["stream_info"]["W"])
+                wbuf, projection["data_widths"]["W"])
     check_buffers(testinst, testinst.weight_modules,
                   "ml_block_weights_inst_{}",
-                wbuf, projection["stream_info"]["W"])
+                wbuf, projection["data_widths"]["W"])
     
     # Calculate required buffers etc.
     iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
     iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
-                         projection["stream_info"]["I"]
+                         projection["data_widths"]["I"]
     ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
                           utils.get_proj_stream_count(projection["inner_projection"], 'O') 
-    activation_width = projection["stream_info"]["I"]
+    activation_width = projection["data_widths"]["I"]
     istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
     ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
     ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
@@ -470,16 +468,16 @@ def test_Datapath():
     
     # Load the input buffer
     # Several values per word, words per buffer, buffers...
-    ibuf = [[[random.randint(0,(2**projection["stream_info"]["I"])-1)
+    ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
     load_buffers(testinst, "input_act_modules_portawe_{}_top",
                 "input_act_modules_portaaddr_top", "input_datain",
-                ibuf, projection["stream_info"]["I"])
+                ibuf, projection["data_widths"]["I"])
     check_buffers(testinst, testinst.input_act_modules,
                   "ml_block_inputs_inst_{}",
-                ibuf, projection["stream_info"]["I"])
+                ibuf, projection["data_widths"]["I"])
     
     # Now load the weights into the MLBs
     inner_ub = projection["inner_projection"]["UB"]["value"]
@@ -510,7 +508,7 @@ def test_Datapath():
     # Check they are right
     assert(check_mlb_chains_values(testinst, mlb_count, mac_count, 1, 1,
                             "ml_block_inst_{}", "weight_out_{}", wbuf,
-                            projection["stream_info"]["W"],
+                            projection["data_widths"]["W"],
                             wbo_section_length, outer_ub,
                                    wbi_section_length, inner_ub))
  
@@ -542,7 +540,7 @@ def test_Datapath():
              for j in range (obuf_count)]
     
     obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
-                         obuf_results, projection["stream_info"]["I"])
+                         obuf_results, projection["data_widths"]["I"])
     
     print("EXPECTED: " + str(obuf))
     print("ACTUAL: " + str(obuf_results))
@@ -557,7 +555,7 @@ def test_multiple_Datapaths():
     """Test Component class Datapath with > 1 projections"""
     projections = [{"name": "",
                   "activation_function": "RELU",
-                  "stream_info": {"W": 4,
+                  "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
                   "inner_projection": {'URN':{'value':1},'URW':{'value':1},
@@ -572,7 +570,7 @@ def test_multiple_Datapaths():
                   },
                   {"name": "test2",
                   "activation_function": "RELU",
-                  "stream_info": {"W": 4,
+                  "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
                   "inner_projection": {'URN':{'value':1},'URW':{'value':1},
@@ -656,29 +654,29 @@ def test_multiple_Datapaths():
         wbuf_count = 1
         weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
         wvalues_per_stream = utils.get_proj_stream_count(projection["inner_projection"], 'W')
-        wstream_bitwidth = wvalues_per_stream*projection["stream_info"]["W"]
+        wstream_bitwidth = wvalues_per_stream*projection["data_widths"]["W"]
         wstreams_per_buf = math.floor(wb_spec["ports"][1]["width"]/wstream_bitwidth)
         wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
         wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
         
-        wbuf = [[[random.randint(0,(2**projection["stream_info"]["W"])-1)
+        wbuf = [[[random.randint(0,(2**projection["data_widths"]["W"])-1)
                 for k in range(wvalues_per_buf)]    # values per word
                 for i in range(wbuf_len)]           # words per buffer
                 for j in range(wbuf_count)]         # buffer count
         load_buffers(testinst, "weight_modules_portawe_{}_top",
                     "weight_modules_portaaddr_top", "weight_datain",
-                    wbuf, projection["stream_info"]["W"])
+                    wbuf, projection["data_widths"]["W"])
         check_buffers(testinst, testinst.weight_modules,
                       "ml_block_weights_inst_{}",
-                    wbuf, projection["stream_info"]["W"])
+                    wbuf, projection["data_widths"]["W"])
         
         # Calculate required buffers etc.
         iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
         iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
-                             projection["stream_info"]["I"]
+                             projection["data_widths"]["I"]
         ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
                               utils.get_proj_stream_count(projection["inner_projection"], 'O') 
-        activation_width = projection["stream_info"]["I"]
+        activation_width = projection["data_widths"]["I"]
         istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
         ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
         ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
@@ -687,16 +685,16 @@ def test_multiple_Datapaths():
         
         # Load the input buffer
         # Several values per word, words per buffer, buffers...
-        ibuf = [[[random.randint(0,(2**projection["stream_info"]["I"])-1)
+        ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
                  for k in range(ivalues_per_buf)]            # values per word
                  for i in range(ibuf_len)]                   # words per buffer
                  for j in range (ibuf_count)]                # buffers
         load_buffers(testinst, "input_act_modules_portawe_{}_top",
                     "input_act_modules_portaaddr_top", "input_datain",
-                    ibuf, projection["stream_info"]["I"])
+                    ibuf, projection["data_widths"]["I"])
         check_buffers(testinst, testinst.input_act_modules,
                       "ml_block_inputs_inst_{}",
-                    ibuf, projection["stream_info"]["I"])
+                    ibuf, projection["data_widths"]["I"])
         
         # Now load the weights into the MLBs
         inner_ub = projection["inner_projection"]["UB"]["value"]
@@ -727,7 +725,7 @@ def test_multiple_Datapaths():
         # Check they are right
         assert(check_mlb_chains_values(testinst, mlb_count, mac_count, 1, 1,
                                 "ml_block_inst_{}", "weight_out_{}", wbuf,
-                                projection["stream_info"]["W"],
+                                projection["data_widths"]["W"],
                                 wbo_section_length, outer_ub,
                                        wbi_section_length, inner_ub))
         
@@ -755,7 +753,7 @@ def test_multiple_Datapaths():
                  for j in range (obuf_count)]
         
         obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
-                             obuf_results, projection["stream_info"]["I"])
+                             obuf_results, projection["data_widths"]["I"])
         
         print("EXPECTED: " + str(obuf))
         print("ACTUAL: " + str(obuf_results))

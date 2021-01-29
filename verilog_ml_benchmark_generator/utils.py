@@ -92,6 +92,57 @@ def printi(level, string, colour="None"):
     print(('\t' * level) + col_code + str(string) + '\033[0m')
 
 
+def print_table(title, table, indent=0, col_width=0):
+    """ Print a table nicely on the command line.
+
+        :param table: table to be printed
+        :param title: table name
+        :param col_width: Fixed column width, optional
+    """
+
+    # Function to print a line in the table
+    def printline(row, col_widths):
+        orig_str = ""
+        prev_width = 0
+        for j in range(max(map(lambda i: 1 if (type(i) in [int, str])
+                               else len(i), row))):
+            for i in range(min(len(row), len(col_widths))):
+                orig_str += '{:<' + str(col_widths[i])+'s}'
+                if type(row[i]) in [int, str]:
+                    if j == 0:
+                        orig_str = orig_str.format(str(row[i]))
+                    else:
+                        orig_str = orig_str.format("")
+                else:
+                    curr_key = str(list(row[i].keys())[j])
+                    curr_value = str(row[i][curr_key])
+                    orig_str = orig_str.format(curr_key + " = " +
+                                               curr_value)
+                prev_width += col_widths[i]
+            orig_str += "\n" + "\t" * indent
+        return orig_str
+
+    def get_item_len(item):
+        if type(item) in [int, str]:
+            return len(str(item))
+        else:
+            return max(map(lambda i: len(str(i)), item)) + 3
+
+    widths = [col_width]*max(map(lambda i: len(str(i)), table))
+    if (col_width == 0):
+        for line in table:
+            for i in range(len(line)):
+                itemlen = get_item_len(line[i])
+                if (itemlen+4) > widths[i]:
+                    widths[i] = itemlen+4
+    string_to_print = ("\t"*indent + '-' * sum(widths)) + "\n"
+    string_to_print = "\n" + string_to_print + "\t"*indent + title + "\n" + \
+                      string_to_print + "\t"*indent
+    for line in table:
+        string_to_print += printline(line, widths)
+    return string_to_print
+
+
 """
 =============================================================================
 Utility functions for extracting information from projection vectors
@@ -99,19 +150,7 @@ Utility functions for extracting information from projection vectors
 """
 
 
-def get_var_product(projection, var_array):
-    """ Multiply a subset of projection factors
-
-        :param projection: unrolling factor vector
-        :param var_array: keys to multiply
-    """
-    product = 1
-    for var in var_array:
-        product *= int(projection.get(var, {}).get('value', 1))
-    return product
-
-
-def get_var_product_new(projection, var_array, defaults=[]):
+def get_var_product(projection, var_array, defaults=[]):
     """ Multiply a subset of projection factors (new version)
 
         :param projection: unrolling factor vector
@@ -136,7 +175,9 @@ def get_mlb_count(projection):
 
         :param projection: unrolling factor vector
     """
-    return get_var_product(projection, ['URN', 'URW', 'UB', 'UE', 'UG'])
+    return get_var_product(projection, [['URN', 'value'], ['URW', 'value'],
+                                        ['UB', 'value'], ['UE', 'value'],
+                                        ['UG', 'value']])
 
 
 def get_proj_stream_count(projection, dtype='WIO'):
@@ -150,21 +191,24 @@ def get_proj_stream_count(projection, dtype='WIO'):
     assert re.search(r"^[WIO]*$", dtype), "Unknown type " + dtype
     sum = 0
     if ('W' in dtype):
-        ws = get_var_product(projection, ['URW', 'URN', 'UE', 'UG'])
+        ws = get_var_product(projection, [['URW', 'value'], ['URN', 'value'],
+                                          ['UE', 'value'], ['UG', 'value']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'W':
                     ws = pload.get("bus_count", 1)
         sum += ws
     if ('I' in dtype):
-        wi = get_var_product(projection, ['URN', 'UB', 'UG'])
+        wi = get_var_product(projection, [['URN', 'value'], ['UB', 'value'],
+                                          ['UG', 'value']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'I':
                     wi = pload.get("bus_count", 1)
         sum += wi
     if ('O' in dtype):
-        wo = get_var_product(projection, ['UE', 'UB', 'UG'])
+        wo = get_var_product(projection, [['UE', 'value'], ['UB', 'value'],
+                                          ['UG', 'value']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'O':
@@ -302,12 +346,12 @@ def get_max_input_bus_width(buf_width, projection, data_type, inner_width=-1):
         :param datatype: Type of data stored in the buffers
         :param inner_width: Width of the values stored in buffers
     """
-    max_vals_per_buf = get_var_product_new(
+    max_vals_per_buf = get_var_product(
         projection.get("inner_projection", {}),
         [['UB', 'batches'], ['UG', 'value'], ['URN', 'chans']],
         defaults=['chans', 'batches'])
     if inner_width < 0:
-        inner_width = projection["stream_info"][data_type]
+        inner_width = projection["data_widths"][data_type]
     urny = projection.get('inner_projection', {}).get('URN', {}).get('y', 1)
     if (urny > 1) and (data_type == "I"):
         buf_width = min(inner_width*max_vals_per_buf, buf_width)
@@ -322,7 +366,7 @@ def get_iw_buffer_dimensions(buf_spec, projection, data_type):
                                               data_type)
 
     stream_bitwidth = values_per_stream * \
-        projection["stream_info"][data_type]
+        projection["data_widths"][data_type]
     buf_width = get_max_input_bus_width(get_sum_datatype_width(buf_spec,
                                                                "DATA",
                                                                ["in"]),
@@ -345,7 +389,7 @@ def get_obuffer_dimensions(buf_spec, projection):
     stream_count = \
         get_proj_stream_count(projection["outer_projection"], 'O') * \
         get_proj_stream_count(projection["inner_projection"], 'O')
-    activation_width = projection["stream_info"]["I"]
+    activation_width = projection["data_widths"]["I"]
     values_per_buf = (math.floor(get_sum_datatype_width(buf_spec, "DATA",
                                                         ["in"]) /
                                  activation_width))
@@ -531,57 +575,6 @@ def chain_ports(s, start_idx, end_idx, in_name, out_name, width=8):
     p1name = out_name.format(str(start_idx))
     p2name = in_name.format(str(end_idx))
     return AddOutPort(s, width, p1name), AddInPort(s, width, p2name)
-
-
-def print_table(title, table, indent=0, col_width=0):
-    """ Print a table nicely on the command line.
-
-        :param table: table to be printed
-        :param title: table name
-        :param col_width: Fixed column width, optional
-    """
-
-    # Function to print a line in the table
-    def printline(row, col_widths):
-        orig_str = ""
-        prev_width = 0
-        for j in range(max(map(lambda i: 1 if (type(i) in [int, str])
-                               else len(i), row))):
-            for i in range(min(len(row), len(col_widths))):
-                orig_str += '{:<' + str(col_widths[i])+'s}'
-                if type(row[i]) in [int, str]:
-                    if j == 0:
-                        orig_str = orig_str.format(str(row[i]))
-                    else:
-                        orig_str = orig_str.format("")
-                else:
-                    curr_key = str(list(row[i].keys())[j])
-                    curr_value = str(row[i][curr_key])
-                    orig_str = orig_str.format(curr_key + " = " +
-                                               curr_value)
-                prev_width += col_widths[i]
-            orig_str += "\n" + "\t" * indent
-        return orig_str
-
-    def get_item_len(item):
-        if type(item) in [int, str]:
-            return len(str(item))
-        else:
-            return max(map(lambda i: len(str(i)), item)) + 3
-
-    widths = [col_width]*max(map(lambda i: len(str(i)), table))
-    if (col_width == 0):
-        for line in table:
-            for i in range(len(line)):
-                itemlen = get_item_len(line[i])
-                if (itemlen+4) > widths[i]:
-                    widths[i] = itemlen+4
-    string_to_print = ("\t"*indent + '-' * sum(widths)) + "\n"
-    string_to_print = "\n" + string_to_print + "\t"*indent + title + "\n" + \
-                      string_to_print + "\t"*indent
-    for line in table:
-        string_to_print += printline(line, widths)
-    return string_to_print
 
 
 def tie_off_port(s, port):
@@ -1053,7 +1046,7 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
             ot_idx = ugt * temp_ub * temp_ue + uet * temp_ub + ubt - \
                 outer_uw * inner_uw + 1
             obuf[obuf_idx][ot_idx][os_idx] = correct_sum % \
-                (2 ** projection["stream_info"]["I"])
+                (2 ** projection["data_widths"]["I"])
     return obuf
 
 
@@ -1090,11 +1083,10 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf,
     temp_un = temp_proj.get("URN", {}).get("value", 1)
     temp_ue = temp_proj.get("UE", {}).get("value", 1)
 
-    # Iterate through inputs and calculate expected outs.
-    for (ugt, ubt, uet, ugo, ubo, ueo, g, h) in range8D(
-            temp_ug, temp_ub, temp_ue, outer_ug, outer_ub, outer_ue):
-        for (ugi, ubi, uei, d, e, f, g, h) in range8D(
-                inner_ug, inner_ub, inner_ue):
+    for (ugt, uet, ugo, ubo, ueo, ugi, ubi, uei) in range8D(
+            temp_ug, temp_ue, outer_ug, outer_ub, outer_ue, inner_ug,
+            inner_ub, inner_ue):
+        for ubt in range(outer_uw - 1, temp_ub):
             correct_sum = 0
             # Accumulate a partial sum
             for (urno, urni, urnt, urwo, urwi, f, g, h) in range8D(
@@ -1102,30 +1094,32 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf,
 
                 # Find the corresponding weight in the weight buffers
                 if ("PRELOAD" in projection["inner_projection"]):
-                    bus_idx = 0
                     mlb_chain_len = inner_ug * inner_ue * inner_un * inner_uw
                     w_buf_inst_idx = \
                         ugi * inner_ue * inner_un * inner_uw + \
                         uei * inner_un * inner_uw + \
                         urni * inner_uw + \
                         urwi
+                    bus_idx = 0
                     stream_width = 1
                 else:
-                    bus_idx = ugi * inner_ue * inner_un * inner_uw + \
-                              uei * inner_un * inner_uw + \
-                              urni * inner_uw + \
-                              urwi
                     mlb_chain_len = 1
                     w_buf_inst_idx = 0
-                    stream_width = inner_ug * inner_ue * inner_un * inner_uw
+                    bus_idx = ugi * inner_ue * inner_un * inner_uw + \
+                        uei * inner_un * inner_uw + \
+                        urni * inner_uw + \
+                        urwi
+                    stream_width = inner_ug * inner_ue * inner_un * \
+                        inner_uw
 
                 if ("PRELOAD" in projection["outer_projection"]):
                     w_buf_inst_idx = (ugo * outer_ue * outer_un * outer_uw +
                                       ueo * outer_un * outer_uw +
                                       urno * outer_uw +
-                                      urwo) * mlb_chain_len + w_buf_inst_idx
-                    outer_chain_len = outer_ug * outer_ue * outer_uw * \
-                        outer_un
+                                      urwo) * mlb_chain_len + \
+                        w_buf_inst_idx
+                    outer_chain_len = (outer_ug * outer_ue * outer_uw *
+                                       outer_un)
                     buffer_cnt = 0
                 else:
                     outer_chain_len = 1
@@ -1174,8 +1168,8 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf,
             obuf_idx = math.floor(out_act_idx / ostreams_per_buf)
             os_idx = out_act_idx % ostreams_per_buf
             ot_idx = ugt * temp_ub * temp_ue + uet * temp_ub + ubt
-            truncated_sum = correct_sum % (2**projection["stream_info"]["I"])
-            obuf[obuf_idx][ot_idx][os_idx] = truncated_sum
+            obuf[obuf_idx][ot_idx][os_idx] = correct_sum % \
+                (2 ** projection["data_widths"]["I"])
     return obuf
 
 

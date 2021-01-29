@@ -643,7 +643,7 @@ class StateMachine_old(Component):
         inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
                                                                dtype)
                             for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: proj_spec['stream_info'][dtype]
+        inner_data_widths = {dtype: proj_spec['data_widths'][dtype]
                              for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: inner_bus_counts[dtype] *
                             inner_data_widths[dtype]
@@ -1113,7 +1113,7 @@ class StateMachineEMIF(Component):
         inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
                                                                dtype)
                             for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: proj_spec['stream_info'][dtype]
+        inner_data_widths = {dtype: proj_spec['data_widths'][dtype]
                              for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: inner_bus_counts[dtype] *
                             inner_data_widths[dtype]
@@ -1538,7 +1538,7 @@ class StateMachineEMIFSeparate(Component):
         inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
                                                                dtype)
                             for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: proj_spec['stream_info'][dtype]
+        inner_data_widths = {dtype: proj_spec['data_widths'][dtype]
                              for dtype in MAC_datatypes}
         inner_bus_widths = {dtype: inner_bus_counts[dtype] *
                             inner_data_widths[dtype]
@@ -1921,8 +1921,7 @@ class MultipleLayerSystem(Component):
                   o_address=[0], ws=True, fast_gen=False):
         """ Constructor
         """
-        printi(il, "{:=^60}".format("> Constructing Multiple Statemachine " +
-                                    "System with MLB block " +
+        printi(il, "{:=^60}".format("> Constructing Accelerator, MLB block " +
                                     str(mlb_spec.get('block_name', "unnamed") +
                                         " <")))
         if "inner_projection" in proj_specs:

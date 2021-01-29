@@ -185,7 +185,7 @@ def test_MLB():
     """Test Component class MLB"""
     # URW chain - weight stationary
     proj_legal = {"name": "test",
-                  "stream_info": {"W": 8, "I": 8, "O": 8},
+                  "data_widths": {"W": 8, "I": 8, "O": 8},
                   "inner_projection": {'URN':{'value':1},'URW':{'value':4},
                                        'UB':{'value':1},'UE':{'value':1},
                                        'UG':{'value':1},

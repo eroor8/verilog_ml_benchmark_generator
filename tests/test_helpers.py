@@ -201,7 +201,7 @@ def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name,
                                 mlb_count, mac_count,
                                 1,1,
                                 mlb_name, weight_out_name, 
-                                buffer_values, proj_yaml["stream_info"]["W"],
+                                buffer_values, proj_yaml["data_widths"]["W"],
                                 bo_chain_len, outer_ub,
                                 bi_chain_len, inner_ub, proj_yaml)
     else:

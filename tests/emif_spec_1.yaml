@@ -1,7 +1,6 @@
 block_name: "emif"
-parameters:
-    pipelined: "True"
-    fill: []
+pipelined: "True"
+fill: []
 ports:
     -   name: address
         width: 12

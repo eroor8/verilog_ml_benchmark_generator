@@ -18,7 +18,6 @@ from pymtl3.passes.backends.verilog import VerilogTranslationPass
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import module_classes
 import utils
 import state_machine_classes
 il = 1
@@ -40,7 +39,8 @@ port_schema = {
         "width": {"type": "number", "minimum": 1},
         "direction": {"type": "string", "enum": ["in", "out"]},
         "type": {"type": "string", "enum": datatype_any}},
-    "required": ["name", "width", "direction", "type"]
+    "required": ["name", "width", "direction", "type"],
+    "additionalProperties": False
 }
 inner_proj_schema = {
     "type": "object",
@@ -59,7 +59,8 @@ inner_proj_schema = {
                                              "minimum": 1}},
                               "required": ["dtype"]}},
     },
-    "required": ["URW", "URN", "UB", "UE", "UG"]
+    "required": ["URN", "UB", "UE", "UG"],
+    "additionalProperties": False
 }
 datawidth_schema = {
     "type": "object",
@@ -67,7 +68,8 @@ datawidth_schema = {
         "W": {"type": "number"},
         "I": {"type": "number"},
         "O": {"type": "number"}},
-    "required": ["W", "I", "O"]
+    "required": ["W", "I", "O"],
+    "additionalProperties": False
 }
 proj_schema = {
     "type": "object",
@@ -76,35 +78,90 @@ proj_schema = {
         "activation_function": {"type": "string", "enum": ["RELU"]},
         "outer_projection": inner_proj_schema,
         "inner_projection": inner_proj_schema,
-        "stream_info": datawidth_schema
+        "temporal_projection": inner_proj_schema,
+        "data_widths": datawidth_schema,
+        "dilation": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "number"},
+                "y": {"type": "number"}
+            },
+            "required": ["x", "y"],
+            "additionalProperties": False
+        },
+        "stride": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "number"},
+                "y": {"type": "number"}
+            },
+            "required": ["x", "y"],
+            "additionalProperties": False
+        }
     },
     "required": ["activation_function", "outer_projection",
-                 "inner_projection", "stream_info"]
+                 "inner_projection"],
+    "additionalProperties": False
 }
 MAC_info_schema = {"type": "object",
                    "properties": {
                        "num_units": {"type": "number"},
                        "data_widths": datawidth_schema},
-                   "required": ["num_units", "data_widths"]}
+                   "required": ["num_units", "data_widths"],
+    "additionalProperties": False
+}
 buffer_spec_schema = {
     "type": "object",
     "properties": {
         "block_name": {"type": "string"},
-        "simulation_model": {"type": "string",
-                             "enum": ["MLB", "Buffer", "EMIF"]},
-        "MAC_info": MAC_info_schema,
         "ports": {"type": "array", "items": port_schema}},
-    "required": ["ports"]
+    "required": ["ports", "block_name"],
+    "additionalProperties": False
+}
+emif_schema = {
+    "type": "object",
+    "properties": {
+        "block_name": {"type": "string"},
+        "pipelined": {"type": "string", "enum": ["True", "False"]},
+        "ports": {"type": "array", "items": port_schema}},
+    "required": ["ports", "block_name"]
 }
 mlb_spec_schema = {
     "type": "object",
     "properties": {
         "block_name": {"type": "string"},
-        "simulation_model": {"type": "string"},
         "MAC_info": MAC_info_schema,
-        "ports": {"type": "array", "items": port_schema}},
-    "required": ["ports", "MAC_info"]
+        "ports": {"type": "array", "items": port_schema},
+        "possible_projections": inner_proj_schema,
+        "output_accumulator": {"type": "boolean"},
+    },
+    "required": ["ports", "MAC_info", "block_name"],
+    "additionalProperties": False
 }
+
+
+def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
+                    emif_spec=None, projections=None):
+    """ Call pyMTL elaboration methods to elaborate a Component instance,
+        and post-process generated verilog.
+
+    :param wb_spec: Weight buffer input info.
+    :param ab_spec: Activation buffer input info.
+    :param mlb_spec: MLB input info.
+    :param projection: Projection input.
+    """
+    if (wb_spec):
+        validate(instance=wb_spec, schema=buffer_spec_schema)
+    if (ab_spec):
+        validate(instance=ab_spec, schema=buffer_spec_schema)
+    if (mlb_spec):
+        validate(instance=mlb_spec, schema=mlb_spec_schema)
+        mlb_spec["simulation_model"] = "MLB"
+    if (projections):
+        for projection in projections:
+            validate(instance=projection, schema=proj_schema)
+    if (emif_spec):
+        validate(instance=emif_spec, schema=emif_schema)
 
 
 def generate_verilog(component, write_to_file, module_name):
@@ -115,6 +172,9 @@ def generate_verilog(component, write_to_file, module_name):
     :param write_to_file: Whether or not to write resulting verilog to file.
     :param component: Name of generated verilog file
     """
+    utils.printi(1, "{:=^60}".format("> Generating verilog from pymtl " +
+                                     "models: " + module_name + "_pymtl.v" +
+                                     " (not synthesizable) <"))
     # Generate the outer module containing many MLBs
     component.set_metadata(VerilogTranslationPass.enable, True)
     component.set_metadata(VerilogTranslationPass.explicit_file_name,
@@ -124,11 +184,21 @@ def generate_verilog(component, write_to_file, module_name):
     component.apply(VerilogTranslationPass())
 
     # Post-process generated file so that it is compatible with odin :(
-    outtxt = odinify(module_name + "_pymtl.v")
+    outtxt_o = postprocess_verilog_odin(module_name + "_pymtl.v")
     if (write_to_file):
-        with open(module_name + ".v", 'w') as file:
-            file.write(outtxt)
-    return [component, outtxt]
+        with open(module_name + "_odin.v", 'w') as file:
+            file.write(outtxt_o)
+
+    # Post-process generated file into system verilog
+    outtxt_sv = postprocess_verilog_sv(module_name + "_pymtl.v")
+    if (write_to_file):
+        with open(module_name + "_quartus_vivado.sv", 'w') as file:
+            file.write(outtxt_sv)
+
+    utils.printi(1, "{: ^10}".format("> Final output files: "))
+    utils.printi(2, "{: ^10}".format(module_name + "_odin.sv"))
+    utils.printi(2, "{: ^10}".format(module_name + "_quartus_vivado.sv"))
+    return [component, outtxt_o]
 
 
 def remove_sim_block_defs(line_list, sim_blocks):
@@ -276,12 +346,62 @@ def remove_width_0_ranges(line_list):
     return line_list
 
 
-def odinify(filename_in):
+def postprocess_verilog_sv(filename_in):
     """ Make verilog file compatible with odin.
         This is a bit of a hack, but necessary to run VTR.
 
     :param filename_in: Name of file to fix up
     """
+    utils.printi(1, "{:=^60}".format("> Post-processing generated verilog " +
+                                     "to .sv <"))
+
+    # Post-process generated file so that it is compatible with odin :(
+    with open(filename_in, 'r') as file:
+        filedata = file.read()
+
+    # Replace some system verilog syntax etc
+    filedata = filedata.replace('1\'d1', '2\'d1')
+    filedata = filedata.replace('{}', 'empty')
+
+    # pyMTL adds clk and reset to everything... but we dont want it
+    # in some cases.
+    non_existant_ports = [r"ml_block_weight\S*_inst_\d+__clk",
+                          r"ml_block_input\S*_inst_\d+__clk",
+                          r"ml_block_weight\S*_inst_\d+__reset",
+                          r"ml_block_input\S*_inst_\d+__clk",
+                          r"ml_block_input\S*_inst_\d+__reset"]
+
+    # Rename ML blocks to correct name
+    line_list = filedata.splitlines()
+    line_list = move_ios_into_module_body(line_list)
+    line_list = remove_sim_block_defs(line_list, ["sim_True"])
+    line_list = remove_non_existant_ports(line_list, non_existant_ports)
+    line_list = remove_parameter_references(line_list)
+    line_list = remove_width_0_ranges(line_list)
+    filedata = '\n'.join(line_list)
+
+    # replace HW block component names with actual names
+    filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
+                      r"\2\4\5",
+                      filedata)
+    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
+                      r"\2\4\5",
+                      filedata)
+    filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(\S+)_inst(.*)",
+                      r"\4\3\4_inst\5",
+                      filedata)
+    filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
+    return filedata
+
+
+def postprocess_verilog_odin(filename_in):
+    """ Make verilog file compatible with odin.
+        This is a bit of a hack, but necessary to run VTR.
+
+    :param filename_in: Name of file to fix up
+    """
+    utils.printi(1, "{:=^60}".format("> Post-processing generated " +
+                                     "verilog for ODIN <"))
 
     # Post-process generated file so that it is compatible with odin :(
     with open(filename_in, 'r') as file:
@@ -322,57 +442,14 @@ def odinify(filename_in):
                       r"\4\3\4_inst\5",
                       filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
-
-    # Odin can't handle wide values
-    filedata = filedata.replace('64\'d', '62\'d')
-    filedata = filedata.replace('128\'d', '62\'d')
-    filedata = filedata.replace('210\'d', '62\'d')
-    filedata = filedata.replace('416\'d', '62\'d')
-    filedata = filedata.replace('216\'d', '62\'d')
-    filedata = filedata.replace('112\'d', '62\'d')
-    filedata = filedata.replace('312\'d', '62\'d')
-    filedata = filedata.replace('96\'d', '62\'d')
-    filedata = filedata.replace('310\'d', '62\'d')
-    filedata = filedata.replace('110\'d', '62\'d')
-    filedata = filedata.replace('210\'d', '62\'d')
-    filedata = filedata.replace('310\'d', '62\'d')
-    filedata = filedata.replace('110\'d', '62\'d')
-    filedata = filedata.replace('210\'d', '62\'d')
-    filedata = filedata.replace('115\'d', '62\'d')
-    filedata = filedata.replace('315\'d', '62\'d')
     return filedata
-
-
-def generate_full_datapath(module_name, mlb_spec, wb_spec, ab_spec,
-                           projections, write_to_file):
-    """ Validate input specifications, generate just the datapath and then
-        write resulting verilog to file ``module_name``.v
-
-    :param module_name: Top level module name and filename
-    :param mlb_spec: Hardware definition of ML block
-    :param wb_spec: Hardware definition of weight buffer
-    :param ab_spec: Hardware definition of input buffer
-    :param projection: Projection information
-    :param write_to_file: Whether or not to write resulting verilog to file.
-    """
-    validate(instance=wb_spec, schema=buffer_spec_schema)
-    validate(instance=ab_spec, schema=buffer_spec_schema)
-    validate(instance=mlb_spec, schema=mlb_spec_schema)
-    for proj in projections:
-        validate(instance=proj, schema=proj_schema)
-
-    # Generate the outer module containing many MLBs
-    t = module_classes.Datapath(mlb_spec, wb_spec, ab_spec, ab_spec,
-                                projections)
-    t.elaborate()
-    return generate_verilog(t, write_to_file, module_name)
 
 
 def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                        projection, write_to_file, emif_spec={},
                                        waddr=0, iaddr=0, oaddr=0, ws=True,
                                        fast_gen=False):
-    """ Validate input specifications, generate a system including both
+    """ Validate input specifications, generate  a system including both
         the statemachines and datapath.
 
     :param module_name: Top level module name and filename
@@ -383,11 +460,8 @@ def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
     :param projection: Projection information
     :param write_to_file: Whether or not to write resulting verilog to file.
     """
-    validate(instance=wb_spec, schema=buffer_spec_schema)
-    validate(instance=ab_spec, schema=buffer_spec_schema)
-    validate(instance=mlb_spec, schema=mlb_spec_schema)
-    validate(instance=projection, schema=proj_schema)
-    validate(instance=projection, schema=emif_spec)
+    validate_inputs(wb_spec=wb_spec, ab_spec=ab_spec, mlb_spec=mlb_spec,
+                    emif_spec=emif_spec, projections=[projection])
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projection, waddr, iaddr,
@@ -448,14 +522,11 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     :param validate_output: Whether to check the output correctness
     :param layer_sel: Which layers to simulate
     """
-    emif_spec["simulation_model"] = "EMIF"
+    validate_inputs(wb_spec=wb_spec, ab_spec=ab_spec, mlb_spec=mlb_spec,
+                    emif_spec=emif_spec, projections=[projection])
     wb_spec["simulation_model"] = "Buffer"
     ab_spec["simulation_model"] = "Buffer"
-    mlb_spec["simulation_model"] = "MLB"
-    validate(instance=wb_spec, schema=buffer_spec_schema)
-    validate(instance=ab_spec, schema=buffer_spec_schema)
-    validate(instance=mlb_spec, schema=mlb_spec_schema)
-    validate(instance=projection, schema=proj_schema)
+    emif_spec["simulation_model"] = "EMIF"
 
     # Calculate buffer counts and dimensions
     wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
@@ -470,31 +541,31 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
         # Fill EMIF with random data
         utils.print_heading("Generating random data to initialize " +
                             "off-chip memory", currstep + 0)
-        wbuf = [[[random.randint(0, (2 ** projection["stream_info"]["W"]) - 1)
+        wbuf = [[[random.randint(0, (2 ** projection["data_widths"]["W"]) - 1)
                   for k in range(wvalues_per_buf)]
                  for i in range(wbuf_len)]
                 for j in range(wbuf_count)]
-        wbuf_flat = utils.flatten_array(wbuf, projection["stream_info"]["W"])
+        wbuf_flat = utils.flatten_array(wbuf, projection["data_widths"]["W"])
         iaddr = len(wbuf_flat)
-        ibuf = [[[random.randint(0, (2 ** projection["stream_info"]["I"]) - 1)
+        ibuf = [[[random.randint(0, (2 ** projection["data_widths"]["I"]) - 1)
                   for k in range(ivalues_per_buf)]
                  for i in range(ibuf_len)]
                 for j in range(ibuf_count)]
-        ibuf_flat = utils.flatten_array(ibuf, projection["stream_info"]["I"])
+        ibuf_flat = utils.flatten_array(ibuf, projection["data_widths"]["I"])
         emif_data = wbuf_flat + ibuf_flat
         utils.printi(il, "\tGenerated random initial data: " + str(emif_data))
-        emif_spec["parameters"]["fill"] = emif_data
+        emif_spec["fill"] = emif_data
         oaddr = len(emif_data)
     else:
         # Initial data is included in the EMIF spec.
-        assert("fill" in emif_spec["parameters"])
+        assert("fill" in emif_spec)
         wbuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"], wvalues_per_buf,
-            wbuf_len * wbuf_count, projection["stream_info"]["W"],
+            emif_spec["fill"], wvalues_per_buf,
+            wbuf_len * wbuf_count, projection["data_widths"]["W"],
             waddr, wbuf_len)
         ibuf = utils.read_out_stored_values_from_array(
-            emif_spec["parameters"]["fill"], ivalues_per_buf,
-            ibuf_len * ibuf_count, projection["stream_info"]["I"],
+            emif_spec["fill"], ivalues_per_buf,
+            ibuf_len * ibuf_count, projection["data_widths"]["I"],
             iaddr, ibuf_len)
 
     # Generate the accelerator
@@ -514,7 +585,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     emif_vals = utils.read_out_stored_values_from_emif(
         t.emif_inst.sim_model.buf, ovalues_per_buf,
         min(obuf_len, ibuf_len) * obuf_count,
-        projection["stream_info"]["I"], oaddr)
+        projection["data_widths"]["I"], oaddr)
     if (write_to_file):
         with open("final_offchip_data_contents.yaml", 'w') as file:
             yaml.dump(emif_vals, file, default_flow_style=False)
@@ -573,12 +644,14 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     :param validate_output: Whether to check the output correctness
     :param layer_sel: Which layers to simulate
     """
-    mlb_spec["simulation_model"] = "MLB"
     if "inner_projection" in projections:
         projections = [projections]
-    validate(instance=wb_spec, schema=buffer_spec_schema)
-    validate(instance=ab_spec, schema=buffer_spec_schema)
-    validate(instance=mlb_spec, schema=mlb_spec_schema)
+
+    validate_inputs(wb_spec=wb_spec, ab_spec=ab_spec, mlb_spec=mlb_spec,
+                    emif_spec=emif_spec, projections=projections)
+    ab_spec["simulation_model"] = "Buffer"
+    wb_spec["simulation_model"] = "Buffer"
+    emif_spec["simulation_model"] = "EMIF"
 
     utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
     if (gen_ver):
@@ -589,11 +662,6 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                            fast_gen=True)
         if (not simulate):
             return
-    emif_spec["simulation_model"] = "EMIF"
-    wb_spec["simulation_model"] = "Buffer"
-    ab_spec["simulation_model"] = "Buffer"
-    for projection in projections:
-        validate(instance=projection, schema=proj_schema)
 
     # Generate the statemachine
     utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
@@ -619,17 +687,17 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
             ab_spec, projections[n])
 
         # Initial data is included in the EMIF spec.
-        assert("fill" in emif_spec["parameters"])
+        assert("fill" in emif_spec)
 
         # Run the simulation for 2000 cycles
         if (simulate):
             wbuf = utils.read_out_stored_values_from_array(
-                emif_spec["parameters"]["fill"], wvalues_per_buf,
-                wbuf_len * wbuf_count, projections[n]["stream_info"]["W"],
+                emif_spec["fill"], wvalues_per_buf,
+                wbuf_len * wbuf_count, projections[n]["data_widths"]["W"],
                 waddrs[n], wbuf_len)
             ibuf = utils.read_out_stored_values_from_array(
-                emif_spec["parameters"]["fill"], ivalues_per_buf,
-                ibuf_len * ibuf_count, projections[n]["stream_info"]["I"],
+                emif_spec["fill"], ivalues_per_buf,
+                ibuf_len * ibuf_count, projections[n]["data_widths"]["I"],
                 iaddrs[n], ibuf_len)
             run_simulation(t, 2000, n)
 
@@ -637,7 +705,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
             emif_vals = utils.read_out_stored_values_from_emif(
                 t.emif_inst.sim_model.buf, ovalues_per_buf,
                 min(obuf_len, ibuf_len) * obuf_count,
-                projections[n]["stream_info"]["I"], oaddrs[n])
+                projections[n]["data_widths"]["I"], oaddrs[n])
             output_vals[n] = emif_vals
 
         # Check that the outputs are right!
@@ -709,7 +777,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     proj["activation_function"] = layer["activation_function"]
     proj["stride"] = layer["stride"]
     proj["dilation"] = layer["dilation"]
-    proj["stream_info"] = layer["stream_info"]
+    proj["data_widths"] = layer["data_widths"]
     proj["temporal_projection"] = {'URN': {'value': (mappings[0]["RXT"] *
                                                      mappings[0]["RYT"] *
                                                      mappings[0]["CT"]),

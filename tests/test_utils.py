@@ -17,14 +17,15 @@ def test_get_var_product():
     projection_example = {'A':{'value':5},'B':{'value':4},
                           'C':{'value':-1},'D':{'value':2},
                           'E':{'value':0}}
-    assert utils.get_var_product(projection_example,"A") == 5
-    assert utils.get_var_product(projection_example,"AB") == 20
-    assert utils.get_var_product(projection_example,["B","C"]) == -4
-    assert utils.get_var_product(projection_example,"AE") == 0
+    assert utils.get_var_product(projection_example,[["A","value"]]) == 5
+    assert utils.get_var_product(projection_example,
+                                 [["A", "value"],["B","value"]]) == 20
+    assert utils.get_var_product(projection_example,
+                                 [["B","value"],["C","value"]]) == -4
+    assert utils.get_var_product(projection_example,
+                                 [["A", "value"],["E","value"]]) == 0
     assert utils.get_var_product(projection_example,[]) == 1
 
-    #with pytest.raises(AssertionError):
-    #    utils.get_var_product(projection_example,["T"])
 
 def test_get_mlb_count():
     """Test util function get_mlb_count"""

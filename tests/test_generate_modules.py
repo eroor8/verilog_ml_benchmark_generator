@@ -63,7 +63,6 @@ def test_yaml_schemas():
     """Test yaml schema validation"""
     hwb_yaml_legal = {
         "block_name": "ml_block",
-        "simulation_model": "MLB",
         "MAC_info": { "num_units": 12, "data_widths": {"W":8, "I":8, "O": 32}},
         "ports": [
             {"name":"a_in", "width":32, "direction": "in", "type":"W"},
@@ -73,11 +72,6 @@ def test_yaml_schemas():
     }
     validate(instance=hwb_yaml_legal, schema=generate_modules.mlb_spec_schema)
 
-    # Test a few more ok cases.
-    hwb_yaml_legal.pop("block_name")
-    validate(instance=hwb_yaml_legal, schema=generate_modules.buffer_spec_schema)
-    hwb_yaml_legal.pop("simulation_model")
-    validate(instance=hwb_yaml_legal, schema=generate_modules.buffer_spec_schema)
     hwb_yaml_illegal = hwb_yaml_legal
     hwb_yaml_illegal.pop("MAC_info")
     validate(instance=hwb_yaml_legal, schema=generate_modules.buffer_spec_schema)
@@ -92,7 +86,7 @@ def test_yaml_schemas():
     
     proj_legal = {"name": "test",
                   "activation_function": "RELU",
-                  "stream_info": {"W": 8,
+                  "data_widths": {"W": 8,
                                   "I": 8,
                                   "O": 32},
                   "outer_projection": {'URN':{'value':2},'URW':{'value':1},
@@ -112,7 +106,7 @@ def test_yaml_schemas():
     with pytest.raises(jsonschema.exceptions.ValidationError):
         validate(instance=proj_illegal, schema=generate_modules.proj_schema)
     proj_illegal = proj_legal
-    proj_illegal.pop("stream_info")
+    proj_illegal.pop("data_widths")
     with pytest.raises(jsonschema.exceptions.ValidationError):
         validate(instance=proj_illegal, schema=generate_modules.proj_schema)
     proj_illegal = proj_legal
@@ -138,7 +132,7 @@ def test_odinify_statemachine():
     proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "projection_spec.yaml")
     outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin_sm.v")
+                            "test_odin_sm_odin.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "test_arch.xml")
     with open(mlb_spec) as stream:
@@ -280,25 +274,25 @@ def test_simulate_multiple_layers(
         print(layer)
         
         # Create random input data arrays to load into EMIF
-        weights += [[[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+        weights += [[[[[[random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
                        for k in range(layer["filter_x"])]    # x
                        for i in range(layer["filter_y"])]    # y    
                        for j in range(layer["in_chans"])]    # ichans
                        for l in range(layer["out_chans"])]   # ochans
                        for t in range(layer["group"])]]       # group
-        inputs += [[[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["I"])-1)
+        inputs += [[[[[[random.randint(1,4) #(2**proj_yaml["data_widths"]["I"])-1)
                        for k in range(layer["image_x"])]     # x
                        for i in range(layer["image_y"])]     # y    
                        for j in range(layer["in_chans"])]    # chans
                        for l in range(layer["batches"])]     # batch
                        for t in range(layer["group"])]]       # group
         layer_outputs_i = utils.compute_layer(inputs[py_i], weights[py_i], layer)
-        layer_outputs_i = [[[[[layer_outputs_i[t][l][j][i][k]%(2**proj_yaml["stream_info"]["I"])
+        layer_outputs_i = [[[[[layer_outputs_i[t][l][j][i][k]%(2**proj_yaml["data_widths"]["I"])
                              for k in range(len(layer_outputs_i[t][l][j][i]))]  # x
                              for i in range(len(layer_outputs_i[t][l][j]))]      # y    
                              for j in range(len(layer_outputs_i[t][l]))]       # chans
                              for l in range(len(layer_outputs_i[t]))]       # batch
-                             for t in range(len(layer_outputs_i))]       # group o%(2**proj_yaml["stream_info"]["I"])
+                             for t in range(len(layer_outputs_i))]       # group o%(2**proj_yaml["data_widths"]["I"])
         layer_outputs += [layer_outputs_i]
         
         # Move the weights and inputs into the EMIF in the expected order
@@ -421,12 +415,12 @@ def test_simulate_multiple_layers(
         
         waddrs += [len(wbufs_flat)]
         wbufs_flat += [sum((lambda i: inner[i] * \
-                          (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                          (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                          for i in range(len(inner))) \
                              for outer in wbuf for inner in outer]
         iaddrs += [len(ibufs_flat)]
         ibufs_flat += [sum((lambda i: inner[i] * \
-                    (2**(i*proj_yaml["stream_info"]["I"])))(i) \
+                    (2**(i*proj_yaml["data_widths"]["I"])))(i) \
                          for i in range(len(inner))) \
                               for outer in ibuf for inner in outer]
         oaddrs += [len(obufs_flat)]
@@ -434,7 +428,7 @@ def test_simulate_multiple_layers(
                  for i in range(ibuf_len)]                  
                  for j in range (ibuf_count)]  
         obufs_flat += [sum((lambda i: inner[i] * \
-                    (2**(i*proj_yaml["stream_info"]["I"])))(i) \
+                    (2**(i*proj_yaml["data_widths"]["I"])))(i) \
                          for i in range(len(inner))) \
                               for outer in obuf for inner in outer]            
         
@@ -446,7 +440,7 @@ def test_simulate_multiple_layers(
         oaddrs[i] += len(ibufs_flat) + len(wbufs_flat)
     emif_data = wbufs_flat + ibufs_flat
     oaddr = len(emif_data)
-    emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
+    emif_yaml["fill"] = copy.deepcopy(emif_data)
     print(waddrs)
     print(iaddrs)
     print(oaddrs)
@@ -531,7 +525,7 @@ def test_simulate_multiple_layers(
         
         emif_vals = utils.read_out_stored_values_from_emif(
             testinst.emif_inst.sim_model.buf, wvalues_per_buf, waddrs[py_i+1]-waddrs[py_i],
-            proj_yaml["stream_info"]["W"], waddrs[py_i])
+            proj_yaml["data_widths"]["W"], waddrs[py_i])
         print(wbufs[py_i])
         for k in range(len(wbufs[py_i])):
             for j in range(len(wbufs[py_i][k])):
@@ -540,7 +534,7 @@ def test_simulate_multiple_layers(
                     
         emif_vals = utils.read_out_stored_values_from_emif(
             testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddrs[py_i]-iaddrs[py_i],
-            proj_yaml["stream_info"]["I"], iaddrs[py_i])
+            proj_yaml["data_widths"]["I"], iaddrs[py_i])
         print("\n\nCOMPARE")
         print(emif_vals)
         print("WITH")
@@ -558,7 +552,7 @@ def test_simulate_multiple_layers(
                          for i in range(len(layer_outputs[py_i][t][l][j]))]      # y    
                          for j in range(len(layer_outputs[py_i][t][l]))]       # chans
                          for l in range(len(layer_outputs[py_i][t]))]       # batch
-                         for t in range(len(layer_outputs[py_i]))]       # group o%(2**proj_yaml["stream_info"]["I"])
+                         for t in range(len(layer_outputs[py_i]))]       # group o%(2**proj_yaml["data_widths"]["I"])
         
         for ugt in range(temp_ug):
             for ugo in range(outer_ug): 
@@ -735,42 +729,42 @@ def test_simulate_layer(
     print(layer)
 
     # Create random input data arrays to load into EMIF
-    weights = [[[[[random.randint(1,4) #(2**proj_yaml["stream_info"]["W"])-1)
+    weights = [[[[[random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans
                    for l in range(layer["out_chans"])]   # ochans
                    for t in range(layer["group"])]       # group
-    inputs = [[[[[random.randint(0,4) #(2**proj_yaml["stream_info"]["I"])-1)
+    inputs = [[[[[random.randint(0,4) #(2**proj_yaml["data_widths"]["I"])-1)
                    for k in range(layer["image_x"])]     # x
                    for i in range(layer["image_y"])]     # y    
                    for j in range(layer["in_chans"])]    # chans
                    for l in range(layer["batches"])]     # batch
                    for t in range(layer["group"])]       # group
     layer_outputs = utils.compute_layer(inputs, weights, layer)
-    layer_outputs = [[[[[layer_outputs[t][l][j][i][k]%(2**proj_yaml["stream_info"]["I"])
+    layer_outputs = [[[[[layer_outputs[t][l][j][i][k]%(2**proj_yaml["data_widths"]["I"])
                          for k in range(len(layer_outputs[t][l][j][i]))]  # x
                          for i in range(len(layer_outputs[t][l][j]))]      # y    
                          for j in range(len(layer_outputs[t][l]))]       # chans
                          for l in range(len(layer_outputs[t]))]       # batch
-                         for t in range(len(layer_outputs))]       # group o%(2**proj_yaml["stream_info"]["I"])
+                         for t in range(len(layer_outputs))]       # group o%(2**proj_yaml["data_widths"]["I"])
     
     # Move the weights and inputs into the EMIF in the expected order
     wbuf = reorder_weight_array(weights,proj_yaml, wb_yaml)
     ibuf = reorder_input_array(inputs,proj_yaml, ab_yaml, obuf_len)
     wbuf_flat = [sum((lambda i: inner[i] * \
-                      (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                      (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                          for outer in wbuf for inner in outer]
     iaddr = len(wbuf_flat)
     ibuf_flat = [sum((lambda i: inner[i] * \
-                (2**(i*proj_yaml["stream_info"]["I"])))(i) \
+                (2**(i*proj_yaml["data_widths"]["I"])))(i) \
                      for i in range(len(inner))) \
                           for outer in ibuf for inner in outer]
     emif_data = wbuf_flat + ibuf_flat
     oaddr = len(emif_data)
     
-    emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
+    emif_yaml["fill"] = copy.deepcopy(emif_data)
     print("==> Start simulation")
     outvals, testinst = generate_modules.simulate_accelerator(
         module_name="test_odin_emif_sm", 
@@ -790,7 +784,7 @@ def test_simulate_layer(
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, wvalues_per_buf, iaddr,
-        proj_yaml["stream_info"]["W"], 0)
+        proj_yaml["data_widths"]["W"], 0)
     print("==> Checking that weights are correctly stored in EMIF")
     print(wbuf)
     print(emif_vals)
@@ -800,7 +794,7 @@ def test_simulate_layer(
                 assert emif_vals[k*len(wbuf[k])+j][i] == wbuf[k][j][i]
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddr-iaddr,
-        proj_yaml["stream_info"]["I"], iaddr)
+        proj_yaml["data_widths"]["I"], iaddr)
     print("==> Checking that inputs are correctly stored in EMIF")
     print(emif_vals)
     for k in range(len(ibuf)):
@@ -812,10 +806,10 @@ def test_simulate_layer(
     print("==> Check that EMIF data gets into the on-chip buffers")
     check_buffers(testinst.datapath, testinst.datapath.weight_modules,
                   "ml_block_weights_inst_{}",
-                  wbuf, proj_yaml["stream_info"]["W"], testinst)
+                  wbuf, proj_yaml["data_widths"]["W"], testinst)
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
                   "ml_block_input_inst_{}",
-                  ibuf, proj_yaml["stream_info"]["I"], testinst)
+                  ibuf, proj_yaml["data_widths"]["I"], testinst)
 
     with open("final_offchip_data_contents.yaml") as outfile:
         outvals_yaml = yaml.safe_load(outfile)[0]
@@ -824,7 +818,7 @@ def test_simulate_layer(
                      for i in range(len(layer_outputs[t][l][j]))]      # y    
                      for j in range(len(layer_outputs[t][l]))]       # chans
                      for l in range(len(layer_outputs[t]))]       # batch
-                     for t in range(len(layer_outputs))]       # group o%(2**proj_yaml["stream_info"]["I"])
+                     for t in range(len(layer_outputs))]       # group o%(2**proj_yaml["data_widths"]["I"])
                             
     actual_outputs = reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, actual_outputs, ibuf_len)
     print("==> Comparing outputs with expected output array:")
@@ -882,28 +876,28 @@ def test_simulate_emif_statemachine(
         ab_yaml, proj_yaml)
 
     # Create random input data arrays to load into EMIF
-    wbuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["W"])-1)
+    wbuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["W"])-1)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
             for j in range(wbuf_count)]         # buffer count
     wbuf_flat = [sum((lambda i: inner[i] * \
-                      (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                      (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                          for outer in wbuf for inner in outer]
     iaddr = len(wbuf_flat)
-    ibuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["I"])-1)
+    ibuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["I"])-1)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
     ibuf_flat = [sum((lambda i: inner[i] * \
-                (2**(i*proj_yaml["stream_info"]["I"])))(i) \
+                (2**(i*proj_yaml["data_widths"]["I"])))(i) \
                      for i in range(len(inner))) \
                           for outer in ibuf for inner in outer]
     emif_data = wbuf_flat + ibuf_flat
     print(wbuf_flat)
     oaddr = len(emif_data)
     
-    emif_yaml["parameters"]["fill"] = copy.deepcopy(emif_data)
+    emif_yaml["fill"] = copy.deepcopy(emif_data)
     outvals, testinst = generate_modules.simulate_accelerator(
         module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml,
@@ -922,7 +916,7 @@ def test_simulate_emif_statemachine(
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, wvalues_per_buf, iaddr,
-        proj_yaml["stream_info"]["W"], 0)
+        proj_yaml["data_widths"]["W"], 0)
     print(emif_vals)
     print(wbuf)
     for k in range(len(wbuf)):
@@ -932,7 +926,7 @@ def test_simulate_emif_statemachine(
                 
     emif_vals = utils.read_out_stored_values_from_emif(
         testinst.emif_inst.sim_model.buf, ivalues_per_buf, oaddr-iaddr,
-        proj_yaml["stream_info"]["I"], iaddr)
+        proj_yaml["data_widths"]["I"], iaddr)
     print("\n\nCOMPARE")
     print(emif_vals)
     print("WITH")
@@ -945,10 +939,10 @@ def test_simulate_emif_statemachine(
     # Check that the right data got into the on-chip buffers
     check_buffers(testinst.datapath, testinst.datapath.weight_modules,
                   "ml_block_weights_inst_{}",
-                  wbuf, proj_yaml["stream_info"]["W"], testinst)
+                  wbuf, proj_yaml["data_widths"]["W"], testinst)
     check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
                   "ml_block_input_inst_{}",
-                  ibuf, proj_yaml["stream_info"]["I"], testinst)
+                  ibuf, proj_yaml["data_widths"]["I"], testinst)
     # Check that the right data is in the MLBs
     #if (ws):
     print("okkkk...")
@@ -1082,27 +1076,27 @@ def test_simulate_random_emif_statemachine():
         ab_yaml, proj_yaml)
 
     # Create random input data arrays to load into EMIF
-    wbuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["W"])-1)
+    wbuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["W"])-1)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
             for j in range(wbuf_count)]         # buffer count
     wbuf_flat = [sum((lambda i: inner[i] * \
-                      (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                      (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                          for outer in wbuf for inner in outer]
     iaddr = len(wbuf_flat)
-    ibuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["I"])-1)
+    ibuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["I"])-1)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
     ibuf_flat = [sum((lambda i: inner[i] * \
-                (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                           for outer in ibuf for inner in outer]
     emif_data = wbuf_flat + ibuf_flat
     oaddr = len(emif_data)
     
-    emif_yaml["parameters"]["fill"] = emif_data
+    emif_yaml["fill"] = emif_data
     outvals, testinst = generate_modules.simulate_accelerator_with_random_input(
         module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml,
@@ -1134,7 +1128,7 @@ def test_odinify_emif_statemachine():
     proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "projection_spec.yaml")
     outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin_emif_sm.v")
+                            "test_odin_emif_sm_odin.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "test_arch.xml")
     with open(mlb_spec) as stream:
@@ -1150,56 +1144,16 @@ def test_odinify_emif_statemachine():
     outtxt = generate_modules.generate_accelerator_given_mapping(module_name="test_odin_emif_sm", 
                                                     mlb_spec=mlb_yaml, wb_spec=wb_yaml,
                                                     ab_spec=ab_yaml, projection=proj_yaml,
-                                                    write_to_file=False,
+                                                    write_to_file=True,
                                                     emif_spec=emif_yaml,
                                                     waddr=0, iaddr=20, oaddr=90)
-    with open(outfile, 'w') as file:
-        file.write(outtxt[1])
+
     command = [VTR_FLOW_PATH, outfile, archfile,
                "-ending_stage", "abc"]
     process = subprocess.Popen(command,
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     assert "OK" in str(process.stdout.read())
-
-@pytest.mark.requiresodin
-def test_odinify():
-    assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location " + \
-        "of VTR flow scripts"
-        
-    # Make sure that output gets through odin.
-    mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "mlb_spec.yaml")
-    ab_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "b1_spec.yaml")
-    wb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "b0_spec.yaml")
-    proj_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "projection_spec.yaml")
-    outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin.v")
-    archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_arch.xml")
-    with open(mlb_spec) as stream:
-        mlb_yaml = yaml.safe_load(stream)
-    with open(ab_spec) as stream:
-        ab_yaml = yaml.safe_load(stream)
-    with open(wb_spec) as stream:
-        wb_yaml = yaml.safe_load(stream)
-    with open(proj_spec) as stream:
-        proj_yaml = yaml.safe_load(stream)
-    outtxt = generate_modules.generate_full_datapath("test_odin", 
-                                            mlb_yaml, wb_yaml,
-                                                     ab_yaml, [proj_yaml], True)
-    with open(outfile, 'w') as file:
-        file.write(outtxt[1])
-    command = [VTR_FLOW_PATH, outfile, archfile,
-               "-ending_stage", "abc"]
-    process = subprocess.Popen(command,
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-    assert "OK" in str(process.stdout.read())
-
     
 
 @pytest.mark.skip
@@ -1238,27 +1192,27 @@ def test_generate_layer(workload_yaml,
         ab_yaml, proj_yaml)
 
     # Create random input data arrays to load into EMIF
-    wbuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["W"])-1)
+    wbuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["W"])-1)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
             for j in range(wbuf_count)]         # buffer count
     wbuf_flat = [sum((lambda i: inner[i] * \
-                      (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                      (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                          for outer in wbuf for inner in outer]
     iaddr = len(wbuf_flat)
-    ibuf = [[[random.randint(0,(2**proj_yaml["stream_info"]["I"])-1)
+    ibuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["I"])-1)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
     ibuf_flat = [sum((lambda i: inner[i] * \
-                (2**(i*proj_yaml["stream_info"]["W"])))(i) \
+                (2**(i*proj_yaml["data_widths"]["W"])))(i) \
                      for i in range(len(inner))) \
                           for outer in ibuf for inner in outer]
     emif_data = wbuf_flat + ibuf_flat
     oaddr = len(emif_data)
     
-    emif_yaml["parameters"]["fill"] = emif_data
+    emif_yaml["fill"] = emif_data
     generate_modules.generate_accelerator_for_layers(
         module_name=layer_name, 
         mlb_spec=mlb_yaml,
@@ -1292,7 +1246,7 @@ def test_generate_layer_example_intel_l1(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1, 'C':1024, 
                             'E':1000, 'PX':1,
                             'PY':1, 'RX':1,
@@ -1317,7 +1271,7 @@ def test_generate_layer_example_intel_l2(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1, 'C':64,
                             'E':128, 'PX':56,
                             'PY':56, 'RX':1,
@@ -1338,7 +1292,7 @@ def test_generate_layer_example_intel_l3(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1365,7 +1319,7 @@ def test_generate_layer_xilinx_l1(layer_name="test_full_layer_flow_x1"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":16},
+        "data_widths": {"W":8, "I":8, "O":16},
         "loop_dimensions": {'B':1, 'C':1024, 
                             'E':1000, 'PX':1,
                             'PY':1, 'RX':1,
@@ -1387,7 +1341,7 @@ def test_generate_layer_xilinx_l2(layer_name="test_full_layer_flow_x2"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":16},
+        "data_widths": {"W":8, "I":8, "O":16},
         "loop_dimensions": {'B':1, 'C':64,
                             'E':128, 'PX':56,
                             'PY':56, 'RX':1,
@@ -1408,7 +1362,7 @@ def test_generate_layer_xilinx_l3(layer_name="test_full_layer_flow_x3"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":16},
+        "data_widths": {"W":8, "I":8, "O":16},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1436,7 +1390,7 @@ def test_generate_layer_intel_soft(layer_name="test_full_layer_flow_soft"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1459,7 +1413,7 @@ def test_generate_layer_intel_soft_small(layer_name="test_full_layer_flow_soft_s
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1481,7 +1435,7 @@ def test_generate_layer_intel_soft_small2(layer_name="test_full_layer_flow_soft_
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1503,7 +1457,7 @@ def test_generate_layer_intel_soft_small3(layer_name="test_full_layer_flow_soft_
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1525,7 +1479,7 @@ def test_generate_layer_intel_soft_small4(layer_name="test_full_layer_flow_soft_
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1547,7 +1501,7 @@ def test_generate_layer_intel_soft_small5(layer_name="test_full_layer_flow_soft_
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1569,7 +1523,7 @@ def test_generate_layer_xilinx_test(layer_name="test_full_layer_flow_x3"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":16},
+        "data_widths": {"W":8, "I":8, "O":16},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,
@@ -1591,7 +1545,7 @@ def test_generate_layer_example_intel_test(layer_name="test_full_layer_flow"):
     workload = {
         "stride": {"x":1, "y":1},
         "dilation": {"x":1, "y":1},
-        "stream_info": {"W":8, "I":8, "O":32},
+        "data_widths": {"W":8, "I":8, "O":32},
         "loop_dimensions": {'B':1,'C':3,
                             'E':32,'PX':224,
                             'PY':224,'RX':3,

@@ -56,7 +56,7 @@ activation_function: 'RELU'
 stride:
     x: 3
     y: 1
-stream_info:
+data_widths:
     W: 4
     I: 4
     O: 16

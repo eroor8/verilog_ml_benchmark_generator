@@ -1,40 +1,34 @@
 name: "test_proj"
 outer_projection:
-    URW: 
-        value: 2
-    URN: 
-        value: 2
-    UE: 
-        value: 2
-    UB: 
-        value: 2
-    UG: 
-        value: 2
+    RX: 2
+    RY: 1
+    C: 2
+    E: 2
+    PX: 1
+    PY: 1
+    B: 2
+    G: 2
 inner_projection:
-    URW: 
-        value: 6
-    URN: 
-        value: 1
-    UE: 
-        value: 2
-    UB: 
-        value: 1
-    UG: 
-        value: 1
+    RX: 6
+    RY: 1
+    C: 1
+    E: 2
+    PX: 1
+    PY: 1
+    B: 1
+    G: 1
     PRELOAD:
     -   dtype: 'W'
         bus_count: 2
 temporal_projection:
-    URW: 
-        value: 1
-    URN: 
-        value: 1
-    UE: 
-        value: 1
-    UB: 
-        value: 1
-    UG: 
-        value: 1
+    RX: 1
+    RY: 1
+    C: 1
+    E: 1
+    PX: 1
+    PY: 1
+    B: 1
+    G: 1
 activation_function: 'RELU'
 data_widths:
     W: 8

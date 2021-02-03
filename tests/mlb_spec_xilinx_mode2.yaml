@@ -5,12 +5,12 @@ MAC_info:
         W: 8
         I: 8
         O: 16
-possible_projections:
-    URW: 1
-    URN: 1
-    UE: 2
-    UB: 1
-    UG: 1
+access_patterns:
+    AP1: 1
+    AP2: 1
+    AP3: 2
+    AP4: 1
+    AP5: 1
 output_accumulator: True
 ports:
     -   name: data_in_AD

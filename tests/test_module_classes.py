@@ -107,9 +107,9 @@ def test_HWB():
         "MAC_info": {"num_units":4}
     }
     # Basic case
-    proj_spec = {'URN':{'value':1},'URW':{'value':1},
-                  'UB':{'value':1},'UE':{'value':1},
-                  'UG':{'value':1}}
+    proj_spec = {'C':1,'RX':1,
+                  'B':1,'PX':1,'PY':1,'E':1,
+                  'G':1}
     testinst = module_classes.HWB_Sim(spec, proj_spec)
     testinst.elaborate()
     
@@ -128,16 +128,16 @@ def test_MLB_Wrapper():
                   {"name":"res_out", "width":128, "direction": "out", "type":"O"}
                   ],
         "simulation_model": "MLB",
-        "possible_projections": {"URW":1, "URN":8, "UE":1, "UB":1, "UG":1}
+        "access_patterns": {"AP1":1, "AP2":8, "AP3":1, "AP4":1, "AP5":1}
     }
     projection = {"name": "test",
                   "activation_function": "RELU",
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'y':2, 'value':2, 'chans':1},'URW':{'value':2},
-                                       'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':1},
+                  "inner_projection": {'RY':2, 'C':1,'RX':2,
+                                       'B':1,'E':1,
+                                       'G':1, 'PX':1, 'PY':1,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
                   }
     testinst = module_classes.MLB_Wrapper(spec,[projection])
@@ -257,13 +257,13 @@ def test_MergeBusses():
 def test_WeightInterconnect():
     """Test Component class WeightInterconnect"""
     test_vecs = [ # bufferwidth, mlbwidth, mlbwidthused, num_buffers, num_mlbs, proj.
-        {"ins":[8,8,3,4,10,{'URN':{'value':2},'URW':{'value':1},
-                          'UB':{'value':2},'UE':{'value':2},
-                          'UG':{'value':1}}],  
-         "outs":[[8,26,44,62],[0,1,2,3,0,1,2,3,0,0]]},
-        {"ins":[8,8,3,4,15,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':1},
-                          'UG':{'value':2}}],  
+        {"ins":[8,8,3,4,10,{'C':1,'RX':1, 'RY':2,
+                          'B':1,'PX':2,'PY':1,'E':2,
+                          'G':1}],  
+         "outs":[[8,26,44,62],[0,1,2,3,0,1,2,3,0,0]]},  #0000 1000 / 0001 1010 / 0010 1100 
+        {"ins":[8,8,3,4,15,{'C':1,'RX':2, 'RY':1,
+                          'B':3,'PX':1,'PY':1,'E':1,
+                          'G':2}],  
          "outs":[[8,26,44,62],[0,1,0,1,0,1,2,3,2,3,2,3,0,0,0]]},
     ]
     for testvec in test_vecs:
@@ -279,17 +279,16 @@ def test_WeightInterconnect():
         for i in range(len(testvec["outs"][1])):
             out_bus = getattr(testinst, "outputs_to_mlb_"+str(i))
             assert out_bus == testvec["outs"][1][i]
-            
     illegal_test_vecs = [
-        {"ins":[8,2,3,4,10,{'URN':{'value':2},'URW':{'value':1},
-                          'UB':{'value':2},'UE':{'value':2},
-                          'UG':{'value':1}}]}, # mlb bitwidths dont make sense
-        {"ins":[8,8,3,400,15,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':10},
-                          'UG':{'value':2}}]}, # not enough mlbs
-        {"ins":[8,8,3,4,1000,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':10},
-                          'UG':{'value':2}}]} # not enough buffers
+        {"ins":[8,2,3,4,10,{'C':2,'RX':1,
+                          'B':2,'PX':1,'PY':1,'E':2,
+                          'G':1}]}, # mlb bitwidths dont make sense
+        {"ins":[8,8,3,400,15,{'C':1,'RX':2,
+                          'B':3,'PX':1,'PY':1,'E':10,
+                          'G':2}]}, # not enough mlbs
+        {"ins":[8,8,3,4,1000,{'C':1,'RX':2,
+                          'B':3,'PX':1,'PY':1,'E':10,
+                          'G':2}]} # not enough buffers
     ] 
     for testvec in illegal_test_vecs:
         with pytest.raises(AssertionError):
@@ -301,13 +300,18 @@ def test_WeightInterconnect():
 def test_InputInterconnect():
     """Test Component class InputInterconnect"""
     test_vecs = [ # bufferwidth, mlbwidth, mlbwidthused, num_buffers, num_mlbs, proj.
-        {"ins":[8,8,3,2,10,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':4},'UE':{'value':1},
-                          'UG':{'value':1}}],  
+        {"ins":[8,8,3,2,10,{'C':2, 'RX':2, 'RY':1,
+                          'B':1,'PX':2,'PY':1,'E':1,
+                          'G':1}],  
          "outs":[[62,26],[1,2,3,4,5,6,7,8,9,10],[6,1,7,3,2,5,3,7,0,0]]},
-        {"ins":[8,8,3,2,10,{'URN':{'value':1},'URW':{'value':2},
-                          'UB':{'value':2},'UE':{'value':2},
-                          'UG':{'value':1}}],  
+        {"ins":[8,8,3,2,10,{'C':1, 'RX':2, 'RY':2,
+                          'B':2,'PX':1,'PY':1,'E':1,
+                          'G':1}],  
+         "outs":[[62,26],[1,2,3,4,5,6,7,8,9,10],[6,1,2,3,7,5,3,7,0,0]]},
+         # 111 110    /   011 010
+        {"ins":[8,8,3,2,10,{'C':1,'RX':2, 'RY':1,
+                          'B':2,'PX':1,'PY':1,'E':2,
+                          'G':1}],  
          "outs":[[62,26],[1,2,3,4,5,6,7,8,9,10],[6,1,6,3,7,5,7,7,0,0]]}
     ]
     for testvec in test_vecs:
@@ -325,14 +329,17 @@ def test_InputInterconnect():
         testinst.sim_tick()
         for i in range(len(testvec["outs"][2])):
             out_bus = getattr(testinst, "outputs_to_mlb_"+str(i))
+            print(out_bus)
             assert out_bus == testvec["outs"][2][i]
+        #assert(0)
+        
     
 def test_OutputPSInterconnect():
     """Test Component class InputInterconnect"""
     test_vecs = [ # afwidth, mlbwidth, mlbwidthused, num_afs, num_mlbs, proj.
-        {"ins":[3,10,6,6,10,{'URN':{'value':2},'URW':{'value':2},
-                          'UB':{'value':2},'UE':{'value':1},
-                          'UG':{'value':1}}],  
+        {"ins":[3,10,6,6,10,{'C':2,'RX':2, 'RY':1,
+                          'B':2,'PX':1,'PY':1,'E':1,
+                          'G':1}],  
          "outs":[[62,0,0,62,26,0,0,26,0,0],[6,7,2,3,0,0],[0,62,0,0,0,26,0,0,0,0]]}
     ]
     for testvec in test_vecs:
@@ -359,14 +366,16 @@ def test_Datapath():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'value':2},'URW':{'value':3},
-                                       'UB':{'value':2},'UE':{'value':1},
-                                       'UG':{'value':2},
+                  "inner_projection": {'C':2,'RX':3, 'RY':1,
+                                       'B':1,'PX':2,'PY':1,'E':1,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':2},'URW':{'value':1},
-                                       'UB':{'value':2},'UE':{'value':1},
-                                       'UG':{'value':2},
+                 # "inner_projection": {'C':2,'RX':3, 'RY':1,
+                  "outer_projection": {'C':2,'RX':1, 'RY':1,
+                                       'B':2,'PX':1,'PY':1,'E':1,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
+                  #"outer_projection": {'C':2,'RX':1, 'RY':1,
                   }
     wb_spec = {
         "block_name": "ml_block_weights",
@@ -480,22 +489,25 @@ def test_Datapath():
                 ibuf, projection["data_widths"]["I"])
     
     # Now load the weights into the MLBs
-    inner_ub = projection["inner_projection"]["UB"]["value"]
-    outer_ub = projection["outer_projection"]["UB"]["value"]
-    wbi_section_length = projection["inner_projection"]["UE"]["value"] * \
-                        projection["inner_projection"]["URN"]["value"] * \
-                        projection["inner_projection"]["URW"]["value"]
-    wbo_section_length = projection["outer_projection"]["UE"]["value"] * \
-                        projection["outer_projection"]["URN"]["value"] * \
-                        projection["outer_projection"]["URW"]["value"] *\
-                        projection["inner_projection"]["UG"]["value"] *  wbi_section_length
+    inner_ub = projection["inner_projection"]["B"] * projection["inner_projection"]["PX"] * projection["inner_projection"]["PY"]
+    outer_ub = projection["outer_projection"]["B"] * projection["outer_projection"]["PY"] * projection["outer_projection"]["PX"]
+    wbi_section_length = projection["inner_projection"]["E"] * \
+                        projection["inner_projection"]["C"] * \
+                        projection["inner_projection"]["RY"] * \
+                        projection["inner_projection"]["RX"]
+    wbo_section_length = projection["outer_projection"]["E"] * \
+                        projection["outer_projection"]["C"] * \
+                        projection["outer_projection"]["RY"] * \
+                        projection["outer_projection"]["RX"] *\
+                        projection["inner_projection"]["G"] *  wbi_section_length
     starti = 0
-    for ugo in range(projection["outer_projection"]["UG"]["value"]):
+    for ugo in range(projection["outer_projection"]["G"]):
         for ubo in range(outer_ub):
-            for ugi in range(projection["inner_projection"]["UG"]["value"] *
-                             projection["outer_projection"]["URW"]["value"] *
-                             projection["outer_projection"]["URN"]["value"] *
-                             projection["outer_projection"]["UE"]["value"]):
+            for ugi in range(projection["inner_projection"]["G"] *
+                             projection["outer_projection"]["RX"] *
+                             projection["outer_projection"]["RY"] *
+                             projection["outer_projection"]["C"] *
+                             projection["outer_projection"]["E"]):
                 for ubi in range(inner_ub):
                     wbi_section_start = wbo_section_length*ugo + wbi_section_length*ugi
                     print(wbi_section_start)
@@ -558,13 +570,13 @@ def test_multiple_Datapaths():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'value':1},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':1},
+                  "inner_projection": {'C':1,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':1,
+                                       'G':1,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':1},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':1},
+                  "outer_projection": {'C':1,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':1,
+                                       'G':1,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]
                   }
                   },
@@ -573,13 +585,13 @@ def test_multiple_Datapaths():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'value':1},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':2},
-                                       'UG':{'value':2},
+                  "inner_projection": {'C':1,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':2,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':1},'URW':{'value':1},
-                                       'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':1},
+                  "outer_projection": {'C':1,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':1,
+                                       'G':1,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
                   }]
     wb_spec = {
@@ -697,22 +709,25 @@ def test_multiple_Datapaths():
                     ibuf, projection["data_widths"]["I"])
         
         # Now load the weights into the MLBs
-        inner_ub = projection["inner_projection"]["UB"]["value"]
-        outer_ub = projection["outer_projection"]["UB"]["value"]
-        wbi_section_length = projection["inner_projection"]["UE"]["value"] * \
-                            projection["inner_projection"]["URN"]["value"] * \
-                            projection["inner_projection"]["URW"]["value"]
-        wbo_section_length = projection["outer_projection"]["UE"]["value"] * \
-                            projection["outer_projection"]["URN"]["value"] * \
-                            projection["outer_projection"]["URW"]["value"] *\
-                            projection["inner_projection"]["UG"]["value"] *  wbi_section_length
+        inner_ub = projection["inner_projection"]["B"] * projection["inner_projection"]["PX"] * projection["inner_projection"]["PY"]
+        outer_ub = projection["outer_projection"]["B"] * projection["outer_projection"]["PY"] * projection["outer_projection"]["PX"]
+        wbi_section_length = projection["inner_projection"]["E"] * \
+                            projection["inner_projection"]["C"] * \
+                            projection["inner_projection"]["RY"] * \
+                            projection["inner_projection"]["RX"]
+        wbo_section_length = projection["outer_projection"]["E"] * \
+                            projection["outer_projection"]["C"] * \
+                            projection["outer_projection"]["RY"] * \
+                            projection["outer_projection"]["RX"] *\
+                            projection["inner_projection"]["G"] *  wbi_section_length
         starti = 0
-        for ugo in range(projection["outer_projection"]["UG"]["value"]):
+        for ugo in range(projection["outer_projection"]["G"]):
             for ubo in range(outer_ub):
-                for ugi in range(projection["inner_projection"]["UG"]["value"] *
-                                 projection["outer_projection"]["URW"]["value"] *
-                                 projection["outer_projection"]["URN"]["value"] *
-                                 projection["outer_projection"]["UE"]["value"]):
+                for ugi in range(projection["inner_projection"]["G"] *
+                                 projection["outer_projection"]["RX"] *
+                                 projection["outer_projection"]["C"] *
+                                 projection["outer_projection"]["RY"] *
+                                 projection["outer_projection"]["E"]):
                     for ubi in range(inner_ub):
                         wbi_section_start = wbo_section_length*ugo + wbi_section_length*ugi
                         print(wbi_section_start)

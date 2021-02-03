@@ -1,57 +1,31 @@
 name: "test_proj"
 inner_projection:
-    URW: 
-        value: 1
-        x: 1
-        y: 1
-    URN: 
-        value: 1
-        x: 1
-        y: 1
-        chans: 1
-    UE: 
-        value: 1
-    UB: 
-        value: 2
-        x: 1
-        y: 1
-        batches: 2
-    UG: 
-        value: 1
+    RX: 1
+    RY: 1
+    C: 1
+    E: 1
+    PX: 1
+    PY: 1
+    B: 2
+    G: 1
 outer_projection:
-    URW: 
-        value: 1
-        x: 1
-        y: 1
-    URN: 
-        value: 2
-        x: 1
-        y: 1
-        chans: 2
-    UE: 
-        value: 2
-    UB: 
-        value: 2
-        x: 1
-        y: 2
-        batches: 1
-    UG: 
-        value: 1
+    RX: 1
+    RY: 1
+    C: 2
+    E: 2
+    PX: 1
+    PY: 2
+    B: 1
+    G: 1
 temporal_projection:
-    URN: 
-        value: 1
-        x: 1
-        y: 1
-        chans: 1
-    UE: 
-        value: 1
-    UB: 
-        value: 8
-        x: 4
-        y: 2
-        batches: 1
-    UG: 
-        value: 1
+    RX: 1
+    RY: 1
+    C: 1
+    E: 1
+    PX: 4
+    PY: 2
+    B: 1
+    G: 1
 activation_function: 'RELU'
 stride:
     x: 1

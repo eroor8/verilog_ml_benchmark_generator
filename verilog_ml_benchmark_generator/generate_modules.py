@@ -42,14 +42,14 @@ port_schema = {
     "required": ["name", "width", "direction", "type"],
     "additionalProperties": False
 }
-inner_proj_schema = {
+access_pattern_schema = {
     "type": "object",
     "properties": {
-        "URW": {"value": {"type": "int", "minimum": 1}},
-        "URN": {"value": {"type": "int", "minimum": 1}},
-        "UE": {"value": {"type": "int", "minimum": 1}},
-        "UB": {"value": {"type": "int", "minimum": 1}},
-        "UG": {"value": {"type": "int", "minimum": 1}},
+        "AP1": {"value": {"type": "int", "minimum": 1}},
+        "AP2": {"value": {"type": "int", "minimum": 1}},
+        "AP3": {"value": {"type": "int", "minimum": 1}},
+        "AP4": {"value": {"type": "int", "minimum": 1}},
+        "AP5": {"value": {"type": "int", "minimum": 1}},
         "PRELOAD": {"type": "array",
                     "items": {"type": "object",
                               "properties":
@@ -59,7 +59,30 @@ inner_proj_schema = {
                                              "minimum": 1}},
                               "required": ["dtype"]}},
     },
-    "required": ["URN", "UB", "UE", "UG"],
+    "required": ["AP2", "AP3", "AP4", "AP5"],
+    "additionalProperties": False
+}
+inner_proj_schema = {
+    "type": "object",
+    "properties": {
+        "RX": {"type": "number", "minimum": 1},
+        "RY": {"type": "number", "minimum": 1},
+        "C": {"type": "number", "minimum": 1},
+        "E": {"type": "number", "minimum": 1},
+        "B": {"type": "number", "minimum": 1},
+        "PX": {"type": "number", "minimum": 1},
+        "PY": {"type": "number", "minimum": 1},
+        "G": {"type": "number", "minimum": 1},
+        "PRELOAD": {"type": "array",
+                    "items": {"type": "object",
+                              "properties":
+                              {"dtype": {"type": "string",
+                                         "enum": ["W", "I", "O"]},
+                               "bus_count": {"type": "number",
+                                             "minimum": 1}},
+                              "required": ["dtype"]}},
+    },
+    "required": ["RY", "B", "E", "G"],
     "additionalProperties": False
 }
 datawidth_schema = {
@@ -107,9 +130,7 @@ MAC_info_schema = {"type": "object",
                    "properties": {
                        "num_units": {"type": "number"},
                        "data_widths": datawidth_schema},
-                   "required": ["num_units", "data_widths"],
-    "additionalProperties": False
-}
+                   "additionalProperties": False}
 buffer_spec_schema = {
     "type": "object",
     "properties": {
@@ -132,16 +153,16 @@ mlb_spec_schema = {
         "block_name": {"type": "string"},
         "MAC_info": MAC_info_schema,
         "ports": {"type": "array", "items": port_schema},
-        "possible_projections": inner_proj_schema,
+        "access_patterns": access_pattern_schema,
         "output_accumulator": {"type": "boolean"},
     },
-    "required": ["ports", "MAC_info", "block_name"],
+    "required": ["ports", "block_name"],
     "additionalProperties": False
 }
 
 
 def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
-                    emif_spec=None, projections=None):
+                    emif_spec=None, projections=None, sim=True):
     """ Call pyMTL elaboration methods to elaborate a Component instance,
         and post-process generated verilog.
 
@@ -156,12 +177,163 @@ def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
         validate(instance=ab_spec, schema=buffer_spec_schema)
     if (mlb_spec):
         validate(instance=mlb_spec, schema=mlb_spec_schema)
+        assert(("simulation_model" not in mlb_spec) or
+               (mlb_spec["simulation_model"] == "MLB")), \
+            "MLB yaml input has invalid simulation model:" + \
+            " it should be either 'MLB' or nothing."
         mlb_spec["simulation_model"] = "MLB"
+
+        # Ensure that the MLB specified is sufficient for all
+        # specified projections.
+        if not ("MAC_info" in mlb_spec):
+            mlb_spec["MAC_info"] = {}
+        i_data_widths = {
+            dtype: max([proj_spec['data_widths'][dtype]
+                        for proj_spec in projections])
+            for dtype in ['W', 'I', 'O']}
+        if not ("data_widths" in mlb_spec["MAC_info"]):
+            mlb_spec["MAC_info"]["data_widths"] = i_data_widths
+        else:
+            for dtype in ['W', 'I', 'O']:
+                assert(i_data_widths[dtype] <=
+                       mlb_spec["MAC_info"]["data_widths"][dtype]), \
+                       "MLB precision is insufficient (" + \
+                       str(i_data_widths[dtype]) + " > " + \
+                       str(mlb_spec["MAC_info"]["data_widths"][dtype]) \
+                       + ")"
+
+        if not ("num_units" in mlb_spec["MAC_info"]):
+            inner_projs = [proj_spec['inner_projection']
+                           for proj_spec in projections]
+            MAC_counts = [utils.get_mlb_count(inner_proj)
+                          for inner_proj in inner_projs]
+            mlb_spec["MAC_info"]["num_units"] = max(MAC_counts)
+
     if (projections):
         for projection in projections:
             validate(instance=projection, schema=proj_schema)
+
+            # This is for test coverage purposes
+            if (sim):
+                if (projection["inner_projection"].get('RX', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('RX', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('RY', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('RY', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('C', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('C', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('E', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('E', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('PX', 1) > 1):
+                    assert(True)   # unused
+                if (projection["inner_projection"].get('PX', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('PY', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('PY', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('B', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('B', 1) == 1):
+                    assert(True)
+                if (projection["inner_projection"].get('G', 1) > 1):
+                    assert(True)
+                if (projection["inner_projection"].get('G', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('RX', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('RX', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('RY', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('RY', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('C', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('C', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('E', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('E', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('PX', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('PX', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('PY', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('PY', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('B', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('B', 1) == 1):
+                    assert(True)
+                if (projection["outer_projection"].get('G', 1) > 1):
+                    assert(True)
+                if (projection["outer_projection"].get('G', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('RX', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('RX', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('RY', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('RY', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('C', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('C', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('E', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('E', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('PX', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('PX', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('PY', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('PY', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('B', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('B', 1) == 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('G', 1) > 1):
+                    assert(True)
+                if (projection["temporal_projection"].get('G', 1) == 1):
+                    assert(True)
+                if (projection.get("stride", {}).get('x', 1) == 1):
+                    assert(True)
+                if (projection.get("stride", {}).get('x', 1) > 1):
+                    assert(True)
+                if (projection.get("stride", {}).get('y', 1) == 1):
+                    assert(True)
+                if (projection.get("stride", {}).get('y', 1) > 1):
+                    assert(True)
+                if (projection.get("dilation", {}).get('x', 1) == 1):
+                    assert(True)
+                if (projection.get("dilation", {}).get('x', 1) > 1):
+                    assert(True)
+                if (projection.get("dilation", {}).get('y', 1) == 1):
+                    assert(True)
+                if (projection.get("dilation", {}).get('y', 1) > 1):
+                    assert(True)
+
     if (emif_spec):
         validate(instance=emif_spec, schema=emif_schema)
+        if "pipelined" not in emif_spec:
+            emif_spec["pipelined"] = "True"
+        if "fill" not in emif_spec:
+            emif_spec["fill"] = []
 
 
 def generate_verilog(component, write_to_file, module_name):
@@ -648,7 +820,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
         projections = [projections]
 
     validate_inputs(wb_spec=wb_spec, ab_spec=ab_spec, mlb_spec=mlb_spec,
-                    emif_spec=emif_spec, projections=projections)
+                    emif_spec=emif_spec, projections=projections, sim=simulate)
     ab_spec["simulation_model"] = "Buffer"
     wb_spec["simulation_model"] = "Buffer"
     emif_spec["simulation_model"] = "EMIF"
@@ -760,7 +932,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                         "specification", 1)
     currstep = 1
     soft_logic_required = False
-    if (mlb_spec['possible_projections']['URW'] == 0):
+    if (mlb_spec['access_patterns']['AP1'] == 0):
         soft_logic_required = True
 
     mappings, mapping_score = constraint_evaluation.find_mappings(
@@ -778,54 +950,34 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     proj["stride"] = layer["stride"]
     proj["dilation"] = layer["dilation"]
     proj["data_widths"] = layer["data_widths"]
-    proj["temporal_projection"] = {'URN': {'value': (mappings[0]["RXT"] *
-                                                     mappings[0]["RYT"] *
-                                                     mappings[0]["CT"]),
-                                           'x': mappings[0]["RXT"],
-                                           'y': mappings[0]["RYT"],
-                                           'chans': mappings[0]["CT"]},
-                                   'UE': {'value': mappings[0]["ET"]},
-                                   'UB': {'value': (mappings[0]["BT"] *
-                                                    mappings[0]["PXT"] *
-                                                    mappings[0]["PYT"]),
-                                          'x': mappings[0]["PXT"],
-                                          'y': mappings[0]["PYT"],
-                                          'batches': mappings[0]["BT"]},
-                                   'UG': {'value': 1}}
-    proj["outer_projection"] = {'URN': {'value': (mappings[0]["RYO"] *
-                                                  mappings[0]["CO"]),
-                                        'x': 1,
-                                        'y': mappings[0]["RYO"],
-                                        'chans': mappings[0]["CO"]},
-                                'URW': {'value': mappings[0]["RXO"],
-                                        'x': mappings[0]["RXO"],
-                                        'y': 1},
-                                'UE': {'value': mappings[0]["EO"]},
-                                'UB': {'value': (mappings[0]["BO"] *
-                                                 mappings[0]["PXO"] *
-                                                 mappings[0]["PYO"]),
-                                       'x': 1,
-                                       'y': 1,
-                                       'batches': mappings[0]["BO"] *
-                                       mappings[0]["PXO"]*mappings[0]["PYO"]},
-                                'UG': {'value': 1}}
-    proj["inner_projection"] = {'URN': {'value': (mappings[0]["RYI"] *
-                                                  mappings[0]["CI"]),
-                                        'x': 1,
-                                        'y': mappings[0]["RYI"],
-                                        'chans': mappings[0]["CI"]},
-                                'URW': {'value': mappings[0]["RXI"],
-                                        'x': mappings[0]["RXI"],
-                                        'y': 1},
-                                'UE': {'value': mappings[0]["EI"]},
-                                'UB': {'value': (mappings[0]["BI"] *
-                                                 mappings[0]["PXI"] *
-                                                 mappings[0]["PYI"]),
-                                       'x': 1,
-                                       'y': mappings[0]["PYI"],
-                                       'batches': mappings[0]["BI"] *
-                                       mappings[0]["PXI"]},
-                                'UG': {'value': 1}}
+    proj["temporal_projection"] = {'RY': (mappings[0]["RXT"] *
+                                          mappings[0]["RYT"]),
+                                   'C': mappings[0]["CT"],
+                                   'E': mappings[0]["ET"],
+                                   'PX': mappings[0]["PXT"],
+                                   'PY': mappings[0]["PYT"],
+                                   'B': mappings[0]["BT"],
+                                   'G': 1}
+    proj["outer_projection"] = {'RY': mappings[0]["RYO"],
+                                'C': mappings[0]["CO"],
+                                'RX': mappings[0]["RXO"],
+                                'E': mappings[0]["EO"],
+                                'PX': 1,
+                                'PY': 1,
+                                'B': (mappings[0]["BO"] *
+                                      mappings[0]["PXO"] *
+                                      mappings[0]["PYO"]),
+                                'G': 1}
+    proj["inner_projection"] = {'RY': mappings[0]["RYI"],
+                                'C': mappings[0]["CI"],
+                                'RX': mappings[0]["RXI"],
+                                'E': mappings[0]["EI"],
+                                'PX': 1,
+                                'PY': 1,
+                                'B': (mappings[0]["BI"] *
+                                      mappings[0]["PXI"] *
+                                      mappings[0]["PYI"]),
+                                'G': 1}
     if (preload_o > 0):
         proj['outer_projection']['PRELOAD'] = [{'dtype': 'W',
                                                 'bus_count': preload_o}]

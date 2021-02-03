@@ -29,13 +29,13 @@ def test_get_var_product():
 
 def test_get_mlb_count():
     """Test util function get_mlb_count"""
-    projection_example = {'URN':{'value':1},'URW':{'value':3},
-                          'UB':{'value':4},'UE':{'value':2},
-                          'UG':{'value':1}}
+    projection_example = {'C': 1,'RX': 3,
+                          'B':4,'E':2,
+                          'UG':1}
     assert utils.get_mlb_count(projection_example) == 24
-    projection_example = {'URN':{'value':1},'URW':{'value':1},
-                          'UB':{'value':1},'UE':{'value':1},
-                          'UG':{'value':1}}
+    projection_example = {'C':1,'RX':1,
+                          'B':1,'E':1,
+                          'G':1}
     assert utils.get_mlb_count(projection_example) == 1
     
     #with pytest.raises(AssertionError):
@@ -46,32 +46,32 @@ def test_get_mlb_count():
  
 def test_get_proj_stream_count():
     """Test util function get_proj_stream_count"""
-    projection_example = {'URN':{'value':11},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':5},
-                          'UG':{'value':7}}
+    projection_example = {'C':11,'RX':2,
+                          'B':3,'E':5,
+                          'G':7}
     assert utils.get_proj_stream_count(projection_example,"W") == 7*5*2*11
     assert utils.get_proj_stream_count(projection_example,"I") == 7*3*11
     assert utils.get_proj_stream_count(projection_example,"O") == 7*5*3
     assert utils.get_proj_stream_count(projection_example,"WIO") == \
         7*5*3+7*3*11+7*5*2*11
     
-    projection_example = {'URN':{'value':11},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':5},
-                          'UG':{'value':7}, "PRELOAD":[{"dtype":'W', "bus_count":4}]}
+    projection_example = {'C':11,'RX':2,
+                          'B':3,'E':5,
+                          'G':7, "PRELOAD":[{"dtype":'W', "bus_count":4}]}
     assert utils.get_proj_stream_count(projection_example,"W") == 4
     assert utils.get_proj_stream_count(projection_example,"I") == 7*3*11
     assert utils.get_proj_stream_count(projection_example,"WIO") == 4+7*3*11+7*5*3
     
-    projection_example = {'URN':{'value':11},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':5},
-                          'UG':{'value':7}, "PRELOAD":[{"dtype":'I', "bus_count":3}]}
+    projection_example = {'C':11,'RX':2,
+                          'B':3,'E':5,
+                          'G':7, "PRELOAD":[{"dtype":'I', "bus_count":3}]}
     assert utils.get_proj_stream_count(projection_example,"W") == 7*5*2*11
     assert utils.get_proj_stream_count(projection_example,"I") == 3
     assert utils.get_proj_stream_count(projection_example,"WIO") == 7*5*2*11+3+7*5*3
     
-    projection_example = {'URN':{'value':11},'URW':{'value':2},
-                          'UB':{'value':3},'UE':{'value':5},
-                          'UG':{'value':7}, "PRELOAD":[{"dtype":'O', "bus_count":2}]}
+    projection_example = {'C':11,'RX':2,
+                          'B':3,'E':5,
+                          'G':7, "PRELOAD":[{"dtype":'O', "bus_count":2}]}
     assert utils.get_proj_stream_count(projection_example,"W") == 7*5*2*11
     assert utils.get_proj_stream_count(projection_example,"O") == 2
     assert utils.get_proj_stream_count(projection_example,"WIO") == 7*5*2*11+7*3*11+2
@@ -178,38 +178,38 @@ def test_get_num_buffers_reqd():
 
 def test_get_overall_idx():
     """Test util function get_overall_idx"""
-    projection_example = {'URN':{'value':5},'URW':{'value':6},
-                          'UB':{'value':7},'UE':{'value':8},
-                          'UG':{'value':9}}
+    projection_example = {'C':5,'RX':6,
+                          'B':7,'E':8,
+                          'G':9}
     assert utils.get_overall_idx(projection_example,
-                                 {"URN":3,"URW":2,"UG":1}) == 1*6*5+2+3*6
+                                 {"C":3,"RX":2,"G":1}) == 1*6*5+2+3*6
     assert utils.get_overall_idx(projection_example,
-                                 {"UE":3,"URN":2,"UG":2}) == 2*5*8+3*5+2
+                                 {"E":3,"C":2,"G":2}) == 2*5*8+3*5+2
     assert utils.get_overall_idx(projection_example, {}) == 0
 
 
     with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                              'UB':{'value':1},'UE':{'value':1},
-                              'UG':{'value':1}, "A":{"value":0}}
+        projection_example = {'C':1,'RX':1,
+                              'B':1,'E':1,
+                              'G':1, "A":0}
         utils.get_overall_idx(projection_example, {"A":1})
         
     with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                          'UB':{'value':1},'UE':{'value':1}}
-        utils.get_overall_idx(projection_example, {"URN":3,"URW":6})
+        projection_example = {'C':1,'RX':1,
+                          'B':1,'E':1}
+        utils.get_overall_idx(projection_example, {"C":3,"RX":6})
 
     with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                          'UB':{'value':1},'UE':{'value':1},
-                          'UG':{'value':3}}
-        utils.get_overall_idx(projection_example, {"URN":0,"UG":3})
+        projection_example = {'C':1,'RX':1,
+                          'B':1,'E':1,
+                          'G':3}
+        utils.get_overall_idx(projection_example, {"C":0,"G":3})
 
     with pytest.raises(AssertionError):
-        projection_example = {'URN':{'value':1},'URW':{'value':1},
-                          'UB':{'value':1},'UE':{'value':1},
-                          'UG':{'value':3}}
-        utils.get_overall_idx(projection_example, {"URN":0,"UG":-1})
+        projection_example = {'C':1,'RX':1,
+                          'B':1,'E':1,
+                          'G':3}
+        utils.get_overall_idx(projection_example, {"C":0,"G":-1})
         
 
 def test_connect_in_out_to_top():

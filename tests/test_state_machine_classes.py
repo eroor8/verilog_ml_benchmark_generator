@@ -37,13 +37,19 @@ def test_StateMachineEMIFSim():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'URN':{'value':2},'URW':{'value':3},
-                                       'UB':{'value':2},'UE':{'value':1},
-                                       'UG':{'value':2},
+                  #"inner_projection": {'C':2, 'RY':1, 'RX':3,
+                  #                     'B':2, 'PX':1, 'PY':1,'E':1,
+                  #                     'G':2,
+                  "inner_projection": {'C':2, 'RY':1, 'RX':3,
+                                       'B':2, 'PX':1, 'PY':1,'E':1,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
-                  "outer_projection": {'URN':{'value':2},'URW':{'value':1},
-                                       'UB':{'value':2},'UE':{'value':1},
-                                       'UG':{'value':2},
+                  #"outer_projection": {'C':2,'RY':1,'RX':1,
+                  #                     'B':2, 'PX':1, 'PY':1,'E':1,
+                  #                     'G':2,
+                  "outer_projection": {'C':2,'RY':1,'RX':1,
+                                       'B':2, 'PX':1, 'PY':1,'E':1,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]}
                   }
     
@@ -216,15 +222,17 @@ def test_StateMachineEMIFSim():
     assert(int(sm_testinst.load_ibufs_emif.rdy))
 
     # Now load the weights into the MLBs
-    inner_ub = projection["inner_projection"]["UB"]["value"]
-    outer_ub = projection["outer_projection"]["UB"]["value"]
-    wbi_section_length = projection["inner_projection"]["UE"]["value"] * \
-                        projection["inner_projection"]["URN"]["value"] * \
-                        projection["inner_projection"]["URW"]["value"]
-    wbo_section_length = projection["outer_projection"]["UE"]["value"] * \
-                        projection["outer_projection"]["URN"]["value"] * \
-                        projection["outer_projection"]["URW"]["value"] *\
-                        projection["inner_projection"]["UG"]["value"] *  wbi_section_length
+    inner_ub = projection["inner_projection"]["B"] * projection["inner_projection"]["PY"] * projection["inner_projection"]["PX"]
+    outer_ub = projection["outer_projection"]["B"] * projection["outer_projection"]["PY"] * projection["outer_projection"]["PX"]
+    wbi_section_length = projection["inner_projection"]["E"] * \
+                        projection["inner_projection"]["C"] * \
+                        projection["inner_projection"]["RY"] * \
+                        projection["inner_projection"]["RX"]
+    wbo_section_length = projection["outer_projection"]["E"] * \
+                        projection["outer_projection"]["C"] * \
+                        projection["outer_projection"]["RY"] * \
+                        projection["outer_projection"]["RX"] *\
+                        projection["inner_projection"]["G"] *  wbi_section_length
     sm_testinst.sim_tick()
     starti = 0
 

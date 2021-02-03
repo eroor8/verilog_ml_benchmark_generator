@@ -660,8 +660,6 @@ class MLB(Component):
          :param register_input: Whether to register the input value
          :param fast_gen: If true, create empty module (to speed up pymtl gen)
         """
-        if ["inner_projection"] in proj_specs:
-            proj_specs = [proj_specs]
         MAC_datatypes = ['W', 'I', 'O']
 
         # Calculate required MLB interface widths and print information

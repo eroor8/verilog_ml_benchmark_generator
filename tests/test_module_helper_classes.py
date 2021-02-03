@@ -186,9 +186,9 @@ def test_MLB():
     # URW chain - weight stationary
     proj_legal = {"name": "test",
                   "data_widths": {"W": 8, "I": 8, "O": 8},
-                  "inner_projection": {'URN':{'value':1},'URW':{'value':4},
-                                       'UB':{'value':1},'UE':{'value':1},
-                                       'UG':{'value':1},
+                  "inner_projection": {'C':1,'RX':4, 'RY':1, 
+                                       'B':1,'E':1, 'PX':1, 'PY':1,
+                                       'G':1,
                                        "PRELOAD":[{'dtype':'W','bus_count':1}]}
     }
     testinst = module_helper_classes.MLB([proj_legal])

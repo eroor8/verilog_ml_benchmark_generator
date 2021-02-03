@@ -117,43 +117,45 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
                  "This may take several minutes.")
     utils.printi(il, "Workload definition: " + str(workload))
     problem = constraint.Problem()
-    hwbp = copy.deepcopy(hwb['possible_projections'])
+    hwbp = copy.deepcopy(hwb['access_patterns'])
     ws = not (hwb.get('output_accumulator', False))
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
     levels = ['O', 'I', 'T']
 
-    access_patterns = {'URW': ['RX'], 'URN': ['RY', 'C'], 'UE': ['E'],
-                       'UB': ['B', 'PX', 'PY'], 'UG': []}
-    access_patterns_r = {'B': ['UB'], 'C': ['URN'], 'E': ['UE'], 'PX': ['UB'],
-                         'PY': ['UB'], 'RX': ['URW'], 'RY': ['URN']}
+    # Mappings between access patterns and corresponding dimensions.
+    access_patterns = {'AP1': ['RX'], 'AP2': ['RY', 'C'], 'AP3': ['E'],
+                       'AP4': ['B', 'PX', 'PY'], 'AP5': []}
+    access_patterns_r = {'B': ['AP4'], 'C': ['AP2'], 'E': ['AP3'],
+                         'PX': ['AP4'], 'PY': ['AP4'], 'RX': ['AP1'],
+                         'RY': ['AP2']}
 
     if enable_soft_logic:
-        if (hwbp['URW'] < 2):
-            access_patterns['URN'] += access_patterns['URW']
-            for lb in access_patterns['URW']:
-                access_patterns_r[lb] += ['URN']
-                access_patterns_r[lb].remove('URW')
-            access_patterns['URW'] = []
-        if (hwbp['URN'] == 1):
-            access_patterns['UG'] += access_patterns['URN']
-            for lb in access_patterns['URN']:
-                access_patterns_r[lb] += ['UG']
-                access_patterns_r[lb].remove('URN')
-            access_patterns['URN'] = []
-        if (hwbp['UE'] == 1):
-            access_patterns['UG'] += access_patterns['UE']
-            for lb in access_patterns['UE']:
-                access_patterns_r[lb] += ['UG']
-                access_patterns_r[lb].remove('UE')
-            access_patterns['UE'] = []
-        if (hwbp['UB'] == 1):
-            access_patterns['UG'] += access_patterns['UB']
-            for lb in access_patterns['UB']:
-                access_patterns_r[lb] += ['UG']
-                access_patterns_r[lb].remove('UB')
-            access_patterns['UB'] = []
-    if (hwbp['URW'] == 0):
-        hwbp['URW'] = 1
+        if (hwbp['AP1'] < 2):
+            access_patterns['AP2'] += access_patterns['AP1']
+            for lb in access_patterns['AP1']:
+                access_patterns_r[lb] += ['AP2']
+                access_patterns_r[lb].remove('AP1')
+            access_patterns['AP1'] = []
+        # if (hwbp['AP2'] == 1):
+        #     access_patterns['AP5'] += access_patterns['AP2']
+        #     for lb in access_patterns['AP2']:
+        #         access_patterns_r[lb] += ['AP5']
+        #         access_patterns_r[lb].remove('AP2')
+        #     access_patterns['AP2'] = []
+        if (hwbp['AP3'] == 1):
+            access_patterns['AP5'] += access_patterns['AP3']
+            for lb in access_patterns['AP3']:
+                access_patterns_r[lb] += ['AP5']
+                access_patterns_r[lb].remove('AP3')
+            access_patterns['AP3'] = []
+        if (hwbp['AP4'] == 1):
+            access_patterns['AP5'] += access_patterns['AP4']
+            for lb in access_patterns['AP4']:
+                access_patterns_r[lb] += ['AP5']
+                access_patterns_r[lb].remove('AP4')
+            access_patterns['AP4'] = []
+    if (hwbp['AP1'] == 0):
+        hwbp['AP1'] = 1
 
     # Windowing can't be done in both dimensions inside the PE or across PEs.
     # problem.addConstraint(constraint.InSetConstraint([1]), ['PXI'])
@@ -161,7 +163,6 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     # Ensure that product of tiling factors is the workload dimension
     for loop_bound in loop_bounds:
         curr_bound = workload.get(loop_bound, 1)
-        # problem.addVariable(loop_bound, [curr_bound])
 
         # The inner unrolling factor shouldn't exceed the max unrolling
         # physically possible. It also won't be greater than the total

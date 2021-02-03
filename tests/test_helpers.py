@@ -78,10 +78,11 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
     print(proj_yaml["inner_projection"])
     mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
     if ("PRELOAD" in proj_yaml["inner_projection"]):
-        bi_chain_len = proj_yaml["inner_projection"]["UE"]["value"] * \
-                            proj_yaml["inner_projection"]["URN"]["value"] * \
-                            proj_yaml["inner_projection"]["URW"]["value"]
-        ubi = proj_yaml["inner_projection"]["UB"]["value"]
+        bi_chain_len = proj_yaml["inner_projection"]["E"] * \
+                            proj_yaml["inner_projection"]["RY"] * \
+                            proj_yaml["inner_projection"]["C"] * \
+                            proj_yaml["inner_projection"]["RX"]
+        ubi = proj_yaml["inner_projection"]["B"] * proj_yaml["inner_projection"]["PX"] * proj_yaml["inner_projection"]["PY"]
         buflen = len(buffer_values)
         for r in range(mac_count-1,-1,-1):
             curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules, weight_out_name.format(r))
@@ -93,17 +94,17 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
             assert (curr_out == buffer_values[(mlb_start_addr + buffer_idxi + buf_item_idx)% buflen][i])
     else:
         print(buffer_values)
-        for ugi in range(proj_yaml["inner_projection"]["UG"]["value"]):
-            for ubi in range(proj_yaml["inner_projection"]["UB"]["value"]):
-                for uei in range(proj_yaml["inner_projection"]["UE"]["value"]):
-                    for uni in range(proj_yaml["inner_projection"]["URN"]["value"]):
-                        for uwi in range(proj_yaml["inner_projection"]["URW"]["value"]):
+        for ugi in range(proj_yaml["inner_projection"]["G"]):
+            for ubi in range(proj_yaml["inner_projection"]["B"] * proj_yaml["inner_projection"]["PY"] * proj_yaml["inner_projection"]["PX"]):
+                for uei in range(proj_yaml["inner_projection"]["E"]):
+                    for uni in range(proj_yaml["inner_projection"]["C"]*proj_yaml["inner_projection"]["RY"]):
+                        for uwi in range(proj_yaml["inner_projection"]["RX"]):
                             mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
-                                {'URN': uni, 'UB': ubi, 'UG': ugi, 'UE': uei, 'URW':uwi})
+                                {'C': uni, 'B': ubi, 'G': ugi, 'E': uei, 'RX':uwi})
                             curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules,
                                                weight_out_name.format(mac_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
-                                {'URN': uni, 'UG': ugi, 'UE': uei, 'URW':uwi})
+                                {'C': uni, 'G': ugi, 'E': uei, 'RX':uwi})
                             assert (curr_out ==
                                     buffer_values[mlb_start_addr % len(buffer_values)][i+stream_idx])
     return True
@@ -124,7 +125,7 @@ def check_mlb_chain_values(testinst,
             buffer_idxo = math.floor(total_mac_idx/(bo_chain_len*ubo*ubi))
             buffer_idxo = buffer_idxo*bo_chain_len
             
-            ugi = proj_yaml["inner_projection"]["UG"]["value"]
+            ugi = proj_yaml["inner_projection"]["G"]
             buffer_idxi = math.floor((total_mac_idx%(bo_chain_len*ubi))/(bi_chain_len*ubi*ugi))
             buffer_idxi = buffer_idxi*bi_chain_len*ugi
             values_per_stream = utils.get_proj_stream_count(
@@ -148,6 +149,8 @@ def check_mlb_chain_values(testinst,
                 buffer_idxi = buffer_idxi*bi_chain_len
                 buf_item_idx = (total_mac_idx%bi_chain_len)
                 # weight index
+                assert(curr_out ==
+                             buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
                 all_good &= (curr_out ==
                              buffer_values[(buffer_idxo + buffer_idxi + buf_item_idx)% buflen][i])
 
@@ -184,17 +187,19 @@ def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name,
                             buffer_values):
     mlb_count = utils.get_mlb_count(proj_yaml["outer_projection"])
     mac_count = utils.get_mlb_count(proj_yaml["inner_projection"])
-    bi_chain_len = proj_yaml["inner_projection"]["UE"]["value"] * \
-                            proj_yaml["inner_projection"]["URN"]["value"] * \
-                            proj_yaml["inner_projection"]["URW"]["value"]
-    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
+    bi_chain_len = proj_yaml["inner_projection"]["E"] * \
+                            proj_yaml["inner_projection"]["C"] * \
+                            proj_yaml["inner_projection"]["RY"] * \
+                            proj_yaml["inner_projection"]["RX"]
+    inner_ub = proj_yaml["inner_projection"]["B"] * proj_yaml["inner_projection"]["PY"] * proj_yaml["inner_projection"]["PX"]
     print(buffer_values)
     if ("PRELOAD" in proj_yaml["outer_projection"]):
-        outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
-        bo_chain_len = proj_yaml["outer_projection"]["UE"]["value"] * \
-                            proj_yaml["outer_projection"]["URN"]["value"] * \
-                            proj_yaml["outer_projection"]["URW"]["value"] *\
-                            proj_yaml["inner_projection"]["UG"]["value"] *  bi_chain_len
+        outer_ub = proj_yaml["outer_projection"]["B"] * proj_yaml["outer_projection"]["PY"] * proj_yaml["outer_projection"]["PX"]
+        bo_chain_len = proj_yaml["outer_projection"]["E"] * \
+                            proj_yaml["outer_projection"]["RY"] * \
+                            proj_yaml["outer_projection"]["C"] * \
+                            proj_yaml["outer_projection"]["RX"] *\
+                            proj_yaml["inner_projection"]["G"] *  bi_chain_len
         
         # Calculate required buffers etc.
         return check_mlb_chains_values(testinst,
@@ -207,16 +212,16 @@ def check_weight_contents(testinst, proj_yaml, mlb_name, weight_out_name,
     else:
         buflen = len(buffer_values)
         print(proj_yaml["outer_projection"])
-        for ugo in range(proj_yaml["outer_projection"]["UG"]["value"]):
-            for ubo in range(proj_yaml["outer_projection"]["UB"]["value"]):
-                for ueo in range(proj_yaml["outer_projection"]["UE"]["value"]):
-                    for uno in range(proj_yaml["outer_projection"]["URN"]["value"]):
-                        for uwo in range(proj_yaml["outer_projection"]["URW"]["value"]):
+        for ugo in range(proj_yaml["outer_projection"]["G"]):
+            for ubo in range(proj_yaml["outer_projection"]["B"] * proj_yaml["outer_projection"]["PY"] * proj_yaml["outer_projection"]["PX"]):
+                for ueo in range(proj_yaml["outer_projection"]["E"]):
+                    for uno in range(proj_yaml["outer_projection"]["C"] * proj_yaml["outer_projection"]["RY"]):
+                        for uwo in range(proj_yaml["outer_projection"]["RX"]):
                             mlb_idx = utils.get_overall_idx(proj_yaml["outer_projection"],
-                                {'URN': uno, 'UB': ubo, 'UG': ugo, 'UE': ueo, 'URW':uwo})
+                                {'C': uno, 'B': ubo, 'G': ugo, 'E': ueo, 'RX':uwo})
                             curr_mlb = getattr(testinst.mlb_modules, mlb_name.format(mlb_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["outer_projection"],
-                                {'URN': uno, 'UG': ugo, 'UE': ueo, 'URW':uwo})
+                                {'C': uno, 'G': ugo, 'E': ueo, 'RX':uwo})
                             print("MLB: " + str(mlb_idx))
                             values_per_stream = utils.get_proj_stream_count(
                                 proj_yaml["inner_projection"], 'W')
@@ -330,35 +335,35 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
     ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
         ab_yaml, proj_yaml, 'I')
     #assert(ibuf_count == 2)
-    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
-    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
-    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    inner_ug = proj_yaml["inner_projection"]["G"]
+    outer_ug = proj_yaml["outer_projection"]["G"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("G",1)
     
-    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
-    inner_ubb = proj_yaml["inner_projection"]["UB"]["batches"]
-    inner_ubx = proj_yaml["inner_projection"]["UB"]["x"]
-    inner_uby = proj_yaml["inner_projection"]["UB"]["y"]
-    outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
-    outer_ubb = proj_yaml["outer_projection"]["UB"]["batches"]
-    outer_ubx = proj_yaml["outer_projection"]["UB"]["x"]
-    outer_uby = proj_yaml["outer_projection"]["UB"]["y"]
-    temp_ub = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("value", obuf_len)
-    temp_ubb = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("batches", 1)
-    temp_ubx = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("x", obuf_len)
-    temp_uby = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("y", 1)
+    inner_ubb = proj_yaml["inner_projection"]["B"]
+    inner_ubx = proj_yaml["inner_projection"]["PX"]
+    inner_uby = proj_yaml["inner_projection"]["PY"]
+    inner_ub = inner_ubb * inner_ubx * inner_uby
+    outer_ubb = proj_yaml["outer_projection"]["B"]
+    outer_ubx = proj_yaml["outer_projection"]["PX"]
+    outer_uby = proj_yaml["outer_projection"]["PY"]
+    outer_ub = outer_ubb * outer_ubx * outer_uby
+    temp_ubb = proj_yaml.get("temporal_projection",{}).get("B", 1)
+    temp_ubx = proj_yaml.get("temporal_projection",{}).get("PX",obuf_len)
+    temp_uby = proj_yaml.get("temporal_projection",{}).get("PY", 1)
+    temp_ub = temp_ubb * temp_ubx * temp_uby
 
-    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
-    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
-    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
-    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
-    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
-    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
-    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
-    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
-    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
-    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
-    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
-    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
+    inner_unc = proj_yaml["inner_projection"]["C"]
+    inner_unx = 1
+    inner_uny = proj_yaml["inner_projection"]["RY"]
+    inner_un = inner_unc * inner_uny
+    outer_unc = proj_yaml["outer_projection"]["C"]
+    outer_unx = 1
+    outer_uny = proj_yaml["outer_projection"]["RY"]
+    outer_un = outer_unc * outer_uny
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("C",1)
+    temp_unx = 1
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("RY",1)
+    temp_un = temp_unc * temp_uny
     
     ibuf = [[[0 for k in range(ivalues_per_buf)]
              for i in range(ibuf_len)]           
@@ -410,16 +415,16 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
                                                                         
                                                                             i_stream_idx = utils.get_overall_idx_new(proj_yaml["outer_projection"],
-                                                                                                               {'URN': {'y':urnoy, 'chans':urnoc},
-                                                                                                                'UB': {'y':uboy, 'batches':ubob},
-                                                                                                                'UG': {'value': ugo}},
-                                                                                 order=utils.input_order, default=['batches','chans'])
+                                                                                                               {'RY':urnoy, 'C':urnoc,
+                                                                                                                'PY':uboy, 'B':ubob,
+                                                                                                                'G': ugo},
+                                                                                 order=utils.input_order)
                                                                             i_value_idx = i_stream_idx*utils.get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
                                                                                           utils.get_overall_idx_new(proj_yaml["inner_projection"],
-                                                                                                               {'URN': {'y':urniy, 'chans':urnic},
-                                                                                                                'UB': {'y':ubiy, 'batches':ubib},
-                                                                                                                'UG': {'value': ugi}},
-                                                                                 order=utils.input_order, default=['batches','chans'])
+                                                                                                               {'RY':urniy, 'C':urnic,
+                                                                                                                'PY':ubiy, 'B':ubib,
+                                                                                                                'G': ugi},
+                                                                                 order=utils.input_order)
                                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                             iv_idx = i_value_idx % ivalues_per_buf
                                                                             print("idx: " + str(i_value_idx))
@@ -432,30 +437,30 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
     
     wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
         wb_yaml, proj_yaml, 'W')
-    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
-    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
-    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
-    inner_ue = proj_yaml["inner_projection"]["UE"]["value"]
-    outer_ue = proj_yaml["outer_projection"]["UE"]["value"]
-    temp_ue = proj_yaml.get("temporal_projection",{}).get("UE",{}).get("value", 1)
-    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
-    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
-    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
-    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
-    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
-    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
-    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
-    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
-    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
-    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
-    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
-    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
-    inner_uw = proj_yaml["inner_projection"]["URW"]["value"]
-    inner_uwx = proj_yaml["inner_projection"]["URW"]["x"]
-    inner_uwy = proj_yaml["inner_projection"]["URW"]["y"]
-    outer_uw = proj_yaml["outer_projection"]["URW"]["value"]
-    outer_uwx = proj_yaml["outer_projection"]["URW"]["x"]
-    outer_uwy = proj_yaml["outer_projection"]["URW"]["y"]  
+    inner_ug = proj_yaml["inner_projection"]["G"]
+    outer_ug = proj_yaml["outer_projection"]["G"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("G",1)
+    inner_ue = proj_yaml["inner_projection"]["E"]
+    outer_ue = proj_yaml["outer_projection"]["E"]
+    temp_ue = proj_yaml.get("temporal_projection",{}).get("E",1)
+    inner_unc = proj_yaml["inner_projection"]["C"]
+    inner_unx = 1
+    inner_uny = proj_yaml["inner_projection"]["RY"]
+    inner_un = inner_unc * inner_uny
+    outer_unc = proj_yaml["outer_projection"]["C"]
+    outer_unx = 1
+    outer_uny = proj_yaml["outer_projection"]["RY"]
+    outer_un = outer_unc * outer_uny
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("C",1)
+    temp_unx = 1
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("RY",1)
+    temp_un = temp_unc * temp_uny
+    inner_uw = proj_yaml["inner_projection"]["RX"]
+    inner_uwx = proj_yaml["inner_projection"]["RX"]
+    inner_uwy = 1
+    outer_uw = proj_yaml["outer_projection"]["RX"]
+    outer_uwx = proj_yaml["outer_projection"]["RX"]
+    outer_uwy = 1  
 
     # Move the weights and inputs into the EMIF in the expected order
     wbuf = [[[0 for k in range(wvalues_per_buf)] 
@@ -545,48 +550,48 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
     ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
         ab_yaml, proj_yaml)
     
-    inner_uw = proj_yaml["inner_projection"]["URW"]["value"]
-    inner_uwx = proj_yaml["inner_projection"]["URW"]["x"]
-    inner_uwy = proj_yaml["inner_projection"]["URW"]["y"]
-    outer_uw = proj_yaml["outer_projection"]["URW"]["value"]
-    outer_uwx = proj_yaml["outer_projection"]["URW"]["x"]
-    outer_uwy = proj_yaml["outer_projection"]["URW"]["y"]
+    inner_uw = proj_yaml["inner_projection"]["RX"]
+    inner_uwx = proj_yaml["inner_projection"]["RX"]
+    inner_uwy = 1
+    outer_uw = proj_yaml["outer_projection"]["RX"]
+    outer_uwx = proj_yaml["outer_projection"]["RX"]
+    outer_uwy = 1
+
+    inner_unc = proj_yaml["inner_projection"]["C"]
+    inner_unx = 1
+    inner_uny = proj_yaml["inner_projection"]["RY"]
+    inner_un = inner_unc * inner_uny
+    outer_unc = proj_yaml["outer_projection"]["C"]
+    outer_unx = 1
+    outer_uny = proj_yaml["outer_projection"]["RY"]
+    outer_un = outer_unc * outer_uny
+    temp_unc = proj_yaml.get("temporal_projection",{}).get("C",1)
+    temp_unx = 1
+    temp_uny = proj_yaml.get("temporal_projection",{}).get("RY",1)
+    temp_un = temp_unc * temp_uny
     
-    inner_un = proj_yaml["inner_projection"]["URN"]["value"]
-    inner_unc = proj_yaml["inner_projection"]["URN"]["chans"]
-    inner_unx = proj_yaml["inner_projection"]["URN"]["x"]
-    inner_uny = proj_yaml["inner_projection"]["URN"]["y"]
-    outer_un = proj_yaml["outer_projection"]["URN"]["value"]
-    outer_unc = proj_yaml["outer_projection"]["URN"]["chans"]
-    outer_unx = proj_yaml["outer_projection"]["URN"]["x"]
-    outer_uny = proj_yaml["outer_projection"]["URN"]["y"]
-    temp_un = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("value", 1)
-    temp_unc = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("chans", 1)
-    temp_unx = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("x", 1)
-    temp_uny = proj_yaml.get("temporal_projection",{}).get("URN",{}).get("y", 1)
-    
-    inner_ug = proj_yaml["inner_projection"]["UG"]["value"]
-    outer_ug = proj_yaml["outer_projection"]["UG"]["value"]
-    temp_ug = proj_yaml.get("temporal_projection",{}).get("UG",{}).get("value", 1)
+    inner_ug = proj_yaml["inner_projection"]["G"]
+    outer_ug = proj_yaml["outer_projection"]["G"]
+    temp_ug = proj_yaml.get("temporal_projection",{}).get("G",1)
     stridex = proj_yaml.get("stride",{}).get("x",1)
     stridey = proj_yaml.get("stride",{}).get("y",1)
     
-    inner_ub = proj_yaml["inner_projection"]["UB"]["value"]
-    inner_ubb = proj_yaml["inner_projection"]["UB"]["batches"]
-    inner_ubx = proj_yaml["inner_projection"]["UB"]["x"]
-    inner_uby = proj_yaml["inner_projection"]["UB"]["y"]
-    outer_ub = proj_yaml["outer_projection"]["UB"]["value"]
-    outer_ubb = proj_yaml["outer_projection"]["UB"]["batches"]
-    outer_ubx = proj_yaml["outer_projection"]["UB"]["x"]
-    outer_uby = proj_yaml["outer_projection"]["UB"]["y"]
-    temp_ub = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("value", obuf_len)
-    temp_ubb = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("batches", 1)
-    temp_ubx = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("x", obuf_len)
-    temp_uby = proj_yaml.get("temporal_projection",{}).get("UB",{}).get("y", 1)
+    inner_ubb = proj_yaml["inner_projection"]["B"]
+    inner_ubx = proj_yaml["inner_projection"]["PX"]
+    inner_uby = proj_yaml["inner_projection"]["PY"]
+    inner_ub = inner_ubb * inner_ubx * inner_uby
+    outer_ubb = proj_yaml["outer_projection"]["B"]
+    outer_ubx = proj_yaml["outer_projection"]["PX"]
+    outer_uby = proj_yaml["outer_projection"]["PY"]
+    outer_ub = outer_ubb * outer_ubx * outer_uby
+    temp_ubb = proj_yaml.get("temporal_projection",{}).get("B", 1)
+    temp_ubx = proj_yaml.get("temporal_projection",{}).get("PX", obuf_len)
+    temp_uby = proj_yaml.get("temporal_projection",{}).get("PY",1)
+    temp_ub = temp_ubb * temp_ubx * temp_uby
     
-    inner_ue = proj_yaml["inner_projection"]["UE"]["value"]
-    outer_ue = proj_yaml["outer_projection"]["UE"]["value"]
-    temp_ue = proj_yaml.get("temporal_projection",{}).get("UE",{}).get("value", 1)
+    inner_ue = proj_yaml["inner_projection"]["E"]
+    outer_ue = proj_yaml["outer_projection"]["E"]
+    temp_ue = proj_yaml.get("temporal_projection",{}).get("E",1)
     
     for ugt in range(temp_ug):
         for ugo in range(outer_ug): 

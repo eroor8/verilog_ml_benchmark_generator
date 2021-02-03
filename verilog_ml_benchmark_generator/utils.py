@@ -6,8 +6,8 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
-input_order = [['URN', 'chans'], ['UB', 'batches'], ['UG', 'value'],
-               ['URN', 'y'], ['UB', 'y']]
+input_order = [['C'], ['B'], ['PX'], ['G'],
+               ['RY'], ['PY']]
 
 
 """
@@ -150,22 +150,21 @@ Utility functions for extracting information from projection vectors
 """
 
 
-def get_var_product(projection, var_array, defaults=[]):
+def get_var_product(projection, var_array):
     """ Multiply a subset of projection factors (new version)
 
         :param projection: unrolling factor vector
         :param var_array: keys to multiply
-        :param defaults: default second level key
     """
     product = 1
     for var in var_array:
         if var[0] in projection:
             assert var[0] in projection
             if var[0] in projection:
-                if var[1] in projection[var[0]]:
+                if len(var) == 1:
+                    product *= int(projection[var[0]])
+                elif var[1] in projection[var[0]]:
                     product *= int(projection[var[0]][var[1]])
-                elif var[1] in defaults:
-                    product *= int(projection[var[0]]['value'])
     return product
 
 
@@ -175,9 +174,9 @@ def get_mlb_count(projection):
 
         :param projection: unrolling factor vector
     """
-    return get_var_product(projection, [['URN', 'value'], ['URW', 'value'],
-                                        ['UB', 'value'], ['UE', 'value'],
-                                        ['UG', 'value']])
+    return get_var_product(projection, [['RY'], ['C'], ['RX'],
+                                        ['B'], ['PX'], ['PY'], ['E'],
+                                        ['G']])
 
 
 def get_proj_stream_count(projection, dtype='WIO'):
@@ -191,24 +190,24 @@ def get_proj_stream_count(projection, dtype='WIO'):
     assert re.search(r"^[WIO]*$", dtype), "Unknown type " + dtype
     sum = 0
     if ('W' in dtype):
-        ws = get_var_product(projection, [['URW', 'value'], ['URN', 'value'],
-                                          ['UE', 'value'], ['UG', 'value']])
+        ws = get_var_product(projection, [['RX'], ['RY'], ['C'],
+                                          ['E'], ['G']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'W':
                     ws = pload.get("bus_count", 1)
         sum += ws
     if ('I' in dtype):
-        wi = get_var_product(projection, [['URN', 'value'], ['UB', 'value'],
-                                          ['UG', 'value']])
+        wi = get_var_product(projection, [['RY'], ['C'], ['B'], ['PX'], ['PY'],
+                                          ['G']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'I':
                     wi = pload.get("bus_count", 1)
         sum += wi
     if ('O' in dtype):
-        wo = get_var_product(projection, [['UE', 'value'], ['UB', 'value'],
-                                          ['UG', 'value']])
+        wo = get_var_product(projection, [['E'], ['B'], ['PY'], ['PX'],
+                                          ['G']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
                 if pload["dtype"] == 'O':
@@ -229,26 +228,19 @@ def get_activation_function_name(projection):
 
 
 def get_overall_idx_new(projection, idxs,
-                        order=['URW', 'URN', 'UE', 'UB', 'UG'], default=[]):
+                        order=['RX', 'RY', 'C', 'E', 'B', 'PX', 'PY', 'G']):
     """ Calculate the inner block instance number based on loop unrolling
         factors
 
         :param projection: unrolling factor vector
         :param idxs: Unrolling factors to specify some instance
-        :param default: Default key values
     """
     product = 1
     total = 0
     for item in order:
-        if item[0] in idxs and item[1] in idxs[item[0]]:
-            curr_val = idxs[item[0]][item[1]]
-            if item[0] in projection and item[1] not in projection[item[0]]:
-                if item[1] in default:
-                    projection_val = projection[item[0]]['value']
-                else:
-                    projection_val = 1
-            else:
-                projection_val = projection.get(item[0], {}).get(item[1], 1)
+        if item[0] in idxs:
+            curr_val = idxs[item[0]]
+            projection_val = projection.get(item[0], 1)
             assert curr_val >= 0
             total += product * curr_val
             product *= projection_val
@@ -256,7 +248,7 @@ def get_overall_idx_new(projection, idxs,
 
 
 def get_overall_idx(projection, idxs,
-                    order=['URW', 'URN', 'UE', 'UB', 'UG']):
+                    order=['RX', 'RY', 'C', 'E', 'B', 'PX', 'PY', 'G']):
     """ Calculate the inner block instance number based on loop unrolling
         factors
 
@@ -270,10 +262,11 @@ def get_overall_idx(projection, idxs,
     for item in order:
         if item in idxs:
             assert item in projection
-            assert idxs[item] < projection[item]['value']
+            val = projection[item]
+            assert idxs[item] < val
             assert idxs[item] >= 0
             total += product*idxs[item]
-            product *= projection[item]['value']
+            product *= val
     return total
 
 
@@ -348,11 +341,10 @@ def get_max_input_bus_width(buf_width, projection, data_type, inner_width=-1):
     """
     max_vals_per_buf = get_var_product(
         projection.get("inner_projection", {}),
-        [['UB', 'batches'], ['UG', 'value'], ['URN', 'chans']],
-        defaults=['chans', 'batches'])
+        [['B'], ['PY'], ['PX'], ['G'], ['C']])
     if inner_width < 0:
         inner_width = projection["data_widths"][data_type]
-    urny = projection.get('inner_projection', {}).get('URN', {}).get('y', 1)
+    urny = projection.get('inner_projection', {}).get('RY', 1)
     if (urny > 1) and (data_type == "I"):
         buf_width = min(inner_width*max_vals_per_buf, buf_width)
     return buf_width
@@ -655,10 +647,11 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1,
                 muxn_inst = module_helper_classes.MUXN(port._dsl.Type.nbits,
                                                        len(inports), sim=sim)
                 setattr(s, port2name+"mux"+idx, muxn_inst)
-                if (len(inports) < 2):
-                    muxn_inst.sel //= 0
-                else:
-                    muxn_inst.sel //= insel
+                assert (len(inports) > 1)
+                # if (len(inports) < 2):
+                #     muxn_inst.sel //= 0
+                # else:
+                muxn_inst.sel //= insel
                 for i in range(len(inports)):
                     muxin = getattr(muxn_inst, "in"+str(i))
                     muxin //= inports[i]
@@ -939,22 +932,28 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
     ibuf_len = len(ibuf[0])
 
     # Get unrolling factors
-    inner_uw = projection["inner_projection"]["URW"]["value"]
-    inner_un = projection["inner_projection"]["URN"]["value"]
-    inner_ue = projection["inner_projection"]["UE"]["value"]
-    inner_ub = projection["inner_projection"]["UB"]["value"]
-    inner_ug = projection["inner_projection"]["UG"]["value"]
-    outer_uw = projection["outer_projection"]["URW"]["value"]
-    outer_un = projection["outer_projection"]["URN"]["value"]
-    outer_ue = projection["outer_projection"]["UE"]["value"]
-    outer_ub = projection["outer_projection"]["UB"]["value"]
-    outer_ug = projection["outer_projection"]["UG"]["value"]
+    inner_uw = projection["inner_projection"]["RX"]
+    inner_un = projection["inner_projection"]["RY"] * \
+        projection["inner_projection"]["C"]
+    inner_ue = projection["inner_projection"]["E"]
+    inner_ub = projection["inner_projection"]["B"] * \
+        projection["inner_projection"]["PX"] * \
+        projection["inner_projection"]["PY"]
+    inner_ug = projection["inner_projection"]["G"]
+    outer_uw = projection["outer_projection"]["RX"]
+    outer_un = projection["outer_projection"]["RY"] * \
+        projection["outer_projection"]["C"]
+    outer_ue = projection["outer_projection"]["E"]
+    outer_ub = projection["outer_projection"]["B"] * \
+        projection["outer_projection"]["PX"] * \
+        projection["outer_projection"]["PY"]
+    outer_ug = projection["outer_projection"]["G"]
     temp_proj = projection.get("temporal_projection", {})
-    temp_ug = temp_proj.get("UG", {}).get("value", 1)
-    temp_ub = temp_proj.get("UB", {}).get("value", obuf_len)
-    temp_un = temp_proj.get("URN", {}).get("value", 1)
-    temp_ue = temp_proj.get("UE", {}).get("value", 1)
-
+    temp_ug = temp_proj.get("G", 1)
+    temp_ub = temp_proj.get("B", obuf_len) * temp_proj.get("PX", 1) * \
+        temp_proj.get("PY", 1)
+    temp_un = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
+    temp_ue = temp_proj.get("E", 1)
     for (ugt, uet, ugo, ubo, ueo, ugi, ubi, uei) in range8D(
             temp_ug, temp_ue, outer_ug, outer_ub, outer_ue, inner_ug,
             inner_ub, inner_ue):
@@ -1014,17 +1013,16 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
                 # Now find the corresponding input activation value
                 i_stream_idx = get_overall_idx_new(
                     projection["outer_projection"],
-                    {'URN': {'chans': urno}, 'UB': {'batches': ubo},
-                     'UG': {'value': ugo}},
-                    order=input_order, default=['batches', 'chans'])
+                    {'C': urno, 'B': ubo,
+                     'G': ugo},
+                    order=input_order)
                 i_value_idx = i_stream_idx * get_proj_stream_count(
                     projection["inner_projection"], 'I') + \
                     get_overall_idx_new(projection["inner_projection"],
-                                        {'URN': {'chans': urni},
-                                         'UB': {'batches': ubi},
-                                         'UG': {'value': ugi}},
-                                        order=input_order,
-                                        default=['batches', 'chans'])
+                                        {'C': urni,
+                                         'B': ubi,
+                                         'G': ugi},
+                                        order=input_order)
                 ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                 iv_idx = i_value_idx % ivalues_per_buf
 
@@ -1067,21 +1065,28 @@ def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf,
     ibuf_len = len(ibuf[0])
 
     # Get unrolling factors
-    inner_uw = projection["inner_projection"]["URW"]["value"]
-    inner_un = projection["inner_projection"]["URN"]["value"]
-    inner_ue = projection["inner_projection"]["UE"]["value"]
-    inner_ub = projection["inner_projection"]["UB"]["value"]
-    inner_ug = projection["inner_projection"]["UG"]["value"]
-    outer_uw = projection["outer_projection"]["URW"]["value"]
-    outer_un = projection["outer_projection"]["URN"]["value"]
-    outer_ue = projection["outer_projection"]["UE"]["value"]
-    outer_ub = projection["outer_projection"]["UB"]["value"]
-    outer_ug = projection["outer_projection"]["UG"]["value"]
+    inner_uw = projection["inner_projection"]["RX"]
+    inner_un = projection["inner_projection"]["RY"] * \
+        projection["inner_projection"]["C"]
+    inner_ue = projection["inner_projection"]["E"]
+    inner_ub = projection["inner_projection"]["B"] * \
+        projection["inner_projection"]["PY"] * \
+        projection["inner_projection"]["PX"]
+    inner_ug = projection["inner_projection"]["G"]
+    outer_uw = projection["outer_projection"]["RX"]
+    outer_un = projection["outer_projection"]["RY"] * \
+        projection["outer_projection"]["C"]
+    outer_ue = projection["outer_projection"]["E"]
+    outer_ub = projection["outer_projection"]["B"] * \
+        projection["outer_projection"]["PY"] * \
+        projection["outer_projection"]["PX"]
+    outer_ug = projection["outer_projection"]["G"]
     temp_proj = projection.get("temporal_projection", {})
-    temp_ug = temp_proj.get("UG", {}).get("value", 1)
-    temp_ub = temp_proj.get("UB", {}).get("value", obuf_len)
-    temp_un = temp_proj.get("URN", {}).get("value", 1)
-    temp_ue = temp_proj.get("UE", {}).get("value", 1)
+    temp_ug = temp_proj.get("G", 1)
+    temp_ub = temp_proj.get("B", obuf_len) * temp_proj.get("PY", 1) * \
+        temp_proj.get("PX", 1)
+    temp_un = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
+    temp_ue = temp_proj.get("E", 1)
 
     for (ugt, uet, ugo, ubo, ueo, ugi, ubi, uei) in range8D(
             temp_ug, temp_ue, outer_ug, outer_ub, outer_ue, inner_ug,
@@ -1212,25 +1217,21 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0,
 
     # Get Intra-EB unrolling factors
     i_proj = proj_yaml.get("inner_projection", {})
-    inner_ug = i_proj.get("UG", {}).get("value", 1)
-    inner_ub = i_proj.get("UB", {}).get("value", 1)
-    inner_ubb = i_proj.get("UB", {}).get("batches", inner_ub)
-    inner_ubx = i_proj.get("UB", {}).get("x", 1)
-    inner_uby = i_proj.get("UB", {}).get("y", 1)
-    inner_un = i_proj.get("URN", {}).get("value", 1)
-    inner_unc = i_proj.get("URN", {}).get("chans", inner_un)
-    inner_uny = i_proj.get("URN", {}).get("y", 1)
+    inner_ug = i_proj.get("G", 1)
+    inner_ubb = i_proj.get("B", 1)
+    inner_ubx = i_proj.get("PX", 1)
+    inner_uby = i_proj.get("PY", 1)
+    inner_unc = i_proj.get("C", 1)
+    inner_uny = i_proj.get("RY", 1)
 
     # Get Inter-EB unrolling factors
     o_proj = proj_yaml.get("outer_projection", {})
-    outer_ug = o_proj.get("UG", {}).get("value", 1)
-    outer_ub = o_proj.get("UB", {}).get("value", 1)
-    outer_ubb = o_proj.get("UB", {}).get("batches", outer_ub)
-    outer_ubx = o_proj.get("UB", {}).get("x", 1)
-    outer_uby = o_proj.get("UB", {}).get("y", 1)
-    outer_un = o_proj.get("URN", {}).get("value", 1)
-    outer_unc = o_proj.get("URN", {}).get("chans", outer_un)
-    outer_uny = o_proj.get("URN", {}).get("y", 1)
+    outer_ug = o_proj.get("G", 1)
+    outer_ubb = o_proj.get("B", 1)
+    outer_ubx = o_proj.get("PX", 1)
+    outer_uby = o_proj.get("PY", 1)
+    outer_unc = o_proj.get("C", 1)
+    outer_uny = o_proj.get("RY", 1)
 
     # Get other required values
     i_stream_count = get_proj_stream_count(proj_yaml["inner_projection"], 'I')
@@ -1245,33 +1246,37 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0,
                 # Find the corresponding buffer
                 i_stream_idx = get_overall_idx_new(
                     proj_yaml["outer_projection"],
-                    {'URN': {'y': urnoy, 'chans': urnoc},
-                     'UB': {'y': uboy, 'x': ubox, 'batches': ubob},
-                     'UG': {'value': ugo}},
-                    order=input_order, default=['batches', 'chans'])
+                    {'RY': urnoy,
+                     'C': urnoc,
+                     'PX': ubox,
+                     'PY': uboy,
+                     'B': ubob,
+                     'G': ugo},
+                    order=input_order)
                 idx_within_stream = get_overall_idx_new(
                     proj_yaml["inner_projection"],
-                    {'URN': {'y': urniy, 'chans': urnic},
-                     'UB': {'y': ubiy, 'x': ubix, 'batches': ubib},
-                     'UG': {'value': ugi}},
-                    order=input_order, default=['batches', 'chans'])
+                    {'RY': urniy,
+                     'C': urnic,
+                     'PX': ubix,
+                     'PY': ubiy,
+                     'B': ubib,
+                     'G': ugi},
+                    order=input_order)
                 i_value_idx = i_stream_idx * i_stream_count + \
                     idx_within_stream
                 buf_idx = math.floor(i_value_idx / ivalues_per_buf)
 
                 # Find the corresponding y index
                 inner_y = get_overall_idx_new(proj_yaml["inner_projection"],
-                                              {'URN': {'y': urniy},
-                                               'UB': {'y': ubiy}},
-                                              order=[['URN', 'y'],
-                                                     ['UB', 'y']],
-                                              default=['batches', 'chans'])
+                                              {'RY': urniy,
+                                               'PY': ubiy},
+                                              order=[['RY'],
+                                                     ['PY']])
                 outer_y = get_overall_idx_new(proj_yaml["outer_projection"],
-                                              {'URN': {'y': urnoy},
-                                               'UB': {'y': uboy}},
-                                              order=[['URN', 'y'],
-                                                     ['UB', 'y']],
-                                              default=['batches', 'chans'])
+                                              {'RY': urnoy,
+                                               'PY': uboy},
+                                              order=[['RY'],
+                                                     ['PY']])
                 total_y = outer_y * inner_uby * inner_uny + inner_y
                 output_map[buf_idx] = total_y
     return output_map

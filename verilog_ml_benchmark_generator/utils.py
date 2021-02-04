@@ -2,12 +2,9 @@
 import math
 import re
 import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
-input_order = [['C'], ['B'], ['PX'], ['G'],
-               ['RY'], ['PY']]
+input_order = [['C'], ['B'], ['PX'], ['G'], ['RY'], ['PY']]
 
 
 """
@@ -85,8 +82,8 @@ def printi(level, string, colour="None"):
         col_code = '\033[31m'
     elif (colour) == 'GREEN':
         col_code = '\033[32m'
-    elif (colour) == 'RED':
-        col_code = '\033[31m'
+    # elif (colour) == 'RED':
+    #     col_code = '\033[31m'
     elif (colour) == 'BLUE':
         col_code = '\033[34m'
     print(('\t' * level) + col_code + str(string) + '\033[0m')
@@ -206,7 +203,7 @@ def get_proj_stream_count(projection, dtype='WIO'):
                     wi = pload.get("bus_count", 1)
         sum += wi
     if ('O' in dtype):
-        wo = get_var_product(projection, [['E'], ['B'], ['PY'], ['PX'],
+        wo = get_var_product(projection, [['E'], ['B'], ['PX'], ['PY'],
                                           ['G']])
         if 'PRELOAD' in projection:
             for pload in projection["PRELOAD"]:
@@ -263,6 +260,8 @@ def get_overall_idx(projection, idxs,
         if item in idxs:
             assert item in projection
             val = projection[item]
+            print(idxs)
+            print(projection)
             assert idxs[item] < val
             assert idxs[item] >= 0
             total += product*idxs[item]
@@ -390,10 +389,8 @@ def get_obuffer_dimensions(buf_spec, projection):
     return (values_per_buf, buf_len, buf_count)
 
 
-def read_out_stored_values_from_emif(emif_inst,
-                                     bytes_per_word,
-                                     emif_size,
-                                     dwidth, startaddr=0,
+def read_out_stored_values_from_emif(emif_inst, bytes_per_word,
+                                     emif_size, dwidth, startaddr=0,
                                      words_per_buffer=sys.maxsize):
     """ Return the contents of the emif instance """
     emif_array = [0 for i in range(emif_size + startaddr)]
@@ -811,11 +808,11 @@ def mux_inst_ports_by_name(inst2, name2, srcs, name1, factor1=1, factor2=1,
     for port in match_dict:
         parentname = name2+"_"+port
         parentport = None
-        if parentname in inst2.__dict__.keys():
-            parentport = getattr(inst2, name2 + "_" + foundname1.group(1))
-        elif name2 in inst2.__dict__.keys():
-            parentport = getattr(inst2, name2)
-        assert(parentport)
+        # if parentname in inst2.__dict__.keys():
+        #     parentport = getattr(inst2, name2 + "_" + foundname1.group(1))
+        # elif name2 in inst2.__dict__.keys():
+        assert(name2 in inst2.__dict__.keys())
+        parentport = getattr(inst2, name2)
         inports = match_dict[port]
         muxn_inst = module_helper_classes.MUXN(parentport._dsl.Type.nbits,
                                                len(inports), sim)
@@ -967,20 +964,15 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
                     mlb_chain_len = inner_ug * inner_ue * inner_un * inner_uw
                     w_buf_inst_idx = \
                         ugi * inner_ue * inner_un * inner_uw + \
-                        uei * inner_un * inner_uw + \
-                        urni * inner_uw + \
-                        urwi
+                        uei * inner_un * inner_uw + urni * inner_uw + urwi
                     bus_idx = 0
                     stream_width = 1
                 else:
                     mlb_chain_len = 1
                     w_buf_inst_idx = 0
                     bus_idx = ugi * inner_ue * inner_un * inner_uw + \
-                        uei * inner_un * inner_uw + \
-                        urni * inner_uw + \
-                        urwi
-                    stream_width = inner_ug * inner_ue * inner_un * \
-                        inner_uw
+                        uei * inner_un * inner_uw + urni * inner_uw + urwi
+                    stream_width = inner_ug * inner_ue * inner_un * inner_uw
 
                 if ("PRELOAD" in projection["outer_projection"]):
                     w_buf_inst_idx = (ugo * outer_ue * outer_un * outer_uw +
@@ -1013,15 +1005,11 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
                 # Now find the corresponding input activation value
                 i_stream_idx = get_overall_idx_new(
                     projection["outer_projection"],
-                    {'C': urno, 'B': ubo,
-                     'G': ugo},
-                    order=input_order)
+                    {'C': urno, 'B': ubo, 'G': ugo}, order=input_order)
                 i_value_idx = i_stream_idx * get_proj_stream_count(
                     projection["inner_projection"], 'I') + \
                     get_overall_idx_new(projection["inner_projection"],
-                                        {'C': urni,
-                                         'B': ubi,
-                                         'G': ugi},
+                                        {'C': urni, 'B': ubi, 'G': ugi},
                                         order=input_order)
                 ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                 iv_idx = i_value_idx % ivalues_per_buf
@@ -1036,143 +1024,11 @@ def get_expected_outputs(obuf, ostreams_per_buf, wbuf, ibuf,
                 inner_ub * inner_ue + \
                 ubo * outer_ue * inner_ug * inner_ub * inner_ue + \
                 ueo * inner_ug * inner_ub * inner_ue + \
-                ugi * inner_ub * inner_ue + \
-                ubi * inner_ue + \
-                uei
+                ugi * inner_ub * inner_ue + ubi * inner_ue + uei
             obuf_idx = math.floor(out_act_idx / ostreams_per_buf)
             os_idx = out_act_idx % ostreams_per_buf
             ot_idx = ugt * temp_ub * temp_ue + uet * temp_ub + ubt - \
                 outer_uw * inner_uw + 1
-            obuf[obuf_idx][ot_idx][os_idx] = correct_sum % \
-                (2 ** projection["data_widths"]["I"])
-    return obuf
-
-
-def get_expected_outputs_old(obuf, ostreams_per_buf, wbuf, ibuf,
-                             ivalues_per_buf, projection):
-    """  Calculate the expected contents of the output buffer
-        based on the contents of the input and weight buffers.
-
-        :param obuf: output buffer to be filled
-        :param ostreams_per_buf: number of output streams per buffer
-        :param wbuf: array of filter weights
-        :param ibuf: array of input activations
-        :param ivalues_per_buf: number of streams per input buffer
-        :param projection: unrolling factor vector
-    """
-    obuf_len = len(obuf[0])
-    wbuf_len = len(wbuf[0])
-    ibuf_len = len(ibuf[0])
-
-    # Get unrolling factors
-    inner_uw = projection["inner_projection"]["RX"]
-    inner_un = projection["inner_projection"]["RY"] * \
-        projection["inner_projection"]["C"]
-    inner_ue = projection["inner_projection"]["E"]
-    inner_ub = projection["inner_projection"]["B"] * \
-        projection["inner_projection"]["PY"] * \
-        projection["inner_projection"]["PX"]
-    inner_ug = projection["inner_projection"]["G"]
-    outer_uw = projection["outer_projection"]["RX"]
-    outer_un = projection["outer_projection"]["RY"] * \
-        projection["outer_projection"]["C"]
-    outer_ue = projection["outer_projection"]["E"]
-    outer_ub = projection["outer_projection"]["B"] * \
-        projection["outer_projection"]["PY"] * \
-        projection["outer_projection"]["PX"]
-    outer_ug = projection["outer_projection"]["G"]
-    temp_proj = projection.get("temporal_projection", {})
-    temp_ug = temp_proj.get("G", 1)
-    temp_ub = temp_proj.get("B", obuf_len) * temp_proj.get("PY", 1) * \
-        temp_proj.get("PX", 1)
-    temp_un = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
-    temp_ue = temp_proj.get("E", 1)
-
-    for (ugt, uet, ugo, ubo, ueo, ugi, ubi, uei) in range8D(
-            temp_ug, temp_ue, outer_ug, outer_ub, outer_ue, inner_ug,
-            inner_ub, inner_ue):
-        for ubt in range(outer_uw - 1, temp_ub):
-            correct_sum = 0
-            # Accumulate a partial sum
-            for (urno, urni, urnt, urwo, urwi, f, g, h) in range8D(
-                    outer_un, inner_un, temp_un, outer_uw, inner_uw):
-
-                # Find the corresponding weight in the weight buffers
-                if ("PRELOAD" in projection["inner_projection"]):
-                    mlb_chain_len = inner_ug * inner_ue * inner_un * inner_uw
-                    w_buf_inst_idx = \
-                        ugi * inner_ue * inner_un * inner_uw + \
-                        uei * inner_un * inner_uw + \
-                        urni * inner_uw + \
-                        urwi
-                    bus_idx = 0
-                    stream_width = 1
-                else:
-                    mlb_chain_len = 1
-                    w_buf_inst_idx = 0
-                    bus_idx = ugi * inner_ue * inner_un * inner_uw + \
-                        uei * inner_un * inner_uw + \
-                        urni * inner_uw + \
-                        urwi
-                    stream_width = inner_ug * inner_ue * inner_un * \
-                        inner_uw
-
-                if ("PRELOAD" in projection["outer_projection"]):
-                    w_buf_inst_idx = (ugo * outer_ue * outer_un * outer_uw +
-                                      ueo * outer_un * outer_uw +
-                                      urno * outer_uw +
-                                      urwo) * mlb_chain_len + \
-                        w_buf_inst_idx
-                    outer_chain_len = (outer_ug * outer_ue * outer_uw *
-                                       outer_un)
-                    buffer_cnt = 0
-                else:
-                    outer_chain_len = 1
-                    stream_idx = ugo * outer_ue * outer_un * outer_uw + \
-                        ueo * outer_un * outer_uw + \
-                        urno * outer_uw + \
-                        urwo
-                    streams_per_buffer = math.floor(len(wbuf[0][0]) /
-                                                    stream_width)
-                    buffer_cnt = math.floor(stream_idx / streams_per_buffer)
-                    bus_idx = (stream_idx % streams_per_buffer) * \
-                        stream_width + bus_idx
-
-                urw = urwo * inner_uw + urwi
-                buffer_idx = (outer_chain_len * mlb_chain_len -
-                              w_buf_inst_idx - 1)
-                buffer_idx += ugt * temp_ue * temp_un + uet * temp_un
-                w = wbuf[buffer_cnt][(buffer_idx + urnt) % wbuf_len][bus_idx]
-
-                # Now find the corresponding input activation value
-                if ((ubt - urw) >= 0) and ((ubt - urw) < ibuf_len):
-                    i_stream_idx = (outer_ub * outer_un * ugo +
-                                    ubo * outer_un +
-                                    urno)
-                    i_value_idx = i_stream_idx * \
-                        get_proj_stream_count(projection["inner_projection"],
-                                              'I') + \
-                        (inner_ub * inner_un * ugi + ubi * inner_un + urni)
-                    ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
-                    iv_idx = i_value_idx % ivalues_per_buf
-
-                    # Add to the current partial sum
-                    correct_sum += (ibuf[ibuf_idx][(ugt * temp_ub * temp_un
-                                                    + ubt*temp_un
-                                                    + urnt - urw) %
-                                                   ibuf_len][iv_idx] * w)
-
-            # Find the corresponding location in the output buffers
-            out_act_idx = ugo * outer_ub * outer_ue * inner_ug * \
-                inner_ub * inner_ue + \
-                ubo * outer_ue * inner_ug * inner_ub * inner_ue + \
-                ueo * inner_ug * inner_ub * inner_ue + \
-                ugi * inner_ub * inner_ue + \
-                ubi * inner_ue + \
-                uei
-            obuf_idx = math.floor(out_act_idx / ostreams_per_buf)
-            os_idx = out_act_idx % ostreams_per_buf
-            ot_idx = ugt * temp_ub * temp_ue + uet * temp_ub + ubt
             obuf[obuf_idx][ot_idx][os_idx] = correct_sum % \
                 (2 ** projection["data_widths"]["I"])
     return obuf
@@ -1246,37 +1102,23 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0,
                 # Find the corresponding buffer
                 i_stream_idx = get_overall_idx_new(
                     proj_yaml["outer_projection"],
-                    {'RY': urnoy,
-                     'C': urnoc,
-                     'PX': ubox,
-                     'PY': uboy,
-                     'B': ubob,
-                     'G': ugo},
-                    order=input_order)
+                    {'RY': urnoy, 'C': urnoc, 'PX': ubox, 'PY': uboy,
+                     'B': ubob, 'G': ugo}, order=input_order)
                 idx_within_stream = get_overall_idx_new(
                     proj_yaml["inner_projection"],
-                    {'RY': urniy,
-                     'C': urnic,
-                     'PX': ubix,
-                     'PY': ubiy,
-                     'B': ubib,
-                     'G': ugi},
-                    order=input_order)
+                    {'RY': urniy, 'C': urnic, 'PX': ubix, 'PY': ubiy,
+                     'B': ubib, 'G': ugi}, order=input_order)
                 i_value_idx = i_stream_idx * i_stream_count + \
                     idx_within_stream
                 buf_idx = math.floor(i_value_idx / ivalues_per_buf)
 
                 # Find the corresponding y index
                 inner_y = get_overall_idx_new(proj_yaml["inner_projection"],
-                                              {'RY': urniy,
-                                               'PY': ubiy},
-                                              order=[['RY'],
-                                                     ['PY']])
+                                              {'RY': urniy, 'PY': ubiy},
+                                              order=[['RY'], ['PY']])
                 outer_y = get_overall_idx_new(proj_yaml["outer_projection"],
-                                              {'RY': urnoy,
-                                               'PY': uboy},
-                                              order=[['RY'],
-                                                     ['PY']])
+                                              {'RY': urnoy, 'PY': uboy},
+                                              order=[['RY'], ['PY']])
                 total_y = outer_y * inner_uby * inner_uny + inner_y
                 output_map[buf_idx] = total_y
     return output_map

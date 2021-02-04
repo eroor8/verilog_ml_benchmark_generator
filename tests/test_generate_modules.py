@@ -451,7 +451,6 @@ def test_simulate_multiple_layers(
         emif_spec=emif_yaml,
         projections=proj_yamls,
         write_to_file=True,
-        randomize=False,
         waddrs=waddrs,
         iaddrs=iaddrs,
         oaddrs=oaddrs,
@@ -774,7 +773,6 @@ def test_simulate_layer(
                                                     emif_spec=emif_yaml,
                                                     projections=proj_yaml,
                                                     write_to_file=True,
-                                                    randomize=False,
                                                     waddrs=[0],
                                                     iaddrs=[iaddr],
                                                     oaddrs=[oaddr],
@@ -906,12 +904,12 @@ def test_simulate_emif_statemachine(
                                                     emif_spec=emif_yaml,
                                                     projections=proj_yaml,
                                                     write_to_file=True,
-                                                    randomize=False,
                                                     waddrs=[0],
                                                     iaddrs=[iaddr],
                                                     oaddrs=[oaddr],
                                                     ws=ws,
-                                                    validate_output=v)
+                                                    validate_output=v,
+                                                    gen_ver=True)
     print("done simulating")
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
@@ -980,7 +978,7 @@ def test_simulate_emif_statemachine_unit_ws_pl():
                                "input_spec_1.yaml",
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
-                                    "projection_spec_5.yaml", True, False)
+                               "projection_spec_5.yaml", True, True)
     
 def test_simulate_emif_statemachine_unit_ws_bc():
     test_simulate_emif_statemachine("mlb_spec_3.yaml",
@@ -1044,6 +1042,20 @@ def test_simulate_layer_intel():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_cs.yaml", True, False)
+    
+def test_simulate_layer_soft_e():
+    test_simulate_layer("mlb_spec_4.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_15.yaml", True, False)
+    
+def test_simulate_layer_soft_b():
+    test_simulate_layer("mlb_spec_4.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_16.yaml", True, False)
     
 def test_simulate_layer_xilinx_mode1():
     test_simulate_layer("mlb_spec_xilinx_mode1.yaml",
@@ -1140,7 +1152,6 @@ def test_simulate_random_emif_statemachine():
                                                     emif_spec=emif_yaml,
                                                     projection=proj_yaml,
                                                     write_to_file=False,
-                                                    randomize=True,
                                                     waddr=0,
                                                     iaddr=iaddr,
                                                     oaddr=oaddr)
@@ -1577,7 +1588,6 @@ def test_generate_layer_intel_soft_small5(layer_name="test_full_layer_flow_soft_
     gen_constraint_file("chain_list_for_placement.yaml", "full_layer_soft_small5.constraints", list(range(8,WIDTH-2,7))+[81,95,67], list(range(2,HEIGHT-2-4,4)))
     
 @pytest.mark.longtest
-@pytest.mark.skip
 def test_generate_layer_xilinx_test(layer_name="test_full_layer_flow_x3"):
     
     workload = {
@@ -1591,8 +1601,8 @@ def test_generate_layer_xilinx_test(layer_name="test_full_layer_flow_x3"):
         "activation_function": 'RELU'
        }
     test_generate_layer(workload, "mlb_spec_xilinx_mode2.yaml",
-                        "input_spec_intel_36.yaml",
-                        "input_spec_intel_36.yaml",
+                        "input_spec_intel.yaml",
+                        "input_spec_intel.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
                         False, False, 50, -1, -1, layer_name=layer_name, run_odin=False)
@@ -1600,7 +1610,6 @@ def test_generate_layer_xilinx_test(layer_name="test_full_layer_flow_x3"):
 
     
 @pytest.mark.longtest
-@pytest.mark.skip
 def test_generate_layer_example_intel_test(layer_name="test_full_layer_flow"):
     
     workload = {
@@ -1618,7 +1627,7 @@ def test_generate_layer_example_intel_test(layer_name="test_full_layer_flow"):
                         "input_spec_intel_8.yaml",
                         "emif_spec_intel.yaml",
                         "projection_spec_cs.yaml", True,
-                        False, False, 25, -1, 2, layer_name=layer_name, run_odin=False)
+                        False, False, 25, 1, 1, layer_name=layer_name, run_odin=False)
     
     gen_constraint_file("chain_list_for_placement.yaml", "full_layer_l3.constraints", list(range(8,45,7)), list(range(2,45,4)))
     

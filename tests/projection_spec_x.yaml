@@ -1,0 +1,39 @@
+name: "test_proj"
+inner_projection:
+    RX: 2
+    RY: 1
+    C: 1
+    E: 1
+    PX: 1
+    PY: 1
+    B: 2
+    G: 1
+outer_projection:
+    RX: 1
+    RY: 1
+    C: 2
+    E: 2
+    PX: 1
+    PY: 2
+    B: 1
+    G: 1
+temporal_projection:
+    RX: 1
+    RY: 1
+    C: 1
+    E: 1
+    PX: 4
+    PY: 2
+    B: 1
+    G: 1
+activation_function: 'RELU'
+stride:
+    x: 1
+    y: 1
+dilation:
+    x: 1
+    y: 1
+data_widths:
+    W: 8
+    I: 8
+    O: 32

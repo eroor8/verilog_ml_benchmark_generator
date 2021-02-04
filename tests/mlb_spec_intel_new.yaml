@@ -1,23 +1,22 @@
 block_name: "ml_block"
 MAC_info:
-    num_units: 30
+    num_units: 64
     data_widths:
-        W: 8
-        I: 8
-        O: 32
+        W: 4
+        I: 4
+        O: 16
 access_patterns:
-    AP1: 0
+    AP1: 1
     AP2: 10
     AP3: 3
     AP4: 1
     AP5: 1
-output_accumulator: True
 ports:
     -   name: a_en
         width: 1
         direction: "in"
         type: "W_EN"
-    -   name: load_buf_sel
+    -   name: config_in
         width: 1
         direction: "in"
         type: "MODE"
@@ -25,11 +24,7 @@ ports:
         width: 1
         direction: "in"
         type: "I_EN"
-    -   name: feed_sel0
-        width: 1
-        direction: "in"
-        type: "C"
-    -   name: feed_sel1
+    -   name: hp_en
         width: 1
         direction: "in"
         type: "C"
@@ -37,31 +32,35 @@ ports:
         width: 1
         direction: "in"
         type: "ACC_EN"
-    -   name: zero_en
+    -   name: config_en
         width: 1
         direction: "in"
         type: "C"
-    -   name: data_in_w
-        width: 16
+    -   name: config_in
+        width: 1
+        direction: "in"
+        type: "C"
+    -   name: a
+        width: 8
         direction: "in"
         type: "W"
-    -   name: data_in_i
-        width: 80
+    -   name: b_cas_in
+        width: 96
         direction: "in"
         type: "I"
-    -   name: cascade_data_in
+    -   name: res_cas_in
         width: 96
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 80
+        width: 96
         direction: "out"
         type: "I"
-    -   name: weight_cascade_out
-        width: 16
+    -   name: a_out
+        width: 8
         direction: "out"
         type: "W"
-    -   name: cascade_data_out
+    -   name: res_cas_out
         width: 96
         direction: "out"
         type: "O"

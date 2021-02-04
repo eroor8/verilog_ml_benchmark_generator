@@ -6,11 +6,11 @@ MAC_info:
         I: 8
         O: 32
 access_patterns:
-    AP1: 0
-    AP2: 10
-    AP3: 3
+    AP1: 2
+    AP2: 2
+    AP3: 1
     AP4: 1
-    AP5: 1
+    AP5: 8
 output_accumulator: True
 ports:
     -   name: a_en
@@ -42,27 +42,27 @@ ports:
         direction: "in"
         type: "C"
     -   name: data_in_w
-        width: 16
+        width: 128
         direction: "in"
         type: "W"
     -   name: data_in_i
-        width: 80
+        width: 128
         direction: "in"
         type: "I"
     -   name: cascade_data_in
-        width: 96
+        width: 128
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 80
+        width: 128
         direction: "out"
         type: "I"
     -   name: weight_cascade_out
-        width: 16
+        width: 128
         direction: "out"
         type: "W"
     -   name: cascade_data_out
-        width: 96
+        width: 128
         direction: "out"
         type: "O"
     -   name: clk

@@ -8,11 +8,7 @@ PYMTL Helper modules for implementing statemachine, simmodels
 - Buffer
 """
 from pymtl3 import InPort, Component, Wire, update, update_ff, connect, Bits5
-import sys
-import os
 import math
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import module_classes
 import random

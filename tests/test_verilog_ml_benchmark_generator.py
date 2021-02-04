@@ -55,8 +55,7 @@ def test_simulate_statemachine():
                             '--act_buffer_definition', ab_spec,
                             '--weight_buffer_definition', wb_spec,
                             '--emif_definition', emif_spec,
-                            '--projection_definition', proj,
-                            '--randomize_inputs', True])
+                            '--projection_definition', proj])
     print(result.output)
     assert result.exit_code == 0
     assert 'Statemachine simulation was successful' in result.output

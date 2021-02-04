@@ -119,6 +119,8 @@ def test_MLB_Wrapper():
         "block_name": "test_block",
         "ports": [{"name":"acc_en", "width":1, "direction": "in", "type":"ACC_EN"},
                   {"name":"a", "width":64, "direction": "in", "type":"W"},
+                  {"name":"test", "width":1, "direction": "in", "type":"C"},
+                  {"name":"testo", "width":1, "direction": "out", "type":"C"},
                   {"name":"a_out", "width":64, "direction": "out", "type":"W"},
                   {"name":"a_en", "width":1, "direction": "in", "type":"W_EN"},
                   {"name":"b", "width":64, "direction": "in", "type":"I"},
@@ -541,7 +543,7 @@ def test_Datapath():
              for i in range(ostreams_per_buf)]
              for i in range(obuf_len)]
              for j in range (obuf_count)]
-    obuf = utils.get_expected_outputs_old(obuf, ostreams_per_buf,
+    obuf = get_expected_outputs_old(obuf, ostreams_per_buf,
                                 wbuf,
                                 ibuf, ivalues_per_buf,
                                 projection)
@@ -562,7 +564,6 @@ def test_Datapath():
         for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1): 
             assert obuf[bufi][olen] == obuf_results[bufi][olen]
 
-            
 def test_multiple_Datapaths():
     """Test Component class Datapath with > 1 projections"""
     projections = [{"name": "",
@@ -757,7 +758,7 @@ def test_multiple_Datapaths():
                  for i in range(ostreams_per_buf)]
                  for i in range(obuf_len)]
                  for j in range (obuf_count)]
-        obuf = utils.get_expected_outputs_old(obuf, ostreams_per_buf,
+        obuf = get_expected_outputs_old(obuf, ostreams_per_buf,
                                     wbuf,
                                     ibuf, ivalues_per_buf,
                                     projection)

@@ -6,8 +6,6 @@
     Also some helper functions for post processing verilog to make it
     odin compatible.
 """
-import sys
-import os
 import re
 import random
 import yaml
@@ -15,9 +13,6 @@ import constraint_evaluation
 from jsonschema import validate
 from pymtl3 import DefaultPassGroup
 from pymtl3.passes.backends.verilog import VerilogTranslationPass
-
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 import state_machine_classes
 il = 1
@@ -134,6 +129,7 @@ MAC_info_schema = {"type": "object",
 buffer_spec_schema = {
     "type": "object",
     "properties": {
+        "simulation_model": {"type": "string"},
         "block_name": {"type": "string"},
         "ports": {"type": "array", "items": port_schema}},
     "required": ["ports", "block_name"],
@@ -143,6 +139,7 @@ emif_schema = {
     "type": "object",
     "properties": {
         "block_name": {"type": "string"},
+        "simulation_model": {"type": "string"},
         "pipelined": {"type": "string", "enum": ["True", "False"]},
         "ports": {"type": "array", "items": port_schema}},
     "required": ["ports", "block_name"]
@@ -152,6 +149,7 @@ mlb_spec_schema = {
     "properties": {
         "block_name": {"type": "string"},
         "MAC_info": MAC_info_schema,
+        "simulation_model": {"type": "string"},
         "ports": {"type": "array", "items": port_schema},
         "access_patterns": access_pattern_schema,
         "output_accumulator": {"type": "boolean"},
@@ -671,7 +669,7 @@ def run_simulation(module, num_cycles, n=-1):
 
 def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
                                            ab_spec, emif_spec, projection,
-                                           write_to_file, randomize=True,
+                                           write_to_file,
                                            oaddr=0, iaddr=0, waddr=0,
                                            ws=True, validate_output=True):
     """
@@ -686,7 +684,6 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     :param emif_spec: Hardware definition of EMIF
     :param projections: Projection information
     :param write_to_file: Whether or not to write resulting verilog to file.
-    :param randomize: Whether to randomize input data or read from emif spec.
     :param oaddrs: Address of output actiavations in off-chip data
     :param iaddrs: Address of input actiavations in off-chip data
     :param waddrs: Address of weights in off-chip data
@@ -708,37 +705,24 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
         ab_spec, projection)
 
-    # Either randomize input data, or get it from the EMIF yaml file.
-    if (randomize):
-        # Fill EMIF with random data
-        utils.print_heading("Generating random data to initialize " +
-                            "off-chip memory", currstep + 0)
-        wbuf = [[[random.randint(0, (2 ** projection["data_widths"]["W"]) - 1)
-                  for k in range(wvalues_per_buf)]
-                 for i in range(wbuf_len)]
-                for j in range(wbuf_count)]
-        wbuf_flat = utils.flatten_array(wbuf, projection["data_widths"]["W"])
-        iaddr = len(wbuf_flat)
-        ibuf = [[[random.randint(0, (2 ** projection["data_widths"]["I"]) - 1)
-                  for k in range(ivalues_per_buf)]
-                 for i in range(ibuf_len)]
-                for j in range(ibuf_count)]
-        ibuf_flat = utils.flatten_array(ibuf, projection["data_widths"]["I"])
-        emif_data = wbuf_flat + ibuf_flat
-        utils.printi(il, "\tGenerated random initial data: " + str(emif_data))
-        emif_spec["fill"] = emif_data
-        oaddr = len(emif_data)
-    else:
-        # Initial data is included in the EMIF spec.
-        assert("fill" in emif_spec)
-        wbuf = utils.read_out_stored_values_from_array(
-            emif_spec["fill"], wvalues_per_buf,
-            wbuf_len * wbuf_count, projection["data_widths"]["W"],
-            waddr, wbuf_len)
-        ibuf = utils.read_out_stored_values_from_array(
-            emif_spec["fill"], ivalues_per_buf,
-            ibuf_len * ibuf_count, projection["data_widths"]["I"],
-            iaddr, ibuf_len)
+    # Fill EMIF with random data
+    utils.print_heading("Generating random data to initialize " +
+                        "off-chip memory", currstep + 0)
+    wbuf = [[[random.randint(0, (2 ** projection["data_widths"]["W"]) - 1)
+              for k in range(wvalues_per_buf)]
+             for i in range(wbuf_len)]
+            for j in range(wbuf_count)]
+    wbuf_flat = utils.flatten_array(wbuf, projection["data_widths"]["W"])
+    iaddr = len(wbuf_flat)
+    ibuf = [[[random.randint(0, (2 ** projection["data_widths"]["I"]) - 1)
+              for k in range(ivalues_per_buf)]
+             for i in range(ibuf_len)]
+            for j in range(ibuf_count)]
+    ibuf_flat = utils.flatten_array(ibuf, projection["data_widths"]["I"])
+    emif_data = wbuf_flat + ibuf_flat
+    utils.printi(il, "\tGenerated random initial data: " + str(emif_data))
+    emif_spec["fill"] = emif_data
+    oaddr = len(emif_data)
 
     # Generate the accelerator
     utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
@@ -776,14 +760,6 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
         utils.printi(il, "Actual " + str(emif_vals))
         for bufi in range(obuf_count):
             for olen in range(min(obuf_len, ibuf_len) - 1):
-                if (obuf[bufi][olen] != emif_vals[bufi * min(obuf_len,
-                                                             ibuf_len)
-                                                  + olen]):
-                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " +
-                          str(obuf[bufi][olen]))
-                    print("obuf["+str(bufi)+"]["+str(olen)+"] = " +
-                          str(emif_vals[bufi * min(obuf_len, ibuf_len) +
-                                        olen]))
                 assert obuf[bufi][olen] == emif_vals[bufi *
                                                      min(obuf_len, ibuf_len)
                                                      + olen]
@@ -792,7 +768,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
 
 
 def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
-                         projections, write_to_file, randomize=True,
+                         projections, write_to_file,
                          oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True,
                          validate_output=True, layer_sel=[0], simulate=True,
                          gen_ver=False):
@@ -808,7 +784,6 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     :param emif_spec: Hardware definition of EMIF
     :param projections: Projection information
     :param write_to_file: Whether or not to write resulting verilog to file.
-    :param randomize: Whether to randomize input data or read from emif spec.
     :param oaddrs: Address of output actiavations in off-chip data
     :param iaddrs: Address of input actiavations in off-chip data
     :param waddrs: Address of weights in off-chip data
@@ -988,5 +963,5 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
 
     simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
-        False, [oaddr], [iaddr], [waddr], ws, simulate=simulate,
+        [oaddr], [iaddr], [waddr], ws, simulate=simulate,
         gen_ver=True)

@@ -6,12 +6,11 @@ MAC_info:
         I: 8
         O: 32
 access_patterns:
-    AP1: 0
-    AP2: 10
-    AP3: 3
-    AP4: 1
+    AP1: 1
+    AP2: 1
+    AP3: 1
+    AP4: 2
     AP5: 1
-output_accumulator: True
 ports:
     -   name: a_en
         width: 1

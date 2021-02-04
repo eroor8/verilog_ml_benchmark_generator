@@ -7,10 +7,7 @@ Test ASSUMPTIONS:
 
 """
 from pymtl3 import Component, OutPort, InPort, update, update_ff, Wire, Bits5
-import sys
 import math
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
 from utils import printi
 import module_classes

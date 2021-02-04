@@ -1,12 +1,9 @@
 import constraint
 import sys
-import os
 import math
 import copy
-il = 1
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import utils
+il = 1
 
 
 def get_factors(maxv, product):

@@ -1,12 +1,9 @@
 """Function wrappers accessible from the command line."""
 # External imports
-import sys
 import click
-import os
 import yaml
 
 # Internal imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import generate_modules
 
 
@@ -70,8 +67,6 @@ def generate_accelerator_verilog(module_name, mlb_definition,
 @click.option('--projection_definition', required=False,
               help='YAML definition of some projection',
               type=click.File('rb'))
-@click.option('--randomize_inputs', required=False, default=True,
-              help='Randomize initial EMIF contents')
 @click.option('--input_address', required=False, default=0,
               help='Address of inputs in off chip data')
 @click.option('--weight_address', required=False, default=0,
@@ -81,7 +76,7 @@ def generate_accelerator_verilog(module_name, mlb_definition,
 def simulate_accelerator_with_random_input(
         module_name, mlb_definition, act_buffer_definition,
         weight_buffer_definition, emif_definition, projection_definition,
-        randomize_inputs, input_address, weight_address, output_address):
+        input_address, weight_address, output_address):
     """Generate an activation function module -
        Currently only RELU is supported"""
     mlb_yaml = yaml.safe_load(mlb_definition)
@@ -91,7 +86,7 @@ def simulate_accelerator_with_random_input(
     emif_yaml = yaml.safe_load(emif_definition)
     generate_modules.simulate_accelerator_with_random_input(
         module_name, mlb_yaml, wb_yaml, ab_yaml, emif_yaml, proj_yaml,
-        True, randomize_inputs, output_address, input_address, weight_address)
+        True, output_address, input_address, weight_address)
     print("Statemachine simulation was successful")
     return 0
 

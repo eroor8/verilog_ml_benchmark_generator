@@ -356,8 +356,6 @@ class MLB_Wrapper_added_logic(Component):
                         ip, {'RX': urnx, 'C': urnc, 'RY': urny, 'E': ue,
                              'G': ug})
                     for ub in range(ip["B"] * ip["PX"] * ip["PY"]):
-                        print({'RX': urnx, 'C': urnc, 'RY': urny, 'E': ue,
-                               'G': (ug * reqd_ub + ub)})
                         out_chain = utils.get_overall_idx(
                             ip_new, {'RX': urnx, 'C': urnc, 'RY': urny,
                                      'E': ue, 'G': (ug * reqd_ub + ub)})
@@ -424,12 +422,12 @@ class HWB_Sim(Component):
                         "To run simulation, you need port of type " + \
                         req + " in definition of " + spec["block_name"]
                 assert len(ports_by_type["ADDRESS_in"]) == 1  # Todo
-                assert len(ports_by_type["ADDRESS_in"]) == \
-                       len(ports_by_type["DATA_out"])
-                assert len(ports_by_type["ADDRESS_in"]) == \
-                       len(ports_by_type["WEN_in"])
-                assert len(ports_by_type["ADDRESS_in"]) == \
-                       len(ports_by_type["DATA_in"])
+                assert (len(ports_by_type["ADDRESS_in"]) ==
+                        len(ports_by_type["DATA_out"]))
+                assert (len(ports_by_type["ADDRESS_in"]) ==
+                        len(ports_by_type["WEN_in"]))
+                assert (len(ports_by_type["ADDRESS_in"]) ==
+                        len(ports_by_type["DATA_in"]))
                 for buffer_inst in range(len(ports_by_type["ADDRESS_in"])):
                     assert ports_by_type["DATA_out"][buffer_inst][0]["width"] \
                         == ports_by_type["DATA_in"][buffer_inst][0]["width"]
@@ -440,7 +438,7 @@ class HWB_Sim(Component):
                         ports_by_type["ADDRESS_in"][buffer_inst][0]["width"]
                     size = 2**addrlen
                     sim_model = module_helper_classes.Buffer(
-                        datalen, size, keepdata=False, sim=sim,
+                        datalen, size, sim=sim,
                         fast_gen=fast_gen)
                     setattr(s, "sim_model_inst" + str(buffer_inst), sim_model)
                     connect(ports_by_type["DATA_in"][buffer_inst][1],
@@ -762,11 +760,10 @@ class WeightInterconnect(Component):
         # Validate inputs
         if mlb_width < 0:
             mlb_width = mlb_width_used
-        streams_per_buffer = math.floor(buffer_width / mlb_width_used)
-        print(streams_per_buffer)
         print(buffer_width)
         print(mlb_width_used)
-        assert streams_per_buffer > 0
+        streams_per_buffer = math.floor(buffer_width / mlb_width_used)
+
         buffers_per_stream = math.ceil(mlb_width_used / buffer_width)
         assert mlb_width_used <= mlb_width
         assert num_mlbs >= utils.get_var_product(

@@ -31,18 +31,7 @@ class MUX_NXN(Component):
         s.sel = InPort(math.ceil(math.log(max(input_count, 2), 2)))
         for i in range(input_count):
             newout = utils.AddOutPort(s, input_width, "out" + str(i))
-            if (input_count == 3):
-                newmux = MUX3(input_width)
-            elif (input_count == 6):
-                newmux = MUX6(input_width)
-            elif (input_count == 9):
-                newmux = MUX9(input_width)
-            elif (input_count == 12):
-                newmux = MUX12(input_width)
-            else:
-                if not (input_count == 1):
-                    print(input_count)
-                newmux = MUXN(input_width, input_count)
+            newmux = MUXN(input_width, input_count)
             setattr(s, "mux" + str(i), newmux)
             newmux.sel //= s.sel
             newout //= newmux.out
@@ -79,150 +68,6 @@ class MUX2(Component):
         utils.tie_off_clk_reset(s)
 
 
-class MUX3(Component):
-    """" Implements a single 3-input mux.
-    """
-    def construct(s, input_width, sim=False):
-        """ Constructor for MUX
-
-         :param input_width: Bit-width of input
-         :param input_count: Number of inputs to mux between
-         :param sim: Whether to skip synthesis
-        """
-        assert(input_width > 0)
-        for i in range(3):
-            utils.AddInPort(s, input_width, "in" + str(i))
-        utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, 2, "sel")
-
-        @update
-        def upblk_set_wen0():
-            if (s.sel == 0):
-                s.out @= s.in0
-            elif (s.sel == 1):
-                s.out @= s.in1
-            else:
-                s.out @= s.in2
-        utils.tie_off_clk_reset(s)
-
-
-class MUX6(Component):
-    """" Implements a single 6-input mux.
-    """
-    def construct(s, input_width, sim=False):
-        """ Constructor for MUX
-
-         :param input_width: Bit-width of input
-         :param input_count: Number of inputs to mux between
-         :param sim: Whether to skip synthesis
-        """
-        assert(input_width > 0)
-        for i in range(6):
-            utils.AddInPort(s, input_width, "in" + str(i))
-        utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, 3, "sel")
-
-        @update
-        def upblk_set_wen0():
-            if (s.sel == 0):
-                s.out @= s.in0
-            elif (s.sel == 1):
-                s.out @= s.in1
-            elif (s.sel == 2):
-                s.out @= s.in2
-            elif (s.sel == 3):
-                s.out @= s.in3
-            elif (s.sel == 4):
-                s.out @= s.in4
-            else:
-                s.out @= s.in5
-        utils.tie_off_clk_reset(s)
-
-
-class MUX9(Component):
-    """" Implements a single 6-input mux.
-    """
-    def construct(s, input_width, sim=False):
-        """ Constructor for MUX
-
-         :param input_width: Bit-width of input
-         :param input_count: Number of inputs to mux between
-         :param sim: Whether to skip synthesis
-        """
-        assert(input_width > 0)
-        for i in range(9):
-            utils.AddInPort(s, input_width, "in" + str(i))
-        utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, 4, "sel")
-
-        @update
-        def upblk_set_wen0():
-            if (s.sel == 0):
-                s.out @= s.in0
-            elif (s.sel == 1):
-                s.out @= s.in1
-            elif (s.sel == 2):
-                s.out @= s.in2
-            elif (s.sel == 3):
-                s.out @= s.in3
-            elif (s.sel == 4):
-                s.out @= s.in4
-            elif (s.sel == 5):
-                s.out @= s.in5
-            elif (s.sel == 6):
-                s.out @= s.in6
-            elif (s.sel == 7):
-                s.out @= s.in7
-            else:
-                s.out @= s.in8
-        utils.tie_off_clk_reset(s)
-
-
-class MUX12(Component):
-    """" Implements a single 6-input mux.
-    """
-    def construct(s, input_width, sim=False):
-        """ Constructor for MUX
-
-         :param input_width: Bit-width of input
-         :param input_count: Number of inputs to mux between
-         :param sim: Whether to skip synthesis
-        """
-        assert(input_width > 0)
-        for i in range(12):
-            utils.AddInPort(s, input_width, "in" + str(i))
-        utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, 4, "sel")
-
-        @update
-        def upblk_set_wen0():
-            if (s.sel == 0):
-                s.out @= s.in0
-            elif (s.sel == 1):
-                s.out @= s.in1
-            elif (s.sel == 2):
-                s.out @= s.in2
-            elif (s.sel == 3):
-                s.out @= s.in3
-            elif (s.sel == 4):
-                s.out @= s.in4
-            elif (s.sel == 5):
-                s.out @= s.in5
-            elif (s.sel == 6):
-                s.out @= s.in6
-            elif (s.sel == 7):
-                s.out @= s.in7
-            elif (s.sel == 8):
-                s.out @= s.in8
-            elif (s.sel == 9):
-                s.out @= s.in9
-            elif (s.sel == 10):
-                s.out @= s.in10
-            else:
-                s.out @= s.in11
-        utils.tie_off_clk_reset(s)
-
-
 class MUXN(Component):
     """" Implements a single N-input mux.
     """
@@ -234,24 +79,52 @@ class MUXN(Component):
          :param sim: Whether to skip synthesis
         """
         assert(input_width > 0)
-        assert(input_count > 0)
-        s.long_input = Wire(input_width * input_count)
         for i in range(input_count):
-            newin = utils.AddInPort(s, input_width, "in" + str(i))
-            s.long_input[i * input_width:(i + 1) * input_width] //= newin
+            utils.AddInPort(s, input_width, "in" + str(i))
         utils.AddOutPort(s, input_width, "out")
-        utils.AddInPort(s, math.ceil(math.log(max(input_count, 2), 2)), "sel")
-        s.w_sel = Wire(math.ceil(math.log(max(input_width*input_count, 2), 2)))
-        s.w_sel[0:math.ceil(math.log(max(input_count, 2), 2))] //= s.sel
-        if (input_count > 1):
+        sel_width = math.ceil(math.log(max(input_count, 2), 2))
+        utils.AddInPort(s, sel_width, "sel")
+
+        half_width1 = math.ceil(input_count / 2)
+        half_width2 = input_count - half_width1
+        s.a = Wire(input_width)
+        s.b = Wire(input_width)
+
+        if (input_count == 1):
             @update
             def upblk_set_wen0():
-                s.out @= s.long_input[s.w_sel * input_width:(s.w_sel + 1) *
-                                      input_width]
+                s.out @= s.in0
         else:
+            if (half_width1 > 1):
+                s.sub1 = MUXN(input_width, half_width1)
+                sel_half_width = math.ceil(math.log(half_width1, 2))
+                s.sub1.sel //= s.sel[0:sel_half_width]
+                s.a //= s.sub1.out
+                for i in range(half_width1):
+                    inport = getattr(s, "in" + str(i))
+                    subport = getattr(s.sub1, "in" + str(i))
+                    subport //= inport
+            else:
+                s.a //= s.in0
+
+            if (half_width2 > 1):
+                s.sub2 = MUXN(input_width, half_width2)
+                sel_half_width = math.ceil(math.log(half_width2, 2))
+                s.sub2.sel //= s.sel[0:sel_half_width]
+                s.b //= s.sub2.out
+                for i in range(half_width2):
+                    inport = getattr(s, "in" + str(i))
+                    subport = getattr(s.sub2, "in" + str(i))
+                    subport //= inport
+            else:
+                s.b //= getattr(s, "in" + str(half_width1))
+
             @update
             def upblk_set_wen1():
-                s.out @= s.long_input
+                if (s.sel < half_width1):
+                    s.out @= s.a
+                else:
+                    s.out @= s.b
         utils.tie_off_clk_reset(s)
 
 
@@ -339,134 +212,140 @@ class EMIF(Component):
         utils.AddOutPort(s, 1, "avalon_readdatavalid")
         utils.AddOutPort(s, 1, "avalon_writeresponsevalid")
 
-        # s.data = Wire(length*datawidth)
         wide_addr_width = math.ceil(math.log(datawidth * (length + startaddr),
                                              2))
         s.waddress = Wire(wide_addr_width)
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
-        if (fast_gen):
-            s.avalon_readdata //= 0
-            s.avalon_readdatavalid //= 0
-            s.avalon_waitrequest //= 0
-            s.avalon_writeresponsevalid //= 0
-        else:
-            s.buf = Buffer(datawidth, length, startaddr, preload_vector,
-                           keepdata=False, sim=True)
+        s.bufi = Buffer(datawidth, length, startaddr, preload_vector,
+                        sim=True, fast_gen=fast_gen)
         INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE = \
             Bits5(1), Bits5(2), Bits5(3), Bits5(4), Bits5(5)
         s.state = Wire(5)
         s.latency_countdown = Wire(10)
-        pending_transfers = [[] for i in range(max_pipeline_transfers + 1)]
-        s.curr_pending_start = Wire(10)
-        s.curr_pending_end = Wire(10)
+        s.pending_transfers_r = [Wire(1) for i in
+                                 range(max_pipeline_transfers + 1)]
+        s.pending_transfers_w = [Wire(1) for i in
+                                 range(max_pipeline_transfers + 1)]
+        s.pending_transfers_a = [Wire(addrwidth) for i in
+                                 range(max_pipeline_transfers + 1)]
+        s.pending_transfers_wd = [Wire(datawidth) for i in
+                                  range(max_pipeline_transfers + 1)]
+        n = math.ceil(math.log(max_pipeline_transfers + 1, 2))
+        s.curr_pending_start = Wire(math.ceil(math.log(
+            max_pipeline_transfers + 2, 2))+1)
+        s.curr_pending_end = Wire(math.ceil(math.log(
+            max_pipeline_transfers + 2, 2))+1)
+        s.curr_rand = Wire(10)
 
         if (not fast_gen):
             @update_ff
-            def upff():
-                curr_rand = random.randint(0, 3)
+            def upblk_rand_sim():
+                s.curr_rand <<= random.randint(0, 3)
+
+        if (pipelined):
+            @update_ff
+            def upff_pipe():
                 if s.reset:
                     s.state <<= INIT
                     s.curr_pending_start <<= 0
                     s.curr_pending_end <<= 0
-                    if (pipelined):
-                        s.avalon_readdatavalid <<= 0
-                        s.avalon_writeresponsevalid <<= 0
+                    s.avalon_readdatavalid <<= 0
+                    s.avalon_writeresponsevalid <<= 0
                 else:
-                    num_pending_transfers = s.curr_pending_end - \
-                        s.curr_pending_start
-                    if pipelined:
-                        if (s.avalon_read | s.avalon_write) and \
-                           (num_pending_transfers < max_pipeline_transfers):
-                            pending_transfers[s.curr_pending_end %
-                                              max_pipeline_transfers] = \
-                                                  [int(s.avalon_read),
-                                                   int(s.avalon_write),
-                                                   int(s.avalon_address),
-                                                   int(s.avalon_writedata)]
-                            s.curr_pending_end <<= s.curr_pending_end + 1
-
-                        if (s.latency_countdown == 0) and \
-                           (num_pending_transfers > 0):
-                            s.avalon_readdatavalid <<= pending_transfers[
-                                s.curr_pending_start %
-                                max_pipeline_transfers][0]
-                            s.curr_pending_start <<= s.curr_pending_start + 1
-                            s.buf.address <<= pending_transfers[
-                                s.curr_pending_start %
-                                max_pipeline_transfers][2]
-                            s.buf.wen <<= pending_transfers[
-                                s.curr_pending_start %
-                                max_pipeline_transfers][1]
-                            s.buf.datain <<= pending_transfers[
-                                s.curr_pending_start %
-                                max_pipeline_transfers][3]
-                            s.latency_countdown <<= curr_rand
-                        else:
-                            if (s.latency_countdown > 0):
-                                s.latency_countdown <<= s.latency_countdown - 1
-                            else:
-                                s.latency_countdown <<= curr_rand
-                            s.avalon_readdatavalid <<= 0
-                    else:
-                        if (s.state == INIT):
-                            if s.avalon_read:
-                                s.state <<= WAIT_READING
-                                s.buf.address <<= s.avalon_address
-                                s.latency_countdown <<= curr_rand
-                            elif s.avalon_write:
-                                s.state <<= WAIT_WRITING
-                                s.buf.address <<= s.avalon_address
-                                s.buf.datain <<= s.avalon_writedata
-                                s.buf.wen <<= 1
-                                s.latency_countdown <<= curr_rand
-                        elif (s.state == WAIT_READING):
-                            s.latency_countdown <<= s.latency_countdown - 1
-                            if (s.latency_countdown == 0):
-                                s.state <<= DONE_READ
-                        elif (s.state == DONE_READ):
-                            s.state <<= INIT
-                            s.latency_countdown <<= 0
-                        elif (s.state == WAIT_WRITING):
-                            s.latency_countdown <<= s.latency_countdown - 1
-                            if (s.latency_countdown == 0):
-                                s.state <<= DONE_WRITE
-                        elif (s.state == DONE_WRITE):
-                            s.state <<= INIT
-
-            @update
-            def upblk0():
-                s.avalon_readdata @= s.buf.dataout
-                if (pipelined):
                     num_pending_transfers = s.curr_pending_end - \
                         s.curr_pending_start
                     if (s.avalon_read | s.avalon_write) & \
-                       (num_pending_transfers == max_pipeline_transfers):
-                        s.avalon_waitrequest @= 1
+                       (num_pending_transfers <= max_pipeline_transfers - 1):
+                        curr_t = s.curr_pending_end % max_pipeline_transfers
+                        s.pending_transfers_r[curr_t[0:n]] <<= s.avalon_read
+                        s.pending_transfers_w[curr_t[0:n]] <<= s.avalon_write
+                        s.pending_transfers_a[curr_t[0:n]] <<= s.avalon_address
+                        s.pending_transfers_wd[curr_t[0:n]] <<= \
+                            s.avalon_writedata
+                        s.curr_pending_end <<= s.curr_pending_end + 1
+
+                    if (s.latency_countdown == 0) & \
+                       (num_pending_transfers > 0):
+                        curr_t = s.curr_pending_start % max_pipeline_transfers
+                        s.avalon_readdatavalid <<= \
+                            s.pending_transfers_r[curr_t[0:n]]
+                        s.curr_pending_start <<= s.curr_pending_start + 1
+                        s.bufi.address <<= s.pending_transfers_a[curr_t[0:n]]
+                        s.bufi.wen <<= s.pending_transfers_w[curr_t[0:n]]
+                        s.bufi.datain <<= s.pending_transfers_wd[curr_t[0:n]]
+                        s.latency_countdown <<= s.curr_rand
                     else:
-                        s.avalon_waitrequest @= 0
+                        if (s.latency_countdown > 0):
+                            s.latency_countdown <<= s.latency_countdown - 1
+                        else:
+                            s.latency_countdown <<= s.curr_rand
+                        s.avalon_readdatavalid <<= 0
+
+            @update
+            def upblk0_pipe():
+                s.avalon_readdata @= s.bufi.dataout
+                num_pending_transfers = s.curr_pending_end - \
+                    s.curr_pending_start
+                if (s.avalon_read | s.avalon_write) & \
+                   (num_pending_transfers == max_pipeline_transfers):
+                    s.avalon_waitrequest @= 1
                 else:
-                    if ((s.state == INIT) & (s.avalon_read == 0) &
-                            (s.avalon_write == 0)) \
-                            | (s.state == DONE_READ) \
-                            | (s.state == DONE_WRITE):
-                        s.avalon_waitrequest @= 0
-                    else:
-                        s.avalon_waitrequest @= 1
+                    s.avalon_waitrequest @= 0
+        else:
+            @update_ff
+            def upff_n_pipe():
+                if s.reset:
+                    s.state <<= INIT
+                    s.curr_pending_start <<= 0
+                    s.curr_pending_end <<= 0
+                else:
+                    if (s.state == INIT):
+                        if s.avalon_read:
+                            s.state <<= WAIT_READING
+                            s.bufi.address <<= s.avalon_address
+                            s.latency_countdown <<= s.curr_rand
+                        elif s.avalon_write:
+                            s.state <<= WAIT_WRITING
+                            s.bufi.address <<= s.avalon_address
+                            s.bufi.datain <<= s.avalon_writedata
+                            s.bufi.wen <<= 1
+                            s.latency_countdown <<= s.curr_rand
+                    elif (s.state == WAIT_READING):
+                        s.latency_countdown <<= s.latency_countdown - 1
+                        if (s.latency_countdown == 0):
+                            s.state <<= DONE_READ
+                    elif (s.state == DONE_READ):
+                        s.latency_countdown <<= 0
+                        s.state <<= INIT
+                    elif (s.state == WAIT_WRITING):
+                        s.latency_countdown <<= s.latency_countdown - 1
+                        if (s.latency_countdown == 0):
+                            s.state <<= DONE_WRITE
+
+            @update
+            def upblk0_n_pipe():
+                s.avalon_readdata @= s.bufi.dataout
+                if ((s.state == INIT) & (s.avalon_read == 0) &
+                   (s.avalon_write == 0)) \
+                   | (s.state == DONE_READ) \
+                   | (s.state == DONE_WRITE):
+                    s.avalon_waitrequest @= 0
+                else:
+                    s.avalon_waitrequest @= 1
 
 
 class Buffer(Component):
     """" Implements and initializes a buffer.
     """
     def construct(s, datawidth=8, length=1, startaddr=0,
-                  preload_vector=[], keepdata=True, sim=False, fast_gen=False):
+                  preload_vector=[], sim=False, fast_gen=False):
         """ Constructor for Buffer
 
          :param datawidth: Bit-width of input, output data
          :param startaddr: Useful if there are many buffers
          :param length: Number of values in the buffer
          :param preload_vector: Initial buffer data
-         :param keepdata: Store data in a way that makes debugging easier
          :param sim: Whether to skip synthesis
         """
         addrwidth = math.ceil(math.log(length + startaddr, 2))
@@ -479,8 +358,7 @@ class Buffer(Component):
             s.dataout //= 0
             return
 
-        if (keepdata):
-            s.data = Wire(length * datawidth)
+        s.data = [Wire(datawidth) for tt in range(length)]
         s.waddress = Wire(math.ceil(math.log(datawidth * (length + startaddr),
                                              2)))
         connect(s.waddress[0:addrwidth], s.address)
@@ -497,28 +375,14 @@ class Buffer(Component):
             val.datain //= s.datain
             val.wen //= s.wen
             val.address //= s.address
-            if (keepdata):
-                connect(s.data[(i * datawidth):((i + 1) * datawidth)],
-                        val.dataout)
+            connect(s.data[i], val.dataout)
 
-        if keepdata:
-            @update
-            def upblk0():
-                if ((s.waddress - startaddr)) <= (length-1):
-                    s.dataout @= s.data[(s.waddress - startaddr) * datawidth:
-                                        (s.waddress - startaddr) *
-                                        datawidth + datawidth]
-                else:
-                    s.dataout @= 0
-        else:
-            @update
-            def upblk1():
-                if ((s.waddress - startaddr)) <= (length - 1):
-                    currval = getattr(s, "V" +
-                                      str(int(s.waddress - startaddr)))
-                    s.dataout @= currval.dataout
-                else:
-                    s.dataout @= 0
+        @update
+        def upblk0():
+            if ((s.waddress - startaddr)) <= (length-1):
+                s.dataout @= s.data[s.waddress - startaddr]
+            else:
+                s.dataout @= 0
 
 
 class BufferValue(Component):

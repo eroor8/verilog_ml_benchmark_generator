@@ -14,7 +14,7 @@ from verilog_ml_benchmark_generator import cli
 
 def test_MUXN():
     """Test Component class MUXN"""
-    testinst = module_helper_classes.MUXN(4,3)
+    testinst = module_helper_classes.MUXN(4,5)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
@@ -292,32 +292,36 @@ def test_Buffer():
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
     testinst.datain @= 3
-    assert testinst.data == 0
+    for i in testinst.data:
+        assert i == 0
     assert testinst.dataout == 0
     testinst.address @= 0
     testinst.wen @= 1
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 3
+    assert testinst.data[0] == 3
     assert testinst.dataout == 3
     testinst.address @= 1
     testinst.datain @= 1
     testinst.wen @= 1
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 11
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 1
     assert testinst.dataout == 1
     testinst.address @= 0
     testinst.datain @= 4
     testinst.wen @= 0
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 11
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 1
     assert testinst.dataout == 3
     testinst.address @= 2
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 11
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 1
     assert testinst.dataout == 0
 
     testinst = module_helper_classes.Buffer(datawidth=3,length=6,startaddr=6,
@@ -326,34 +330,44 @@ def test_Buffer():
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
     testinst.datain @= 3
-    assert testinst.data == 365
+    assert testinst.data[0] == 5
+    assert testinst.data[1] == 5
+    assert testinst.data[2] == 5
     assert testinst.dataout == 0
     testinst.address @= 0
     testinst.wen @= 1
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 365
+    assert testinst.data[0] == 5
+    assert testinst.data[1] == 5
+    assert testinst.data[2] == 5
     assert testinst.dataout == 0
     testinst.address @= 6
     testinst.wen @= 1
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 363
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 5
+    assert testinst.data[2] == 5
     assert testinst.dataout == 3
     testinst.address @= 7
     testinst.wen @= 0
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 363
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 5
+    assert testinst.data[2] == 5
     assert testinst.dataout == 5
     testinst.address @= 6
     testinst.sim_tick()
     testinst.sim_tick()
-    assert testinst.data == 363
+    assert testinst.data[0] == 3
+    assert testinst.data[1] == 5
+    assert testinst.data[2] == 5
     assert testinst.dataout == 3
 
     testinst = module_helper_classes.Buffer(datawidth=3,length=600,startaddr=0,
-                                            preload_vector=[5,5,5], keepdata=False)
+                                            preload_vector=[5,5,5])
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
@@ -368,7 +382,7 @@ def test_EMIF():
         datawidth=8, length=8, startaddr=0,
         preload_vector=data,
         pipelined=False,
-        max_pipeline_transfers=6,
+        max_pipeline_transfers=4,
         sim=True)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
@@ -423,7 +437,7 @@ def test_EMIF():
         datawidth=8, length=8, startaddr=0,
         preload_vector=data,
         pipelined=True,
-        max_pipeline_transfers=3,
+        max_pipeline_transfers=6,
         sim=True)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())

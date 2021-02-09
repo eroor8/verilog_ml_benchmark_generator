@@ -5,7 +5,7 @@ ports:
         direction: "in"
         type: "WEN"
     -   name: portaaddr
-        width: 10
+        width: 5
         direction: "in"
         type: "ADDRESS"
     -   name: portadatain

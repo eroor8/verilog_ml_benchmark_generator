@@ -395,17 +395,9 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             uny = urnty*outer_uny*inner_uny+urnoy*inner_uny+urniy
                                                                             uy = inner_uny*outer_uny*temp_uny
                                                                             ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
-                                                                            
-                                                                            print(inputs[groups][batches][channels]\
-                                                                                      [(uby+uny)%len(inputs[groups]\
-                                                                                      [batches][channels])][ubx]
-                                                                            )
                                                                             i = inputs[groups][batches][channels]\
                                                                                       [(uby+uny)%len(inputs[groups]\
                                                                                       [batches][channels])][ubx]
-                                                                            print("Ok try to place value " + str(i))
-                                                                            print("group: " + str(groups) + " batches:" + str(batches) + " channels:" + str(channels) + " uby:" + str(uby) + " uny:"+str(uny) + " width:" + str(len(inputs[groups]\
-                                                                                      [batches][channels])))
                                                                             
                                                                             ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
                                                                             ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
@@ -414,15 +406,19 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             urni = urnic*inner_unx*inner_uny + urniy*inner_unx 
                                                                             urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
                                                                         
-                                                                            i_stream_idx = utils.get_overall_idx_new(proj_yaml["outer_projection"],
+                                                                            i_stream_idx = utils.get_overall_idx_new(
+                                                                                proj_yaml["outer_projection"],
                                                                                                                {'RY':urnoy, 'C':urnoc,
                                                                                                                 'PY':uboy, 'B':ubob,
-                                                                                                                'G': ugo},
+                                                                                                                'PX':ubox,
+                                                                                                                'G':ugo},
                                                                                  order=utils.input_order)
                                                                             i_value_idx = i_stream_idx*utils.get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
-                                                                                          utils.get_overall_idx_new(proj_yaml["inner_projection"],
+                                                                                          utils.get_overall_idx_new(
+                                                                                              proj_yaml["inner_projection"],
                                                                                                                {'RY':urniy, 'C':urnic,
                                                                                                                 'PY':ubiy, 'B':ubib,
+                                                                                                                'PX':ubix,
                                                                                                                 'G': ugi},
                                                                                  order=utils.input_order)
                                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)

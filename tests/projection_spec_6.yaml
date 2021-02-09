@@ -9,9 +9,9 @@ inner_projection:
     B: 1 
     G: 1
 outer_projection:
-    RX: 2
+    RX: 1
     RY: 1
-    C: 1
+    C: 2
     E: 1
     PX: 1
     PY: 1
@@ -25,7 +25,7 @@ temporal_projection:
     PX: 1
     PY: 1
     B: 4
-    G: 2
+    G: 3
 activation_function: 'RELU'
 data_widths:
     W: 4

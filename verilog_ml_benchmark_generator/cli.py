@@ -45,7 +45,8 @@ def generate_accelerator_verilog(module_name, mlb_definition,
                                                         wb_yaml, ab_yaml,
                                                         proj_yaml,
                                                         write_to_file=True,
-                                                        emif_spec=emif_yaml)
+                                                        emif_spec=emif_yaml,
+                                                        fast_gen=True)
     return 0
 
 

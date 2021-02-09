@@ -260,8 +260,6 @@ def get_overall_idx(projection, idxs,
         if item in idxs:
             assert item in projection
             val = projection[item]
-            print(idxs)
-            print(projection)
             assert idxs[item] < val
             assert idxs[item] >= 0
             total += product*idxs[item]

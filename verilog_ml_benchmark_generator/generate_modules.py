@@ -211,6 +211,18 @@ def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
         for projection in projections:
             validate(instance=projection, schema=proj_schema)
 
+            # Does the projection make sense?
+            total_px = projection["inner_projection"].get('PX', 1) * \
+                projection["outer_projection"].get('PX', 1) * \
+                projection["temporal_projection"].get('PX', 1)
+            total_rx = projection["inner_projection"].get('RX', 1) * \
+                projection["outer_projection"].get('RX', 1) * \
+                projection["temporal_projection"].get('RX', 1)
+            assert (total_px >= total_rx), \
+                "Image size (" + str(total_px) + \
+                " should be greater than filter size (" + \
+                str(total_rx)
+
             # This is for test coverage purposes
             if (sim):
                 if (projection["inner_projection"].get('RX', 1) > 1):
@@ -544,7 +556,7 @@ def postprocess_verilog_sv(filename_in):
     # Rename ML blocks to correct name
     line_list = filedata.splitlines()
     line_list = move_ios_into_module_body(line_list)
-    line_list = remove_sim_block_defs(line_list, ["sim_True"])
+    # line_list = remove_sim_block_defs(line_list, ["sim_True"])
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
     line_list = remove_parameter_references(line_list)
     line_list = remove_width_0_ranges(line_list)
@@ -632,6 +644,7 @@ def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
     """
     validate_inputs(wb_spec=wb_spec, ab_spec=ab_spec, mlb_spec=mlb_spec,
                     emif_spec=emif_spec, projections=[projection])
+    emif_spec["simulation_model"] = "EMIF"
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projection, waddr, iaddr,
@@ -739,7 +752,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
 
     # Collect final EMIF data, and write it to a file.
     emif_vals = utils.read_out_stored_values_from_emif(
-        t.emif_inst.sim_model.buf, ovalues_per_buf,
+        t.emif_inst.sim_model.bufi, ovalues_per_buf,
         min(obuf_len, ibuf_len) * obuf_count,
         projection["data_widths"]["I"], oaddr)
     if (write_to_file):
@@ -850,7 +863,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
 
             # Collect final EMIF data (and later write to file)
             emif_vals = utils.read_out_stored_values_from_emif(
-                t.emif_inst.sim_model.buf, ovalues_per_buf,
+                t.emif_inst.sim_model.bufi, ovalues_per_buf,
                 min(obuf_len, ibuf_len) * obuf_count,
                 projections[n]["data_widths"]["I"], oaddrs[n])
             output_vals[n] = emif_vals

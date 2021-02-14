@@ -192,7 +192,8 @@ class EMIF(Component):
     """
     def construct(s, datawidth=8, length=1, startaddr=0,
                   preload_vector=[], pipelined=False,
-                  max_pipeline_transfers=4, sim=False, fast_gen=False):
+                  max_pipeline_transfers=4, sim=False,
+                  fast_gen=False, synthesizeable=True):
         """ Constructor for Buffer
 
          :param datawidth: Bit-width of input, output data
@@ -238,10 +239,14 @@ class EMIF(Component):
             max_pipeline_transfers + 2, 2))+1)
         s.curr_rand = Wire(10)
 
-        if (not fast_gen):
+        if (not synthesizeable):
             @update_ff
             def upblk_rand_sim():
                 s.curr_rand <<= random.randint(0, 3)
+        else:
+            @update_ff
+            def upblk_rand_sim():
+                s.curr_rand <<= 2
 
         if (pipelined):
             @update_ff
@@ -252,6 +257,7 @@ class EMIF(Component):
                     s.curr_pending_end <<= 0
                     s.avalon_readdatavalid <<= 0
                     s.avalon_writeresponsevalid <<= 0
+                    s.latency_countdown <<= 0
                 else:
                     num_pending_transfers = s.curr_pending_end - \
                         s.curr_pending_start
@@ -359,10 +365,8 @@ class Buffer(Component):
             return
 
         s.data = [Wire(datawidth) for tt in range(length)]
-        s.waddress = Wire(math.ceil(math.log(datawidth * (length + startaddr),
-                                             2)))
+        s.waddress = Wire(math.ceil(math.log(length + startaddr, 2)))
         connect(s.waddress[0:addrwidth], s.address)
-        s.waddress[addrwidth:math.ceil(math.log(datawidth * length, 2))] //= 0
         for i in range(length):
             if i < len(preload_vector):
                 preload_value = preload_vector[i]

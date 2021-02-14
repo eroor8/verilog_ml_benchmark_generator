@@ -217,6 +217,8 @@ class SM_IterateThruAddresses(Component):
         s.start_address = InPort(addr_width)
         s.start_address_w = Wire(w_addr_width)
         s.start_address_w[0:addr_width] //= s.start_address
+        if (w_addr_width > addr_width):
+            s.start_address_w[addr_width:w_addr_width] //= 0
         s.rdy = OutPort(1)
         s.wen = OutPort(1)
         s.state = Wire(4)
@@ -1124,7 +1126,7 @@ class MultipleLayerSystem(Component):
             s, statemachines, r"stream_outputs_wen", s.datapath,
             r"output_act_modules_portawe_(\d+)_top", insel=s.sel)
 
-        s.done = Wire(1)
+        s.done = OutPort(1)
         utils.mux_inst_ports_by_name(s, "done", statemachines,
                                      "done", insel=s.sel, sim=False)
 

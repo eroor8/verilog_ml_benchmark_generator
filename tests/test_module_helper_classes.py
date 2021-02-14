@@ -438,6 +438,7 @@ def test_EMIF():
         preload_vector=data,
         pipelined=True,
         max_pipeline_transfers=6,
+        synthesizeable=False,
         sim=True)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())

@@ -547,11 +547,7 @@ def postprocess_verilog_sv(filename_in):
 
     # pyMTL adds clk and reset to everything... but we dont want it
     # in some cases.
-    non_existant_ports = [r"ml_block_weight\S*_inst_\d+__clk",
-                          r"ml_block_input\S*_inst_\d+__clk",
-                          r"ml_block_weight\S*_inst_\d+__reset",
-                          r"ml_block_input\S*_inst_\d+__clk",
-                          r"ml_block_input\S*_inst_\d+__reset"]
+    non_existant_ports = []
 
     # Rename ML blocks to correct name
     line_list = filedata.splitlines()
@@ -562,16 +558,6 @@ def postprocess_verilog_sv(filename_in):
     line_list = remove_width_0_ranges(line_list)
     filedata = '\n'.join(line_list)
 
-    # replace HW block component names with actual names
-    filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
-                      r"\2\4\5",
-                      filedata)
-    filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
-                      r"\2\4\5",
-                      filedata)
-    filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(\S+)_inst(.*)",
-                      r"\4\3\4_inst\5",
-                      filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
@@ -784,7 +770,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                          projections, write_to_file,
                          oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True,
                          validate_output=True, layer_sel=[0], simulate=True,
-                         gen_ver=False):
+                         gen_ver=False, include_sim_models=False):
     """
     Generate an accelerator
     Fill the off-chip memory with random data (or assume initial data is
@@ -819,7 +805,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                            ab_spec, projections[0],
                                            write_to_file, emif_spec, waddrs[0],
                                            iaddrs[0], oaddrs[0], ws,
-                                           fast_gen=True)
+                                           fast_gen=(not include_sim_models))
         if (not simulate):
             return
 

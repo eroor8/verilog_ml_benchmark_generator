@@ -760,8 +760,6 @@ class WeightInterconnect(Component):
         # Validate inputs
         if mlb_width < 0:
             mlb_width = mlb_width_used
-        print(buffer_width)
-        print(mlb_width_used)
         streams_per_buffer = math.floor(buffer_width / mlb_width_used)
 
         buffers_per_stream = math.ceil(mlb_width_used / buffer_width)

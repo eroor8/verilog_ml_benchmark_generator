@@ -191,7 +191,7 @@
       </output_ports>
     </model>
     <!-- M20K blocks to store inputs -->
-    <model name="ml_block_input_8">
+    <model name="ml_block_input">
       <input_ports>
         <port name="portadatain" clock="clk_portain" combinational_sink_ports="portadataout"/>
         <port name="clr1" clock="clk_portain" combinational_sink_ports="portadataout"/>
@@ -2778,7 +2778,7 @@
           </mode>
 	  
           <mode name="ml_input_mode_8">
-            <pb_type blif_model=".subckt ml_block_input_8" name="mlblif" num_pb="1">
+            <pb_type blif_model=".subckt ml_block_input" name="mlblif" num_pb="1">
               <input name="portadatain" num_pins="8" port_class="data_in1"/>
               <input name="clr1" num_pins="1"/>
               <input name="clr0" num_pins="1"/>

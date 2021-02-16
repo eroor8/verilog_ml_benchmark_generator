@@ -5,6 +5,12 @@ access_patterns:
     AP3: 30
     AP4: 10
     AP5: 10
+MAC_info:
+    num_units: 30
+    data_widths:
+        W: 8
+        I: 8
+        O: 32
 ports:
     -   name: a_en
         width: 1

@@ -346,7 +346,8 @@ def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
             emif_spec["fill"] = []
 
 
-def generate_verilog(component, write_to_file, module_name):
+def generate_verilog(component, write_to_file, module_name,
+                     include_sim_models):
     """ Call pyMTL elaboration methods to elaborate a Component instance,
         and post-process generated verilog.
 
@@ -372,7 +373,8 @@ def generate_verilog(component, write_to_file, module_name):
             file.write(outtxt_o)
 
     # Post-process generated file into system verilog
-    outtxt_sv = postprocess_verilog_sv(module_name + "_pymtl.v")
+    outtxt_sv = postprocess_verilog_sv(module_name + "_pymtl.v",
+                                       include_sim_models)
     if (write_to_file):
         with open(module_name + "_quartus_vivado.sv", 'w') as file:
             file.write(outtxt_sv)
@@ -528,7 +530,7 @@ def remove_width_0_ranges(line_list):
     return line_list
 
 
-def postprocess_verilog_sv(filename_in):
+def postprocess_verilog_sv(filename_in, include_sim_models=False):
     """ Make verilog file compatible with odin.
         This is a bit of a hack, but necessary to run VTR.
 
@@ -552,12 +554,24 @@ def postprocess_verilog_sv(filename_in):
     # Rename ML blocks to correct name
     line_list = filedata.splitlines()
     line_list = move_ios_into_module_body(line_list)
-    # line_list = remove_sim_block_defs(line_list, ["sim_True"])
+    if (not include_sim_models):
+        line_list = remove_sim_block_defs(line_list, ["sim_True"])
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
     line_list = remove_parameter_references(line_list)
     line_list = remove_width_0_ranges(line_list)
     filedata = '\n'.join(line_list)
 
+    # replace HW block component names with actual names
+    if (not include_sim_models):
+        filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
+                          r"\2\4\5",
+                          filedata)
+        filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
+                          r"\2\4\5",
+                          filedata)
+        filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(\S+)_inst(.*)",
+                          r"\4\3\4_inst\5",
+                          filedata)
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
@@ -616,7 +630,7 @@ def postprocess_verilog_odin(filename_in):
 def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                        projection, write_to_file, emif_spec={},
                                        waddr=0, iaddr=0, oaddr=0, ws=True,
-                                       fast_gen=False):
+                                       fast_gen=True):
     """ Validate input specifications, generate  a system including both
         the statemachines and datapath.
 
@@ -636,7 +650,7 @@ def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                                   projection, waddr, iaddr,
                                                   oaddr, ws, fast_gen)
     t.elaborate()
-    return generate_verilog(t, write_to_file, module_name)
+    return generate_verilog(t, write_to_file, module_name, not fast_gen)
 
 
 def run_simulation(module, num_cycles, n=-1):
@@ -886,7 +900,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                     simulate=True,
                                     preload_o=1,
                                     preload_i=1,
-                                    ws=True):
+                                    ws=True, fast_gen=True):
     """
     Generate an accelerator for a given set of layers.
 
@@ -963,4 +977,4 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         [oaddr], [iaddr], [waddr], ws, simulate=simulate,
-        gen_ver=True)
+        gen_ver=True, include_sim_models=(not fast_gen))

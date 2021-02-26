@@ -226,7 +226,7 @@ def test_MergeBusses():
         if len(testvec["ins"]) == 5:
             testinst = module_classes.MergeBusses(testvec["ins"][0],
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3],
-                        testvec["ins"][4])
+                        ins_per_out=testvec["ins"][4])
         else:
             testinst = module_classes.MergeBusses(testvec["ins"][0],
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3])
@@ -249,7 +249,7 @@ def test_MergeBusses():
         if len(testvec["ins"]) == 5:
             testinst = module_classes.MergeBusses(testvec["ins"][0],
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3],
-                        testvec["ins"][4])
+                        ins_per_out=testvec["ins"][4])
         else:
             testinst = module_classes.MergeBusses(testvec["ins"][0],
                         testvec["ins"][1], testvec["ins"][2], testvec["ins"][3])
@@ -399,16 +399,6 @@ def test_Datapath():
             {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
         ]
     }
-    ob_spec = {
-        "block_name": "mlb_outs",
-        "simulation_model": "Buffer",
-        "ports": [
-            {"name":"portaaddr", "width":3, "direction": "in", "type":"ADDRESS"},
-            {"name":"portadatain", "width":16, "direction": "in", "type":"DATA"},
-            {"name":"portadataout", "width":16, "direction": "out", "type":"DATA"},
-            {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
-        ]
-    }
     mlb_spec = {
         "block_name": "ml_block",
         "simulation_model": "MLB",
@@ -430,7 +420,7 @@ def test_Datapath():
         mlb_spec=mlb_spec,
         wb_spec=wb_spec,
         ib_spec=ib_spec,
-        ob_spec=ob_spec,
+        ob_spec=ib_spec,
         proj_specs=[projection])
 
     testinst.elaborate()
@@ -441,7 +431,7 @@ def test_Datapath():
     mlb_count = utils.get_mlb_count(projection["outer_projection"])
     mac_count = utils.get_mlb_count(projection["inner_projection"])
     ibuf_len = 2**ib_spec["ports"][0]["width"]
-    obuf_len = 2**ob_spec["ports"][0]["width"]
+    obuf_len = 2**ib_spec["ports"][0]["width"]
     wbuf_len = 2**wb_spec["ports"][0]["width"]
     print(obuf_len)
     # Load the weight buffer
@@ -473,7 +463,7 @@ def test_Datapath():
     activation_width = projection["data_widths"]["I"]
     istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
     ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
-    ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
+    ostreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/activation_width)
     ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
     obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
     
@@ -529,13 +519,13 @@ def test_Datapath():
     
     # Now stream the inputs, and check the outputs!
     stream_mlb_values(testinst, obuf_len,
-                      ["input_act_modules_portaaddr_top", "output_act_modules_portaaddr_top"],
+                      ["input_act_modules_portaaddr_top", "input_act_modules_portaaddr_o_top"],
                       [0, -1],
                       [ibuf_len, obuf_len],
                       ["mlb_modules_b_en_top"] +
-                      ["output_act_modules_portawe_{}_top".format(obi) for obi in range(obuf_count)])
+                      ["input_act_modules_portawe_{}_out_top".format(obi+len(ibuf))
+                       for obi in range(obuf_count)])
       
-
 
     #print(testinst.output_act_modules.mlb_outs_inst_0.sim_model_inst0.data)
     
@@ -552,12 +542,14 @@ def test_Datapath():
              for i in range(ostreams_per_buf)]
              for i in range(obuf_len)]
              for j in range (obuf_count)]
+
+    obuf_results = read_out_stored_values(testinst, "input_act_modules_portaaddr_o_top", "dataout",
+                                          obuf_results, projection["data_widths"]["I"], start_buffer=len(ibuf))
     
-    obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
-                         obuf_results, projection["data_widths"]["I"])
     
     print("EXPECTED: " + str(obuf))
     print("ACTUAL: " + str(obuf_results))
+
     print("W: " + str(wbuf))
     print("I: " + str(ibuf))
     for bufi in range(obuf_count):
@@ -615,16 +607,6 @@ def test_multiple_Datapaths():
             {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
         ]
     }
-    ob_spec = {
-        "block_name": "mlb_outs",
-        "simulation_model": "Buffer",
-        "ports": [
-            {"name":"portaaddr", "width":3, "direction": "in", "type":"ADDRESS"},
-            {"name":"portadatain", "width":16, "direction": "in", "type":"DATA"},
-            {"name":"portadataout", "width":16, "direction": "out", "type":"DATA"},
-            {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
-        ]
-    }
     mlb_spec = {
         "block_name": "ml_block",
         "simulation_model": "MLB",
@@ -647,7 +629,7 @@ def test_multiple_Datapaths():
         mlb_spec=mlb_spec,
         wb_spec=wb_spec,
         ib_spec=ib_spec,
-        ob_spec=ob_spec,
+        ob_spec=ib_spec,
         proj_specs=projections)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
@@ -660,7 +642,7 @@ def test_multiple_Datapaths():
         mlb_count = utils.get_mlb_count(projection["outer_projection"])
         mac_count = utils.get_mlb_count(projection["inner_projection"])
         ibuf_len = 2**ib_spec["ports"][0]["width"]
-        obuf_len = 2**ob_spec["ports"][0]["width"]
+        obuf_len = 2**ib_spec["ports"][0]["width"]
         wbuf_len = 2**wb_spec["ports"][0]["width"]
         print(obuf_len)
         # Load the weight buffer
@@ -692,7 +674,7 @@ def test_multiple_Datapaths():
         activation_width = projection["data_widths"]["I"]
         istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
         ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
-        ostreams_per_buf = math.floor(ob_spec["ports"][1]["width"]/activation_width)
+        ostreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/activation_width)
         ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
         obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
         
@@ -748,11 +730,11 @@ def test_multiple_Datapaths():
         
         # Now stream the inputs, and check the outputs!
         stream_mlb_values(testinst, obuf_len,
-                          ["input_act_modules_portaaddr_top", "output_act_modules_portaaddr_top"],
+                          ["input_act_modules_portaaddr_top", "input_act_modules_portaaddr_o_top"],
                           [0, -1],
                           [ibuf_len, obuf_len],
                           ["mlb_modules_b_en_top"] +
-                          ["output_act_modules_portawe_{}_top".format(obi) for obi in range(obuf_count)])
+                          ["input_act_modules_portawe_{}_out_top".format(obi+len(ibuf)) for obi in range(obuf_count)])
         
         obuf = [[[0
                  for i in range(ostreams_per_buf)]
@@ -768,10 +750,11 @@ def test_multiple_Datapaths():
                  for i in range(obuf_len)]
                  for j in range (obuf_count)]
         
-        obuf_results = read_out_stored_values(testinst, "output_act_modules_portaaddr_top", "dataout",
-                             obuf_results, projection["data_widths"]["I"])
-        
         print("EXPECTED: " + str(obuf))
+        
+        obuf_results = read_out_stored_values(testinst, "input_act_modules_portaaddr_o_top", "dataout",
+                             obuf_results, projection["data_widths"]["I"], start_buffer=len(ibuf))
+        
         print("ACTUAL: " + str(obuf_results))
         print("W: " + str(wbuf))
         print("I: " + str(ibuf))

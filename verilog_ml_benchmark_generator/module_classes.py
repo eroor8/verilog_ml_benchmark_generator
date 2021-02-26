@@ -542,32 +542,46 @@ class InputBufferWrapper(Component):
          shared between all instances. All other ports are duplicated one for
          each instance on the top level, and named
          <instance_port_name>_<instance>. Clock and reset are common.
+
+         This module instantiates buffers for all the input and output
+         activations.
+         For each layer, these buffers are divided into input buffers and
+         output buffers. There are X banks of Y input buffers and Z banks of
+         T output buffers.
     """
-    def construct(s, spec={}, count=1, name="_v1", projections={}, mux=True,
-                  fast_gen=False, add_SR=False, input_width=-1):
+    def construct(s, spec={}, bcounts_i=[1], bcounts_o=[1], name="_v1",
+                  projections={}, mux=True, fast_gen=False, add_SR=False, input_width=-1):
         # Add ports shared between instances to the top level
         # How many address muxes are required? URNYxURNB
         muxes = [[] for proj in projections]
-        j = 0
+        max_total_bcount = max([sum(x) for x in zip(bcounts_i, bcounts_o)])
         addr_width = 0
-        addrp1 = None
+        addri1 = None
+
+        # Add three addresses - two input addresses and an output address
         for port in spec['ports']:
             if (port['type'] == 'ADDRESS'):
                 addr_width = port['width']
-                addrp1 = utils.AddInPort(s,  port['width'], port["name"])
-                addrp2 = utils.AddInPort(s,  port['width'], port["name"] +
-                                         "_b")
+                addri1 = utils.AddInPort(s,  port['width'], port["name"])
+                addri2 = utils.AddInPort(s,  port['width'], port["name"]
+                                         + "_b")
+                addro = utils.AddInPort(s,  port['width'], port["name"]
+                                        + "_o")
+
+        # A signal to select which layer
+        layer_sel = utils.AddInPort(s, math.ceil(math.log(max(len(projections),
+                                                              2), 2)),
+                                    "sel")
+
+        # Mux between two input addresses for efficient convolution.
         mux_sizes = [proj['outer_projection']['PY'] *
                      proj['inner_projection']['PY'] *
                      proj['inner_projection']['RY'] *
                      proj['outer_projection']['RY']
                      for proj in projections]
-        if (max(mux_sizes) > 1):
-            s.addr_sel = InPort(math.ceil(math.log(max(max(mux_sizes), 2), 2)))
-            utils.tie_off_port(s, s.addr_sel)
-        s.sel = InPort(math.ceil(math.log(max(len(projections), 2), 2)))
-        utils.tie_off_port(s, s.sel)
-
+        utils.AddInPort(s, math.ceil(math.log(max(max(mux_sizes), 2), 2)),
+                        "addr_sel")
+        j = 0
         for proj in projections:
             k = 0
             if ((proj['inner_projection']['RY'] *
@@ -583,21 +597,21 @@ class InputBufferWrapper(Component):
                                                                 2), 2))]
                     else:
                         newmux.sel //= 0
-                    newmux.in0 //= addrp1
-                    newmux.in1 //= addrp2
+                    newmux.in0 //= addri1
+                    newmux.in1 //= addri2
                     muxes[j] += [newmux]
                     k = k + 1
             j += 1
+        s.omux = module_helper_classes.MUX1(addr_width)
+        s.omux.in0 //= addro
 
-        for i in range(count):
-            curr_inst = HWB_Sim(spec, projections, sim=True, fast_gen=fast_gen)
+        for i in range(max_total_bcount):
+            curr_inst = HWB_Sim(spec, sim=True, fast_gen=fast_gen)
             setattr(s, spec.get('block_name', "unnamed") + '_inst_' + str(i),
                     curr_inst)
 
             for port in spec['ports']:
-                if ((port['type'] == 'C' or
-                     port['type'] == 'W_EN' or port['type'] == 'I_EN' or
-                     port['type'] == 'ACC_EN' or port['type'] == 'MODE')
+                if ((port['type'] == 'C' or port['type'] == 'MODE')
                         and port["direction"] == "in"):
                     instport = getattr(curr_inst, port["name"])
                     instport //= utils.AddInPort(s,  port['width'],
@@ -608,44 +622,70 @@ class InputBufferWrapper(Component):
                     for pj in range(len(projections)):
                         buffer_idxs = utils.map_buffer_idx_to_y_idx(
                             projections[pj], spec)
-                        assert i < len(buffer_idxs)
-                        muxs += [muxes[pj][buffer_idxs[i]]]
+                        if i < bcounts_i[pj]:
+                            assert i < len(buffer_idxs)
+                            muxs += [muxes[pj][buffer_idxs[i]]]
+                        else:
+                            muxs += [s.omux]
                     # Which muxes to connect to?
                     utils.mux_ports_by_name(s, muxs, "out", curr_inst,
-                                            port['name'], insel=s.sel,
+                                            port['name'], insel=layer_sel,
                                             sim=False, idx=str(i))
-                elif add_SR and (port['type'] == 'DATA') and \
+                elif (port['type'] == 'DATA') and \
                         (port["direction"] == "out"):
-                    assert(input_width > 0)
-                    urwv = projections[0]['inner_projection']['RX']
-                    outport = utils.AddOutPort(s, port["width"] * urwv,
-                                               port["name"] + "_" + str(i))
-                    for vali in range(math.floor(port['width']/input_width)):
-                        curr_shift_reg = module_helper_classes.ShiftRegister(
-                            reg_width=input_width, length=urwv - 1, sim=False)
-                        assert urwv - 1 > 0
-                        setattr(s, "SR" + str(i) + "_" + str(vali),
-                                curr_shift_reg)
-                        dataout = getattr(curr_inst, port["name"])
-                        curr_shift_reg.input_data //= dataout[vali *
-                                                              input_width:
-                                                              input_width *
-                                                              (vali + 1)]
-                        curr_shift_reg.ena //= 1
-                        datain = getattr(curr_inst, port["name"])
-                        curridx = vali * \
-                            projections[0]['inner_projection']['RX']
-                        outport[input_width * curridx:
-                                input_width * (curridx + 1)] //= \
-                            datain[vali * input_width:
-                                   input_width * (vali + 1)]
-                        wv = projections[0]['inner_projection']['RX']
-                        for outi in range(1, wv):
-                            curridx = vali * wv + outi
+                    
+                    utils.connect_out_to_top(s, getattr(curr_inst,
+                                                            port["name"]),
+                                                 port["name"] + "_out_" + str(i))
+
+                    if (add_SR):
+                        assert(input_width > 0)
+                        urwv = projections[0]['inner_projection']['RX']
+                        outport = utils.AddOutPort(s, port["width"] * urwv,
+                                                   port["name"] + "_" + str(i))
+                        for vali in range(math.floor(port['width']/input_width)):
+                            curr_shift_reg = module_helper_classes.ShiftRegister(
+                                reg_width=input_width, length=urwv - 1, sim=False)
+                            assert urwv - 1 > 0
+                            setattr(s, "SR" + str(i) + "_" + str(vali),
+                                    curr_shift_reg)
+                            dataout = getattr(curr_inst, port["name"])
+                            curr_shift_reg.input_data //= dataout[vali *
+                                                                  input_width:
+                                                                  input_width *
+                                                                  (vali + 1)]
+                            curr_shift_reg.ena //= 1
+                            datain = getattr(curr_inst, port["name"])
+                            curridx = vali * \
+                                projections[0]['inner_projection']['RX']
                             outport[input_width * curridx:
                                     input_width * (curridx + 1)] //= \
-                                getattr(curr_shift_reg, "out" + str(outi-1))
-                elif port['type'] not in ('CLK', 'RESET'):
+                                datain[vali * input_width:
+                                       input_width * (vali + 1)]
+                            wv = projections[0]['inner_projection']['RX']
+                            for outi in range(1, wv):
+                                curridx = vali * wv + outi
+                                outport[input_width * curridx:
+                                        input_width * (curridx + 1)] //= \
+                                    getattr(curr_shift_reg, "out" + str(outi - 1))
+                    else:         
+                        utils.connect_out_to_top(s, getattr(curr_inst,
+                                                            port["name"]),
+                                                 port["name"] + "_" + str(i))
+                elif (port['type'] == 'DATA') and \
+                        (port["direction"] == "in"):
+                    instport = utils.AddInPort(s, port['width'],
+                                               port["name"] + "_" + str(i))
+                    instport_new = utils.AddInPort(s, port['width'],
+                                                   port["name"] + "_" +
+                                                   str(i) + "_out")
+                    datain = getattr(curr_inst, port['name'])
+                    newmux = module_helper_classes.MUX2(port['width'], 1)
+                    setattr(s, "input_data_mux" + str(i), newmux)
+                    newmux.in0 //= instport_new
+                    newmux.in1 //= instport
+                    datain //= newmux.out
+                elif port['type'] not in ('CLK', 'RESET', 'WEN'):
                     if (port['direction'] == "in"):
                         utils.connect_in_to_top(s, getattr(curr_inst,
                                                            port["name"]),
@@ -655,6 +695,27 @@ class InputBufferWrapper(Component):
                                                             port["name"]),
                                                  port["name"] + "_" + str(i))
 
+            for port in spec['ports']:
+                if (port['type'] == 'WEN'):
+                    assert(port["direction"] == "in")
+                    instport = utils.AddInPort(s, port['width'],
+                                               port["name"] + "_" + str(i))
+                    instport_new = utils.AddInPort(s, port['width'],
+                                                   port["name"] + "_" +
+                                                   str(i) + "_out")
+                    wen_in = getattr(curr_inst, port['name'])
+                    newmux = module_helper_classes.MUXN(1, len(bcounts_o))
+                    setattr(s, "input_wen_mux" + str(i), newmux)
+                    for tt in range(len(bcounts_i)):
+                        currin = getattr(newmux, "in" + str(tt))
+                        if (i < bcounts_i[tt]):
+                            currin //= instport
+                        else:
+                            currin //= instport_new
+                    newmux.sel //= layer_sel
+                    wen_in //= newmux.out
+                    currmux = getattr(s, "input_data_mux" + str(i))
+                    currmux.sel //= instport
         utils.tie_off_clk_reset(s)
 
 
@@ -669,7 +730,7 @@ class MergeBusses(Component):
          :type output_<i>: Component class
     """
     def construct(s, in_width=1, num_ins=1, out_width=1, num_outs=1,
-                  ins_per_out=0, sim=False):
+                  start_bus=0, ins_per_out=0, sim=False):
         """ Constructor for MergeBusses
 
          :param in_width: Bit-width of input ports
@@ -695,7 +756,7 @@ class MergeBusses(Component):
 
         # Add input and output ports from each MLB
         for inp in range(num_ins_used):
-            bus_idx = math.floor(inp/ins_per_out)
+            bus_idx = start_bus + math.floor(inp/ins_per_out)
             bus_start = (inp % ins_per_out) * in_width
             bus_end = ((inp % ins_per_out)+1) * in_width
             input_bus = getattr(s, "input_"+str(inp))
@@ -704,11 +765,11 @@ class MergeBusses(Component):
 
         for i in range(num_outs):
             output_bus = getattr(s, "output_" + str(i))
-            if (i > math.floor(num_ins_used / ins_per_out)):
+            if ((i >= start_bus + math.ceil(num_ins_used / ins_per_out))
+                    or (i < start_bus)):
                 output_bus //= 0
             elif ((ins_per_out*in_width < out_width)):
                 output_bus[ins_per_out * in_width:out_width] //= 0
-
         utils.tie_off_clk_reset(s)
 
 
@@ -918,9 +979,6 @@ class InputInterconnect(Component):
          1) Connect MLBs to each other
             Chains of URW MLBs have the same input. Connect the inputs between
             these sets of blocks.
-
-         TODO: Allow for preloading inputs instead of streaming them.
-         TODO: deal with crossbars
 
          :param inputs_from_buffer_<i>: Input port from weight buffer for i
                                         from 0 to ``num_buffers``
@@ -1413,10 +1471,9 @@ class Datapath(Component):
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
                                        max(buffer_counts['W']),
                                        fast_gen=fast_gen)
-
         s.input_act_modules = InputBufferWrapper(
-            buffer_specs['I'], max(buffer_counts['I']), projections=proj_specs,
-            fast_gen=fast_gen,
+            buffer_specs['I'], buffer_counts['I'], buffer_counts['O'],
+            projections=proj_specs, fast_gen=fast_gen,
             add_SR=(("access_patterns" in mlb_spec) and
                     (mlb_spec["access_patterns"]["AP1"] <
                      inner_projs[i]["RX"]) and (inner_projs[i]["RX"] > 1)),
@@ -1424,10 +1481,6 @@ class Datapath(Component):
         s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
                                     projections=proj_specs, fast_gen=fast_gen)
         s.input_act_modules.sel //= s.sel
-        s.output_act_modules = HWB_Wrapper(buffer_specs['O'],
-                                           max(buffer_counts['O']),
-                                           name='_v2', fast_gen=fast_gen)
-
         activation_function_modules = []
         for i in range(len(proj_specs)):
             new_act_modules = ActivationWrapper(
@@ -1487,7 +1540,8 @@ class Datapath(Component):
                 buffer_width=buf_width,
                 mlb_width=max(mlb_width, mlb_width_used),
                 mlb_width_used=mlb_width_used,
-                num_buffers=max(buffer_counts['I']),
+                num_buffers=max(sum(x) for x in zip(buffer_counts['I'],
+                                                    buffer_counts['O'])),
                 num_mlbs=max(MLB_counts),
                 projection=proj_specs[i],
                 inner_projection=inner_projs[i],
@@ -1512,7 +1566,9 @@ class Datapath(Component):
                 num_ins=max(total_bus_counts['O']),
                 out_width=utils.
                 get_sum_datatype_width(buffer_specs['O'], 'DATA', ["in"]),
-                num_outs=max(buffer_counts['O']))
+                num_outs=max(sum(x) for x in zip(buffer_counts['I'],
+                                                 buffer_counts['O'])),
+                start_bus=buffer_counts['I'][i])
             output_interconnects += [output_interconnect]
             setattr(s, "output_interconnect" + newname, output_interconnect)
 
@@ -1595,11 +1651,11 @@ class Datapath(Component):
         for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["in"]):
             connected_ins += utils.mux_ports_by_name(
-                s, output_interconnects, r"output_(\d+)", s.output_act_modules,
-                portname["name"] + r"_(\d+)", insel=s.sel)
+                s, output_interconnects, r"output_(\d+)", s.input_act_modules,
+                portname["name"] + r"_(\d+)_out", insel=s.sel)
 
         # Connect output buffers to top
-        for port in s.output_act_modules.get_output_value_ports():
+        for port in s.input_act_modules.get_output_value_ports():
             for dout in utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                 ["out"]):
                 if dout["name"] in port._dsl.my_name:
@@ -1621,7 +1677,7 @@ class Datapath(Component):
                                                               s.weight_modules,
                                                               port["name"])
         for inst in [s.activation_function_modules, s.mlb_modules,
-                     s.mlb_modules, s.output_act_modules, s.input_act_modules,
+                     s.mlb_modules, s.input_act_modules,
                      s.weight_interconnect, s.output_ps_interconnect,
                      s.input_interconnect, s.weight_modules]:
             for port in (inst.get_input_value_ports()):

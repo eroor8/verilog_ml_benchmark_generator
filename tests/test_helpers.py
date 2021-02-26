@@ -272,7 +272,7 @@ def read_out_stored_buffer_values(testinst, inner_inst, addr_portname, dataout_p
         addr_port @= i
         outertestinst.sim_tick()
         curr_obuf_out = int(dataout_port)
-        assert (curr_obuf_out == dataout_val.dataout)
+        assert(curr_obuf_out == dataout_val.dataout)
         for section in range(len(buffer_values[i])):
             buffer_values[i][section] = int(curr_obuf_out%(2**dwidth))
             curr_obuf_out = math.floor(curr_obuf_out / (2**dwidth))
@@ -290,14 +290,15 @@ def read_out_stored_buffer_values_from_sm(dataout_portname,
     return buffer_values
                
 def read_out_stored_values(testinst, addr_portname, dataout_portname,
-                         buffer_values, dwidth, outertestinst=None):
+                           buffer_values, dwidth, outertestinst=None,
+                           start_buffer=0):
     if outertestinst:
         dataout = dataout_portname
     else:
         dataout = "portadataout"
     for obufi in range(len(buffer_values)):
         print("OBUF = " + str(int(obufi)))
-        curr_obuf = getattr(testinst.output_act_modules, "mlb_outs_inst_" + str(obufi))
+        curr_obuf = getattr(testinst.input_act_modules, "ml_block_inputs_inst_" + str(start_buffer + obufi))
         read_out_stored_buffer_values(testinst, curr_obuf, addr_portname, dataout,
                                     buffer_values[obufi], dwidth, outertestinst)
     return buffer_values

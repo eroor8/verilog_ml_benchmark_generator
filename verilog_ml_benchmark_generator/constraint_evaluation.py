@@ -23,7 +23,7 @@ def get_factors(maxv, product):
     return var_range
 
 
-def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
+def score_layer(solution, num_MACs, loop_bounds, preload_i, preload_o):
     """ Score a possible solution based on estimated cycle count.
 
     :param solution: Mapping vector
@@ -33,6 +33,7 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
     :param preload_o: number of PE weight chains
     """
     # calculate an approximate cycle count
+    total_cycles = 0
     product_cycles = get_product(
         solution, [loop_bound + 'T' for loop_bound in loop_bounds])
     num_used_PEs = get_product(
@@ -61,6 +62,35 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o):
 
     total_cycles = product_cycles + preload_cycles + pipeline_count
     return total_cycles
+
+
+def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o,
+                   layer_info=None):
+    """ Score a possible solution based on estimated cycle count.
+
+    :param solution: Mapping vector
+    :param num_MACs: Total number of MACs per PE
+    :param loop_bounds: Layer loop bounds
+    :param preload_i: number of weight chains per PE
+    :param preload_o: number of PE weight chains
+    """
+    # calculate an approximate cycle count
+    if layer_info and (len(layer_info) > 0):
+        total_cycles = 0
+        for layer in layer_info:
+            for loop_bound in loop_bounds:
+                total_bound = layer[loop_bound]
+                spatial_factor = solution[loop_bound + 'I'] * \
+                    solution[loop_bound + 'O']
+                temporal_factor = math.ceil(total_bound / spatial_factor)
+                solution[loop_bound + 'T'] = temporal_factor
+            total_cycles = total_cycles + score_layer(solution, num_MACs,
+                                                      loop_bounds,
+                                                      preload_i, preload_o)
+        return total_cycles
+    else:
+        return score_layer(solution, num_MACs, loop_bounds, preload_i,
+                           preload_o)
 
 
 def ApproximateProductConstraint(x, val0=1, val1=1, val2=1, val3=1, val4=1,
@@ -118,6 +148,9 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     ws = not (hwb.get('output_accumulator', False))
     loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
     levels = ['O', 'I', 'T']
+    workloads = workload
+    if type(workload) == dict:
+        workloads = [workload]
 
     # Mappings between access patterns and corresponding dimensions.
     access_patterns = {'AP1': ['RX'], 'AP2': ['RY', 'C'], 'AP3': ['E'],
@@ -159,7 +192,8 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
 
     # Ensure that product of tiling factors is the workload dimension
     for loop_bound in loop_bounds:
-        curr_bound = workload.get(loop_bound, 1)
+        curr_bounds = [wld.get(loop_bound, 1)
+                       for wld in workloads]
 
         # The inner unrolling factor shouldn't exceed the max unrolling
         # physically possible. It also won't be greater than the total
@@ -167,16 +201,17 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
         ap_product = 1
         for ap in access_patterns_r[loop_bound]:
             ap_product *= hwbp[ap]
-        max_bound_i = min(curr_bound, ap_product)
+        max_bound_i = min(max(curr_bounds), ap_product)
 
         # We probably want to unroll within the PE as much as possible
         # if this is the only loop bound corresponding to an access pattern.
         min_bound_i = 1
         if (len(access_patterns_r[loop_bound]) == 1) and \
            (len(access_patterns[access_patterns_r[loop_bound][0]]) == 1):
-            min_bound_i = min(max(math.floor(max_bound_i / 2), 1), curr_bound)
-            if (max_bound_i == curr_bound):
-                min_bound_i = curr_bound
+            min_bound_i = min(max(math.floor(max_bound_i / 2), 1),
+                              max(curr_bounds))
+            if (max_bound_i == max(curr_bounds)):
+                min_bound_i = max(curr_bounds)
 
         for level in levels:
             if (suggested_solution):
@@ -185,20 +220,20 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
             else:
                 if (level == 'O'):
                     var_range = get_factors(pe_count,
-                                            math.ceil(curr_bound /
+                                            math.ceil(max(curr_bounds) /
                                                       min_bound_i))
                 elif (level == 'I'):
                     var_range = range(min_bound_i,
-                                      min(curr_bound, max_bound_i) + 1)
+                                      min(max(curr_bounds), max_bound_i) + 1)
                 else:
                     var_range = get_factors(sys.maxsize,
-                                            math.ceil(curr_bound /
+                                            math.ceil(max(curr_bounds) /
                                                       min_bound_i))
                 problem.addVariable(loop_bound + level, var_range)
 
         nested_bounds = [loop_bound + level for level in levels]
         problem.addConstraint(lambda val0=1, val1=1, val2=1, val3=1,
-                              val4=1, val5=1, val6=1, maxv=curr_bound:
+                              val4=1, val5=1, val6=1, maxv=max(curr_bounds):
                               ApproximateProductConstraint(maxv, val0, val1,
                                                            val2, val3, val4,
                                                            val5),
@@ -238,11 +273,11 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     num_MACs = hwb["MAC_info"]["num_units"]
     sorted_solutions = sorted(solutions,
                               key=lambda soln, nm=num_MACs, lbs=loop_bounds,
-                              pli=preload_i, plo=preload_o:
-                              cost_function(soln, nm, lbs, pli, plo))
+                              pli=preload_i, plo=preload_o, wklds=workloads:
+                              cost_function(soln, nm, lbs, pli, plo, wklds))
     min_solutions = sorted_solutions[0:num_solutions]
     min_product = cost_function(min_solutions[0], num_MACs, loop_bounds,
-                                preload_i, preload_o)
+                                preload_i, preload_o, workloads)
     utils.printi(il, "Found best " + str(num_solutions) +
                  " solutions out of " + str(len(solutions)) +
                  " possibilities, with estimated cycle count " +

@@ -864,20 +864,29 @@ def test_simulate_emif_statemachine(
                                 wbuf,
                                 ibuf, ivalues_per_buf,
                                 proj_yaml)
+
     print("EXPECTED OUT")
     print(obuf)
     print("\nACTUAL OUT")
+    
+    #ibuf2 = [[[0 for k in range(ivalues_per_buf)]            # values per word
+    #         for i in range(ibuf_len)]                   # words per buffer
+    #         for j in range (2)]                # buffers
 
+    #print("%%%%%%%%%%% Check inputs again")
+    #check_buffers(testinst.datapath, testinst.datapath.input_act_modules,
+    #              "ml_block_input_inst_{}",
+    #              ibuf2, proj_yaml["data_widths"]["I"], testinst)
+    
     with open("final_offchip_data_contents.yaml") as outfile:
         outvals_yaml = yaml.safe_load(outfile)[0]
-
+            
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1):
             print(obuf[bufi][olen])
             assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
 
-
-            
+    
 def test_simulate_emif_statemachine_unit_ws_pl():
     test_simulate_emif_statemachine("mlb_spec_3.yaml",
                                "input_spec_1.yaml",
@@ -940,7 +949,7 @@ def test_simulate_layer_urn():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_9.yaml", True, False)
-    
+            
 def test_simulate_layer_intel():
     test_simulate_layer("mlb_spec_intel.yaml",
                         "input_spec_intel_8.yaml",

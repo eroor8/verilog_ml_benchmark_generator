@@ -178,3 +178,245 @@ def test_soft():
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, True, suggested_solution=suggested_soln, preload_o=-1, preload_i=-1)
     print(len(mappings))
     assert tp == 64515
+
+def test_ANet_L1():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':3,
+                      'E':96,'PX':224,
+                      'PY':224/4,'RX':11,
+                      'RY':11}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L2():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':96,
+                      'E':256,'PX':55,
+                      'PY':55,'RX':5,
+                      'RY':5}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+
+    
+def test_ANet_L3():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':256,
+                      'E':384,'PX':27,
+                      'PY':27,'RX':3,
+                      'RY':3}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L4():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':384,
+                      'E':384,'PX':13,
+                      'PY':13,'RX':3,
+                      'RY':3}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L5():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':384,
+                      'E':256,'PX':13,
+                      'PY':13,'RX':3,
+                      'RY':3}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L6():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':256,
+                      'E':2048,'PX':13,
+                      'PY':13,'RX':1,
+                      'RY':1}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L7():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':2048,
+                      'E':2048,'PX':1,
+                      'PY':1,'RX':1,
+                      'RY':1}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+    
+def test_ANet_L8():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':2048,
+                      'E':1000,'PX':1,
+                      'PY':1,'RX':1,
+                      'RY':1}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+    return tp
+
+
+#def test_ANet_all_layers():
+#    l = test_ANet_L1()
+#    l = l + test_ANet_L2()
+#    l = l + test_ANet_L3()
+#    l = l + test_ANet_L4()
+#    l = l + test_ANet_L5()
+#    l = l + test_ANet_L6()
+#    l = l + test_ANet_L7()
+#    l = l + test_ANet_L8()
+#    print(l)
+    #assert l == 34
+
+    
+#def test_ANet_L12345678():
+#    """Test yaml schema validation"""
+#    hwb = {
+#        "block_name": "ml_block",
+#        "output_accumulator": "True",
+#        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+#        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+#        "ports": [
+#            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+#            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+#            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+#        ]
+#    }
+#    workload_conv0 = [{'B':1,'C':3,  # L1
+#                       'E':96,'PX':224,
+#                       'PY':224/4,'RX':11,
+#                       'RY':11},
+#                      {'B':1,'C':96, # L2 - 3m
+#                       'E':256,'PX':55,
+#                       'PY':55,'RX':5,
+#                       'RY':5},
+#                      {'B':1,'C':256, # L3
+#                      'E':384,'PX':27,
+#                      'PY':27,'RX':3,
+#                       'RY':3},
+#                      {'B':1,'C':384, # L4
+#                      'E':384,'PX':13,
+#                      'PY':13,'RX':3,
+#                       'RY':3},
+#                      {'B':1,'C':384, # L5
+#                      'E':256,'PX':13,
+#                      'PY':13,'RX':3,
+#                       'RY':3},
+#                      {'B':1,'C':256, # L6
+#                      'E':2048,'PX':13,
+#                      'PY':13,'RX':1,
+#                       'RY':1},
+#                      {'B':1,'C':2048, # L7
+#                      'E':2048,'PX':1,
+#                      'PY':1,'RX':1,
+#                       'RY':1},
+#                      {'B':1,'C':2048, # L8
+#                      'E':1000,'PX':1,
+#                      'PY':1,'RX':1,
+#                      'RY':1}]
+#    
+#    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
+#    print(len(mappings))
+#    print(tp)
+#    return tp

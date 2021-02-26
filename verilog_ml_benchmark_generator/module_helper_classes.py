@@ -42,10 +42,31 @@ class MUX_NXN(Component):
         utils.tie_off_clk_reset(s)
 
 
+class MUX1(Component):
+    """" Implements a single wire (sometimes useful)
+    """
+    def construct(s, input_width):
+        """ Constructor for 2-input MUX
+
+         :param input_width: Bit-width of input
+         :param sel_width: Width of sel signal
+         :param threshold: If sel > threshold, choose second input
+         :param sim: Whether to skip synthesis
+        """
+        assert(input_width > 0)
+        s.in0 = InPort(input_width)
+        utils.AddOutPort(s, input_width, "out")
+
+        @update
+        def upblk_set_wen1():
+            s.out @= s.in0
+        utils.tie_off_clk_reset(s)
+
+
 class MUX2(Component):
     """" Implements a single 2-input mux
     """
-    def construct(s, input_width, sel_width, threshhold, sim=False):
+    def construct(s, input_width, sel_width, threshhold=0, sim=False):
         """ Constructor for 2-input MUX
 
          :param input_width: Bit-width of input

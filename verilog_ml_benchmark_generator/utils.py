@@ -52,7 +52,7 @@ def print_mapping(mapping, indent):
          "PY": mapping["PYT"]}
 
     return ("\n" + "\t" * indent + "Intra-PE unrolling factors: " + str(i) +
-            "\n" + "\t" * indent + "Iner-PE unrolling factors: " + str(o) +
+            "\n" + "\t" * indent + "Inter-PE unrolling factors: " + str(o) +
             "\n" + "\t" * indent + "Temporal tiling factors: " + str(t))
 
 

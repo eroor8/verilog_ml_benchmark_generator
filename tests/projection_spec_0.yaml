@@ -7,7 +7,7 @@ inner_projection:
     PX: 1
     PY: 1
     B: 2 
-    G: 2
+    G: 1
     PRELOAD:
       - dtype: 'W'
         bus_count: 1

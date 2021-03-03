@@ -10,6 +10,7 @@ from pymtl3 import Component, OutPort, InPort, update, update_ff, Wire, Bits5
 import math
 import utils
 from utils import printi
+import module_helper_classes
 import module_classes
 il = 1
 
@@ -32,28 +33,6 @@ class SM_BufferWen(Component):
             @update
             def upblk_set_wen1():
                 s.we @= s.we_in
-        utils.AddOutPort(s, 1, "we")
-        utils.tie_off_clk_reset(s)
-
-
-class SM_InputSel(Component):
-    def construct(s, value_width, buf_count_width, curr_buffer_count):
-        utils.AddInPort(s, value_width, "vin")
-        utils.AddInPort(s, value_width, "cv")
-        utils.AddOutPort(s, value_width, "vout")
-        if (buf_count_width > 0):
-            utils.AddInPort(s, buf_count_width, "buffer_count")
-
-            @update
-            def upblk_set_wen0():
-                if (s.buffer_count == curr_buffer_count):
-                    s.vout @= s.cv
-                else:
-                    s.vout @= s.vin
-        else:
-            @update
-            def upblk_set_wen1():
-                s.vout @= s.cv
         utils.AddOutPort(s, 1, "we")
         utils.tie_off_clk_reset(s)
 
@@ -479,7 +458,7 @@ class SM_WriteOffChipEMIF(Component):
     # buffer_count buffers
     def construct(s, obuffer_count, write_count, addr_width, datawidth,
                   emif_addr_width, emif_data_width, startaddr=0,
-                  total_buffer_count=-1):
+                  total_buffer_count=-1, start_buffer=-1):
         """ Constructor for WriteOffChipEMIF
          :param obuffer_count: Number of buffers to write from
          :type  obuffer_count: int
@@ -504,6 +483,7 @@ class SM_WriteOffChipEMIF(Component):
         assert (emif_data_width >= datawidth)
         s.start = InPort(1)
         s.buf_count = Wire(max(math.ceil(math.log(total_buffer_count, 2)), 1))
+        s.buf_idx = OutPort(max(math.ceil(math.log(total_buffer_count, 2)), 1))
         s.address = OutPort(addr_width)
         s.bufdata = Wire(datawidth)
 
@@ -523,29 +503,24 @@ class SM_WriteOffChipEMIF(Component):
         s.state = Wire(2)
         utils.add_n_inputs(s, total_buffer_count, datawidth, "datain_")
 
-        for wb in range(total_buffer_count - obuffer_count, total_buffer_count):
-            new_sel = SM_InputSel(
-                datawidth, math.ceil(math.log(total_buffer_count,
-                                              2)), wb)
-            setattr(s, "insel{}".format(wb), new_sel)
-            if (total_buffer_count > 1):
-                new_sel.buffer_count //= s.buf_count
-            new_sel.cv //= getattr(s, "datain_{}".format(wb))
-            if (wb == total_buffer_count - obuffer_count):
-                new_sel.vin //= 0
-            else:
-                last_sel = getattr(s, "insel{}".format(wb - 1))
-                new_sel.vin //= last_sel.vout
-            if (wb == total_buffer_count - 1):
-                s.bufdata //= new_sel.vout
+        newmux = module_helper_classes.MUXN(datawidth, total_buffer_count)
+        setattr(s, "data_mux", newmux)
+        for wb in range(total_buffer_count):
+            currin = getattr(newmux, "in{}".format(wb))
+            currin //= getattr(s, "datain_{}".format(wb))
+        newmux.sel //= s.buf_idx
+        s.bufdata //= newmux.out
 
         INIT, LOAD = 0, 1
 
-        start_buffer = total_buffer_count - obuffer_count
+        if (start_buffer < 0):
+            start_buffer = total_buffer_count - obuffer_count
+
         @update_ff
         def upblk_set_wen_ff():
             if s.reset:
-                s.buf_count <<= start_buffer
+                s.buf_count <<= 0
+                s.buf_idx <<= start_buffer
                 s.state <<= INIT
                 s.address <<= 0
                 s.emif_address_w <<= startaddr
@@ -563,11 +538,16 @@ class SM_WriteOffChipEMIF(Component):
                     if (s.emif_waitrequest == 0):
                         if (s.address == (write_count-1)):
                             s.address <<= 0
-                            if (s.buf_count == (total_buffer_count-1)):
+                            if (s.buf_count == obuffer_count - 1):
                                 s.state <<= INIT
                                 s.buf_count <<= 0
+                                s.buf_idx <<= start_buffer
                                 s.emif_write <<= 0
                             else:
+                                if (s.buf_idx == total_buffer_count - 1):
+                                    s.buf_idx <<= 0
+                                else:
+                                    s.buf_idx <<= s.buf_idx + 1
                                 s.buf_count <<= s.buf_count + 1
                                 s.emif_address_w <<= s.emif_address_w + 1
                         else:
@@ -579,7 +559,9 @@ class SM_WriteOffChipEMIF(Component):
 class StateMachineEMIFSeparate(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
                   emif_spec={}, proj_spec={}, w_address=0, i_address=0,
-                  o_address=0, ws=True):
+                  o_address=0, ws=True, ibuf_start=0, load_inputs=True,
+                  load_outputs=True, num_layers=1, curr_layer=0,
+                  total_num_buffers=-1):
         """ Constructor for Datapath
 
          :param mlb_spec: Contains information about ML block used
@@ -645,6 +627,7 @@ class StateMachineEMIFSeparate(Component):
                                                         inner_bus_counts['O'],
                                                         inner_data_widths['I'])
         connected_ins = []
+        s.sel = InPort(math.ceil(math.log(max(num_layers, 2), 2)))
 
         # Load data into weight buffers
         s.sm_start = InPort(1)
@@ -830,19 +813,15 @@ class StateMachineEMIFSeparate(Component):
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                    ["out"]))
 
-        s.write_off_emif = SM_WriteOffChipEMIF(buffer_counts['O'],
-                                               2 ** addro_ports[0]["width"],
-                                               addro_ports[0]["width"],
-                                               datao_ports[0]["width"],
-                                               utils.get_sum_datatype_width(
-                                                   emif_spec, "AVALON_ADDRESS",
-                                                   "in"),
-                                               utils.get_sum_datatype_width(
-                                                   emif_spec,
-                                                   "AVALON_WRITEDATA", "in"),
-                                               o_address,
-                                               buffer_counts['O'] +
-                                               buffer_counts['I'])
+        if (total_num_buffers < 1):
+            total_num_buffers = buffer_counts['O'] + buffer_counts['I']
+        s.write_off_emif = SM_WriteOffChipEMIF(
+            buffer_counts['O'], 2 ** addro_ports[0]["width"],
+            addro_ports[0]["width"], datao_ports[0]["width"],
+            utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
+            utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"),
+            o_address, total_num_buffers,
+            start_buffer=(buffer_counts['I'] + ibuf_start) % total_num_buffers)
 
         connected_ins += utils.connect_inst_ports_by_name(s, r"emif_datain",
                                                           s.write_off_emif,
@@ -886,12 +865,17 @@ class StateMachineEMIFSeparate(Component):
                 s.ostart_address_wide <<= initial_val
             else:
                 if (s.state == INIT):
-                    if s.sm_start:
-                        s.state <<= LOADING_W_BUFFERS
+                    if (num_layers < 2) | (s.sel == curr_layer):
+                        if s.sm_start:
+                            s.state <<= LOADING_W_BUFFERS
                 elif (s.state == LOADING_W_BUFFERS):
                     # Write weights on chip
-                    if s.load_wbufs_emif.rdy:
-                        s.state <<= LOADING_I_BUFFERS
+                    if (load_inputs):
+                        if s.load_wbufs_emif.rdy:
+                            s.state <<= LOADING_I_BUFFERS
+                    else:
+                        if s.load_wbufs_emif.rdy:
+                            s.state <<= LOADING_MLBS
                 elif (s.state == LOADING_I_BUFFERS):
                     # Write inputs on chip
                     if s.load_ibufs_emif.rdy:
@@ -918,8 +902,11 @@ class StateMachineEMIFSeparate(Component):
                             s.ostart_address_wide <<= s.ostart_address_wide + \
                                 (output_count)
                         else:
-                            s.state <<= WRITE_OFFCHIP
-                            s.ostart_address_wide <<= 0
+                            if (load_outputs):
+                                s.state <<= WRITE_OFFCHIP
+                                s.ostart_address_wide <<= 0
+                            else:
+                                s.state <<= DONE
                 elif (s.state == WRITE_OFFCHIP):
                     # Write outputs out to EMIF
                     if s.write_off_emif.rdy:
@@ -970,17 +957,27 @@ class StateMachineEMIFSeparate(Component):
             s.load_wbufs_emif.emif_readdatavalid @= s.emif_readdatavalid
             s.load_wbufs_emif.emif_waitrequest @= s.emif_waitrequest
             s.load_wbufs_emif.emif_readdata @= s.emif_readdata
-            s.load_ibufs_emif.start @= (s.state == LOADING_W_BUFFERS) & \
-                s.load_wbufs_emif.rdy
+            if (load_inputs):
+                s.load_ibufs_emif.start @= (s.state == LOADING_W_BUFFERS) & \
+                    s.load_wbufs_emif.rdy
+            else:
+                s.load_ibufs_emif.start @= 0
             s.load_ibufs_emif.emif_readdatavalid @= s.emif_readdatavalid
             s.load_ibufs_emif.emif_waitrequest @= s.emif_waitrequest
             s.load_ibufs_emif.emif_readdata @= s.emif_readdata
             if (ws):
-                s.preload_weights.start @= ((s.state == LOADING_I_BUFFERS) &
-                                            s.load_ibufs_emif.rdy) | \
-                                            ((s.state == STREAMING_MLBS) &
-                                             s.stream_inputs.rdy &
-                                             (s.ugt_cnt < ugt))
+                if (load_inputs):
+                    s.preload_weights.start @= \
+                        ((s.state == LOADING_I_BUFFERS) &
+                         s.load_ibufs_emif.rdy) | \
+                        ((s.state == STREAMING_MLBS) &
+                         s.stream_inputs.rdy & (s.ugt_cnt < ugt))
+                else:
+                    s.preload_weights.start @= \
+                        ((s.state == LOADING_W_BUFFERS) &
+                         s.load_wbufs_emif.rdy) | \
+                        ((s.state == STREAMING_MLBS) &
+                         s.stream_inputs.rdy & (s.ugt_cnt < ugt))
                 s.pstart_address_wide @= (s.ugt_cnt * uet + s.uet_cnt) * \
                     outer_tile_size
                 s.stream_inputs.start @= (s.state == LOADING_MLBS) & \
@@ -996,14 +993,18 @@ class StateMachineEMIFSeparate(Component):
                 s.stream_outputs.start @= (s.state == LOADING_MLBS) & \
                     s.load_ibufs_emif.rdy
             s.write_off_emif.emif_waitrequest @= s.emif_waitrequest
-            s.write_off_emif.start @= (s.state == STREAMING_MLBS) & \
-                s.stream_inputs.rdy & ((ws == 0) | (s.ugt_cnt == ugt))
+            if (load_outputs):
+                s.write_off_emif.start @= (s.state == STREAMING_MLBS) & \
+                    s.stream_inputs.rdy & ((ws == 0) | (s.ugt_cnt == ugt))
+            else:
+                s.write_off_emif.start @= 0
 
 
 class MultipleLayerSystem(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
                   emif_spec={}, proj_specs=[], w_address=[0], i_address=[0],
-                  o_address=[0], ws=True, fast_gen=False):
+                  o_address=[0], ws=True, fast_gen=False,
+                  write_between_layers=False):
         """ Constructor
         """
         printi(il, "{:=^60}".format("> Constructing Accelerator, MLB block " +
@@ -1014,7 +1015,6 @@ class MultipleLayerSystem(Component):
             w_address = [w_address]
             i_address = [i_address]
             o_address = [o_address]
-
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs,
                                              fast_gen=fast_gen)
@@ -1029,22 +1029,75 @@ class MultipleLayerSystem(Component):
         s.datapath.sel //= s.sel
         s.sm_start = InPort(1)
 
+        # Figure out how many buffers are required
+        inner_projs = [proj_spec['inner_projection']
+                       for proj_spec in proj_specs]
+        inner_bus_counts = {dtype: [utils.get_proj_stream_count(inner_proj,
+                                                                dtype)
+                                    for inner_proj in inner_projs]
+                            for dtype in ['W', 'I', 'O']}
+        inner_data_widths = {dtype: [proj_spec['data_widths'][dtype]
+                                     for proj_spec in proj_specs]
+                             for dtype in ['W', 'I', 'O']}
+        inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
+                                    for (inner_bus_count, inner_data_width)
+                                    in zip(inner_bus_counts[dtype],
+                                           inner_data_widths[dtype])]
+                            for dtype in ['W', 'I', 'O']}
+        outer_projs = [proj_spec['outer_projection']
+                       for proj_spec in proj_specs]
+        outer_bus_counts = {dtype: [utils.get_proj_stream_count(outer_proj,
+                                                                dtype)
+                                    for outer_proj in outer_projs]
+                            for dtype in ['W', 'I', 'O']}
+        max_input_buf_widths = [utils.get_max_input_bus_width(
+            utils.get_sum_datatype_width(ib_spec, "DATA", ["in"]),
+            proj, 'I') for proj in proj_specs]
+        buffer_counts = {}
+        buffer_counts['I'] = [utils.get_num_buffers_reqd(ib_spec,
+                                                         outer_bus_count,
+                                                         inner_bus_width, mw)
+                              for (outer_bus_count, inner_bus_width, mw) in
+                              zip(outer_bus_counts['I'],
+                                  inner_bus_widths['I'],
+                                  max_input_buf_widths)]
+        buffer_counts['O'] = [utils.get_num_buffers_reqd(ob_spec,
+                                                         outer_bus_counto *
+                                                         inner_bus_counto,
+                                                         inner_data_widthi)
+                              for (outer_bus_counto, inner_bus_counto,
+                                   inner_data_widthi) in
+                              zip(outer_bus_counts["O"],
+                                  inner_bus_counts["O"],
+                                  inner_data_widths["I"])]
+        total_num_buffers = max(sum(x) for x in zip(buffer_counts['I'],
+                                                    buffer_counts['O']))
+        buffer_start_idxs = [sum(buffer_counts['I'][0:i+1]) %
+                             total_num_buffers
+                             for i in range(len(buffer_counts['I']) - 1)]
+        ibuffer_start_idxs = [0] + buffer_start_idxs
+
         for i in range(len(proj_specs)):
             if (i > 0):
                 newname = proj_specs[i].get("name", i)
             else:
                 newname = ""
-            statemachine = StateMachineEMIFSeparate(mlb_spec, wb_spec,
-                                                    ib_spec, ob_spec,
-                                                    emif_spec, proj_specs[i],
-                                                    w_address[i], i_address[i],
-                                                    o_address[i], ws)
+            statemachine = StateMachineEMIFSeparate(
+                mlb_spec, wb_spec, ib_spec, ob_spec, emif_spec, proj_specs[i],
+                w_address[i], i_address[i], o_address[i], ws,
+                ibuf_start=ibuffer_start_idxs[i],
+                load_inputs=((i == 0) or write_between_layers),
+                load_outputs=((i == len(proj_specs) - 1) or
+                              write_between_layers),
+                num_layers=len(proj_specs), curr_layer=i,
+                total_num_buffers=total_num_buffers)
             setattr(s, "statemachine" + newname, statemachine)
             statemachines += [statemachine]
             statemachine.emif_waitrequest //= s.emif_inst.waitrequest
             statemachine.emif_readdatavalid //= s.emif_inst.readdatavalid
             statemachine.emif_readdata //= s.emif_inst.readdata
             statemachine.sm_start //= s.sm_start
+            statemachine.sel //= s.sel
             connected_ins += utils.connect_ports_by_name(
                 s.datapath, r"portadataout_out_(\d+)", statemachine,
                 r"emif_datain_(\d+)")

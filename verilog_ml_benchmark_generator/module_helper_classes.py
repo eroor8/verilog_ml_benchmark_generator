@@ -29,6 +29,7 @@ class MUX_NXN(Component):
         assert(input_count > 0)
         utils.add_n_inputs(s, input_count, input_width, "in")
         s.sel = InPort(math.ceil(math.log(max(input_count, 2), 2)))
+
         for i in range(input_count):
             newout = utils.AddOutPort(s, input_width, "out" + str(i))
             newmux = MUXN(input_width, input_count)
@@ -105,8 +106,7 @@ class MUXN(Component):
         utils.AddOutPort(s, input_width, "out")
         sel_width = math.ceil(math.log(max(input_count, 2), 2))
         utils.AddInPort(s, sel_width, "sel")
-
-        half_width1 = math.ceil(input_count / 2)
+        half_width1 = 2**(sel_width-1)
         half_width2 = input_count - half_width1
         s.a = Wire(input_width)
         s.b = Wire(input_width)
@@ -116,6 +116,7 @@ class MUXN(Component):
             def upblk_set_wen0():
                 s.out @= s.in0
         else:
+            print(str(half_width1) + "," + str(half_width2))
             if (half_width1 > 1):
                 s.sub1 = MUXN(input_width, half_width1)
                 sel_half_width = math.ceil(math.log(half_width1, 2))
@@ -134,7 +135,7 @@ class MUXN(Component):
                 s.sub2.sel //= s.sel[0:sel_half_width]
                 s.b //= s.sub2.out
                 for i in range(half_width2):
-                    inport = getattr(s, "in" + str(i))
+                    inport = getattr(s, "in" + str(i+half_width1))
                     subport = getattr(s.sub2, "in" + str(i))
                     subport //= inport
             else:

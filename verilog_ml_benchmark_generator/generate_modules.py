@@ -358,7 +358,7 @@ def generate_verilog(component, write_to_file, module_name,
     utils.printi(1, "{:=^60}".format("> Generating verilog from pymtl " +
                                      "models: " + module_name + "_pymtl.v" +
                                      " (not synthesizable) <"))
-    # Generate the outer module containing many MLBs
+    # Create the pymtl modules and generate verilog using pymtl
     component.set_metadata(VerilogTranslationPass.enable, True)
     component.set_metadata(VerilogTranslationPass.explicit_file_name,
                            module_name + "_pymtl.v")
@@ -661,7 +661,6 @@ def run_simulation(module, num_cycles, n=-1):
     """
     # Start simulation and wait for done to be asserted
     utils.print_heading("Begin cycle accurate simulation", currstep + 2)
-    module.sim_reset()
     if (n > -1):
         module.sel @= n
     module.sm_start @= 1
@@ -748,6 +747,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     t.apply(DefaultPassGroup())
 
     # Start simulation and wait for done to be asserted
+    t.sim_reset()
     run_simulation(t, 2000)
 
     # Collect final EMIF data, and write it to a file.
@@ -837,6 +837,10 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
 
     # Simulate each of the layers
     output_vals = [[] for m in range(max(layer_sel) + 1)]
+    t.sim_reset()
+
+    # Initial data is included in the EMIF spec.
+    assert("fill" in emif_spec)
     for n in layer_sel:
         # Calculate buffer counts and dimensions
         wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
@@ -846,11 +850,9 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
         ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
             ab_spec, projections[n])
 
-        # Initial data is included in the EMIF spec.
-        assert("fill" in emif_spec)
-
         # Run the simulation for 2000 cycles
         if (simulate):
+            print("Simulate layer " + str(n))
             wbuf = utils.read_out_stored_values_from_array(
                 emif_spec["fill"], wvalues_per_buf,
                 wbuf_len * wbuf_count, projections[n]["data_widths"]["W"],
@@ -862,29 +864,44 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
             run_simulation(t, 2000, n)
 
             # Collect final EMIF data (and later write to file)
-            emif_vals = utils.read_out_stored_values_from_emif(
-                t.emif_inst.sim_model.bufi, ovalues_per_buf,
-                min(obuf_len, ibuf_len) * obuf_count,
-                projections[n]["data_widths"]["I"], oaddrs[n])
-            output_vals[n] = emif_vals
+            # buffer_vals = utils.read_out_stored_values_from_emif(
+            #    t.datapath.input_act_modules.ml_block_input_inst_0.
+            #     sim_model_inst0, ivalues_per_buf,
+            #    10,
+            #    projections[n]["data_widths"]["I"], 0)
+            # print(buffer_vals)
+            # buffer_vals = utils.read_out_stored_values_from_emif(
+            #    t.datapath.input_act_modules.ml_block_input_inst_1.
+            #     sim_model_inst0, ivalues_per_buf,
+            #    10,
+            #    projections[n]["data_widths"]["I"], 0)
+            # print(buffer_vals)
 
-        # Check that the outputs are right!
-        if (simulate and validate_output):
-            obuf = [[[0 for i in range(ovalues_per_buf)]
-                    for i in range(obuf_len)]
-                    for j in range(obuf_count)]
-            obuf = utils.get_expected_outputs(obuf, ovalues_per_buf, wbuf,
-                                              ibuf, ivalues_per_buf,
-                                              projections[n])
-            utils.print_heading("Comparing final off-chip buffer contents" +
-                                "with expected results", currstep + 3)
-            utils.printi(il, "Expected " + str(obuf))
-            utils.printi(il, "Actual " + str(emif_vals))
-            for bufi in range(obuf_count):
-                for olen in range(min(obuf_len, ibuf_len) - 1):
-                    assert obuf[bufi][olen] == \
-                        emif_vals[bufi * min(obuf_len, ibuf_len) + olen]
-            utils.printi(il, "Simulation outputs were correct.", "GREEN")
+    if (simulate):
+        # Collect final EMIF data (and later write to file)
+        emif_vals = utils.read_out_stored_values_from_emif(
+            t.emif_inst.sim_model.bufi, ovalues_per_buf,
+            min(obuf_len, ibuf_len) * obuf_count,
+            projections[n]["data_widths"]["I"], oaddrs[n])
+        output_vals[n] = emif_vals
+
+    # Check that the outputs are right!
+    if (simulate and validate_output):
+        obuf = [[[0 for i in range(ovalues_per_buf)]
+                for i in range(obuf_len)]
+                for j in range(obuf_count)]
+        obuf = utils.get_expected_outputs(obuf, ovalues_per_buf, wbuf,
+                                          ibuf, ivalues_per_buf,
+                                          projections[-1])
+        utils.print_heading("Comparing final off-chip buffer contents" +
+                            "with expected results", currstep + 3)
+        utils.printi(il, "Expected " + str(obuf))
+        utils.printi(il, "Actual " + str(emif_vals))
+        for bufi in range(obuf_count):
+            for olen in range(min(obuf_len, ibuf_len) - 1):
+                assert obuf[bufi][olen] == \
+                    emif_vals[bufi * min(obuf_len, ibuf_len) + olen]
+        utils.printi(il, "Simulation outputs were correct.", "GREEN")
 
     if (write_to_file):
         with open("final_offchip_data_contents.yaml", 'w') as file:

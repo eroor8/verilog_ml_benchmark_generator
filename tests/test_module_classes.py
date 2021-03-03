@@ -563,9 +563,9 @@ def test_multiple_Datapaths():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'C':1,'RY':1,'RX':1,
-                                       'B':1,'PX':1,'PY':1,'E':1,
-                                       'G':1,
+                  "inner_projection": {'C':2,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':2,
+                                       'G':2,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
                   "outer_projection": {'C':1,'RY':1,'RX':1,
                                        'B':1,'PX':1,'PY':1,'E':1,
@@ -578,9 +578,9 @@ def test_multiple_Datapaths():
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
-                  "inner_projection": {'C':1,'RY':1,'RX':1,
-                                       'B':1,'PX':1,'PY':1,'E':2,
-                                       'G':2,
+                  "inner_projection": {'C':2,'RY':1,'RX':1,
+                                       'B':1,'PX':1,'PY':1,'E':1,
+                                       'G':1,
                                        'PRELOAD':[{'dtype':'W','bus_count':1}]},
                   "outer_projection": {'C':1,'RY':1,'RX':1,
                                        'B':1,'PX':1,'PY':1,'E':1,
@@ -633,9 +633,37 @@ def test_multiple_Datapaths():
         proj_specs=projections)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
+    prev_ibuf_len=0
+    testinst.sim_reset()
+    
+    projection = projections[0]
+    testinst.sel @= 0
+    iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
+    iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
+                             projection["data_widths"]["I"]
+    ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
+                              utils.get_proj_stream_count(projection["inner_projection"], 'O') 
+    activation_width = projection["data_widths"]["I"]
+    istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
+    ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
+    ostreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/activation_width)
+    ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
+    obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
+    ibuf_len = 2**ib_spec["ports"][0]["width"]
+    obuf_len = 2**ib_spec["ports"][0]["width"]
+        
+    # Load the input buffer
+    # Several values per word, words per buffer, buffers...
+    ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
+             for k in range(ivalues_per_buf)]    
+             for i in range(ibuf_len)]           
+             for j in range (ibuf_count)]         
+    load_buffers(testinst, "input_act_modules_portawe_{}_top",
+            "input_act_modules_portaaddr_top", "input_datain",
+            ibuf, projection["data_widths"]["I"])
+    
     for n in [0,1]:
         projection = projections[n]
-        testinst.sim_reset()
         testinst.sel @= n
         
         # Calculate required buffers etc.
@@ -644,7 +672,7 @@ def test_multiple_Datapaths():
         ibuf_len = 2**ib_spec["ports"][0]["width"]
         obuf_len = 2**ib_spec["ports"][0]["width"]
         wbuf_len = 2**wb_spec["ports"][0]["width"]
-        print(obuf_len)
+
         # Load the weight buffer
         wbuf_count = 1
         weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
@@ -661,35 +689,17 @@ def test_multiple_Datapaths():
         load_buffers(testinst, "weight_modules_portawe_{}_top",
                     "weight_modules_portaaddr_top", "weight_datain",
                     wbuf, projection["data_widths"]["W"])
+        print("\nCheck that the on-chip weights are correct")
         check_buffers(testinst, testinst.weight_modules,
                       "ml_block_weights_inst_{}",
                     wbuf, projection["data_widths"]["W"])
         
-        # Calculate required buffers etc.
-        iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
-        iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
-                             projection["data_widths"]["I"]
-        ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
-                              utils.get_proj_stream_count(projection["inner_projection"], 'O') 
-        activation_width = projection["data_widths"]["I"]
-        istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
-        ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
-        ostreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/activation_width)
-        ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
-        obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
-        
         # Load the input buffer
-        # Several values per word, words per buffer, buffers...
-        ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
-                 for k in range(ivalues_per_buf)]            # values per word
-                 for i in range(ibuf_len)]                   # words per buffer
-                 for j in range (ibuf_count)]                # buffers
-        load_buffers(testinst, "input_act_modules_portawe_{}_top",
-                    "input_act_modules_portaaddr_top", "input_datain",
-                    ibuf, projection["data_widths"]["I"])
+        print("\nCheck that the on-chip inputs are correct")
         check_buffers(testinst, testinst.input_act_modules,
                       "ml_block_inputs_inst_{}",
-                    ibuf, projection["data_widths"]["I"])
+                      ibuf, projection["data_widths"]["I"],
+                      buf_start=prev_ibuf_len)
         
         # Now load the weights into the MLBs
         inner_ub = projection["inner_projection"]["B"] * projection["inner_projection"]["PX"] * projection["inner_projection"]["PY"]
@@ -721,6 +731,7 @@ def test_multiple_Datapaths():
                                   ["mlb_modules_a_en_top"], starti=wbi_section_start)
           
         # Check they are right
+        print("\nCheck that the MLB values are right!")
         assert(check_mlb_chains_values(testinst, mlb_count, mac_count, 1, 1,
                                 "ml_block_inst_{}", "weight_out_{}", wbuf,
                                 projection["data_widths"]["W"],
@@ -729,13 +740,14 @@ def test_multiple_Datapaths():
         
         
         # Now stream the inputs, and check the outputs!
+        print("Stream!")
         stream_mlb_values(testinst, obuf_len,
                           ["input_act_modules_portaaddr_top", "input_act_modules_portaaddr_o_top"],
                           [0, -1],
                           [ibuf_len, obuf_len],
                           ["mlb_modules_b_en_top"] +
-                          ["input_act_modules_portawe_{}_out_top".format(obi+len(ibuf)) for obi in range(obuf_count)])
-        
+                          ["input_act_modules_portawe_{}_out_top".format((obi+len(ibuf)+prev_ibuf_len) % 2) for obi in range(obuf_count)])
+                      
         obuf = [[[0
                  for i in range(ostreams_per_buf)]
                  for i in range(obuf_len)]
@@ -750,15 +762,23 @@ def test_multiple_Datapaths():
                  for i in range(obuf_len)]
                  for j in range (obuf_count)]
         
+        print("\nCheck that the outputs are correct")
         print("EXPECTED: " + str(obuf))
         
         obuf_results = read_out_stored_values(testinst, "input_act_modules_portaaddr_o_top", "dataout",
-                             obuf_results, projection["data_widths"]["I"], start_buffer=len(ibuf))
+                                              obuf_results, projection["data_widths"]["I"], start_buffer=(len(ibuf)+prev_ibuf_len)%2)
         
         print("ACTUAL: " + str(obuf_results))
         print("W: " + str(wbuf))
         print("I: " + str(ibuf))
+        ibuf = []
         for bufi in range(obuf_count):
-            for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1): 
+            ibuf = ibuf + [[]]
+            for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1):
                 assert obuf[bufi][olen] == obuf_results[bufi][olen]
+                
+                # Now the inputs are the outputs of the previous layer
+                ibuf[bufi] = ibuf[bufi] + [obuf_results[bufi][olen]]
+                
+        prev_ibuf_len = len(ibuf)
 #    assert(1==0)

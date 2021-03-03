@@ -54,9 +54,10 @@ def load_buffers_sm(testinst, datain_portname, buffer_values, dwidth, outertesti
             testinst.sm_start @= 0
     outertestinst.sim_tick()
 
-def check_buffers(testinst, outer_inst, inner_inst_name, buffer_values, dwidth, outertestinst=None):
+def check_buffers(testinst, outer_inst, inner_inst_name, buffer_values, dwidth,
+                  outertestinst=None, buf_start=0):
     for j in range(len(buffer_values)):
-        inner_inst = getattr(outer_inst, inner_inst_name.format(j))
+        inner_inst = getattr(outer_inst, inner_inst_name.format(j + buf_start))
         check_buffer(testinst, inner_inst, buffer_values[j], dwidth, outertestinst)
                 
 def load_mlb_values(testinst, chainlen, chainstart, buflen, addr_portname, en_portname, outertestinst=None):

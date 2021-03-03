@@ -550,7 +550,8 @@ class InputBufferWrapper(Component):
          T output buffers.
     """
     def construct(s, spec={}, bcounts_i=[1], bcounts_o=[1], name="_v1",
-                  projections={}, mux=True, fast_gen=False, add_SR=False, input_width=-1):
+                  projections={}, mux=True, fast_gen=False, add_SR=False,
+                  input_width=-1, buffer_start_idxs=[0]):
         # Add ports shared between instances to the top level
         # How many address muxes are required? URNYxURNB
         muxes = [[] for proj in projections]
@@ -622,9 +623,11 @@ class InputBufferWrapper(Component):
                     for pj in range(len(projections)):
                         buffer_idxs = utils.map_buffer_idx_to_y_idx(
                             projections[pj], spec)
-                        if i < bcounts_i[pj]:
-                            assert i < len(buffer_idxs)
-                            muxs += [muxes[pj][buffer_idxs[i]]]
+                        i_order = (i - buffer_start_idxs[pj]) % \
+                            max_total_bcount
+                        if (i_order < bcounts_i[pj]):
+                            assert i_order < len(buffer_idxs)
+                            muxs += [muxes[pj][buffer_idxs[i_order]]]
                         else:
                             muxs += [s.omux]
                     # Which muxes to connect to?
@@ -633,19 +636,21 @@ class InputBufferWrapper(Component):
                                             sim=False, idx=str(i))
                 elif (port['type'] == 'DATA') and \
                         (port["direction"] == "out"):
-                    
-                    utils.connect_out_to_top(s, getattr(curr_inst,
-                                                            port["name"]),
-                                                 port["name"] + "_out_" + str(i))
+                    utils.connect_out_to_top(
+                        s, getattr(curr_inst, port["name"]),
+                        port["name"] + "_out_" + str(i))
 
                     if (add_SR):
                         assert(input_width > 0)
                         urwv = projections[0]['inner_projection']['RX']
                         outport = utils.AddOutPort(s, port["width"] * urwv,
                                                    port["name"] + "_" + str(i))
-                        for vali in range(math.floor(port['width']/input_width)):
-                            curr_shift_reg = module_helper_classes.ShiftRegister(
-                                reg_width=input_width, length=urwv - 1, sim=False)
+                        for vali in range(math.floor(port['width'] /
+                                                     input_width)):
+                            curr_shift_reg = \
+                                module_helper_classes.ShiftRegister(
+                                    reg_width=input_width,
+                                    length=urwv - 1, sim=False)
                             assert urwv - 1 > 0
                             setattr(s, "SR" + str(i) + "_" + str(vali),
                                     curr_shift_reg)
@@ -667,8 +672,9 @@ class InputBufferWrapper(Component):
                                 curridx = vali * wv + outi
                                 outport[input_width * curridx:
                                         input_width * (curridx + 1)] //= \
-                                    getattr(curr_shift_reg, "out" + str(outi - 1))
-                    else:         
+                                    getattr(curr_shift_reg, "out" +
+                                            str(outi - 1))
+                    else:
                         utils.connect_out_to_top(s, getattr(curr_inst,
                                                             port["name"]),
                                                  port["name"] + "_" + str(i))
@@ -696,24 +702,34 @@ class InputBufferWrapper(Component):
                                                  port["name"] + "_" + str(i))
 
             for port in spec['ports']:
+                # Mux between the input buffer write enable signal
+                # and the output buffer write enable signal depending on
+                # whether this is an input or output buffer
                 if (port['type'] == 'WEN'):
                     assert(port["direction"] == "in")
+                    # Add ports for both the input and output buffers.
                     instport = utils.AddInPort(s, port['width'],
                                                port["name"] + "_" + str(i))
                     instport_new = utils.AddInPort(s, port['width'],
                                                    port["name"] + "_" +
                                                    str(i) + "_out")
                     wen_in = getattr(curr_inst, port['name'])
-                    newmux = module_helper_classes.MUXN(1, len(bcounts_o))
+
+                    # Mux between the different layers, connecting either
+                    # the input activation WEN or output activation WEN.
+                    newmux = module_helper_classes.MUXN(1, len(bcounts_i))
                     setattr(s, "input_wen_mux" + str(i), newmux)
                     for tt in range(len(bcounts_i)):
                         currin = getattr(newmux, "in" + str(tt))
-                        if (i < bcounts_i[tt]):
+                        i_order = (i - buffer_start_idxs[tt]) % \
+                            max_total_bcount
+                        if (i_order < bcounts_i[tt]):
                             currin //= instport
                         else:
                             currin //= instport_new
                     newmux.sel //= layer_sel
                     wen_in //= newmux.out
+
                     currmux = getattr(s, "input_data_mux" + str(i))
                     currmux.sel //= instport
         utils.tie_off_clk_reset(s)
@@ -756,7 +772,7 @@ class MergeBusses(Component):
 
         # Add input and output ports from each MLB
         for inp in range(num_ins_used):
-            bus_idx = start_bus + math.floor(inp/ins_per_out)
+            bus_idx = (start_bus + math.floor(inp/ins_per_out)) % num_outs
             bus_start = (inp % ins_per_out) * in_width
             bus_end = ((inp % ins_per_out)+1) * in_width
             input_bus = getattr(s, "input_"+str(inp))
@@ -765,8 +781,8 @@ class MergeBusses(Component):
 
         for i in range(num_outs):
             output_bus = getattr(s, "output_" + str(i))
-            if ((i >= start_bus + math.ceil(num_ins_used / ins_per_out))
-                    or (i < start_bus)):
+            i_order = (i - start_bus) % num_outs
+            if i_order >= math.ceil(num_ins_used / ins_per_out):
                 output_bus //= 0
             elif ((ins_per_out*in_width < out_width)):
                 output_bus[ins_per_out * in_width:out_width] //= 0
@@ -800,7 +816,8 @@ class WeightInterconnect(Component):
     """
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
                   num_buffers=1, num_mlbs=1, projection={}, sim=False,
-                  num_mlbs_used=-1, inner_projection={}, dilx=1):
+                  num_mlbs_used=-1, inner_projection={}, dilx=1,
+                  num_banks=1):
         """ Constructor for WeightInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -847,7 +864,11 @@ class WeightInterconnect(Component):
             "Insufficient number of weight buffers"
 
         # Add inputs from buffers
-        utils.add_n_inputs(s, num_buffers, buffer_width, "inputs_from_buffer_")
+        utils.add_n_inputs(s, num_buffers*num_banks, buffer_width,
+                           "inputs_from_buffer_")
+        if (num_banks > 1):
+            bank_sel = utils.AddInPort(s, math.ceil(math.log(num_banks, 2)),
+                                       "bank_sel")
 
         if preload:
             assert mlb_width_used * preload_bus_count <= \
@@ -868,8 +889,20 @@ class WeightInterconnect(Component):
                     "the weight buffer data width must be at least as " + \
                     "wide as the ML block weight input"
                 input_bus_idx = math.floor(chain / streams_per_buffer)
-                input_bus = getattr(s, "inputs_from_buffer_" +
-                                    str(input_bus_idx))
+                if (num_banks > 1):
+                    newmux = module_helper_classes.MUXN(buffer_width,
+                                                        num_banks)
+                    setattr(s, "bank_mux" + str(input_bus_idx), newmux)
+                    for mm in range(num_banks):
+                        currin = getattr(newmux, "in" + str(mm))
+                        inbus_mm = getattr(s, "inputs_from_buffer_" +
+                                           str(input_bus_idx*num_banks))
+                        currin //= inbus_mm
+                    input_bus = newmux.out
+                    newmux.sel //= bank_sel
+                else:
+                    input_bus = getattr(s, "inputs_from_buffer_" +
+                                        str(input_bus_idx))
                 section_idx = chain % streams_per_buffer
                 input_bus_start = section_idx * mlb_width_used
                 input_bus_end = (section_idx + 1) * mlb_width_used
@@ -914,8 +947,20 @@ class WeightInterconnect(Component):
                                                    streams_per_buffer)
                         section_idx = stream_idx % streams_per_buffer
                         output_bus_start = 0
-                    input_bus = getattr(s, "inputs_from_buffer_" +
-                                        str(input_bus_idx))
+                    if (num_banks > 1):
+                        newmux = module_helper_classes.MUXN(buffer_width,
+                                                            num_banks)
+                        setattr(s, "bank_mux" + str(input_bus_idx), newmux)
+                        for mm in range(num_banks):
+                            currin = getattr(newmux, "in" + str(mm))
+                            inbus_mm = getattr(s, "inputs_from_buffer_" +
+                                               str(input_bus_idx*num_banks))
+                            currin //= inbus_mm
+                        input_bus = newmux.out
+                        newmux.sel //= bank_sel
+                    else:
+                        input_bus = getattr(s, "inputs_from_buffer_" +
+                                            str(input_bus_idx))
                     input_bus_start = section_idx * mlb_width_used
                     input_bus_end = (section_idx + 1) * \
                         min(mlb_width_used, buffer_width)
@@ -992,7 +1037,7 @@ class InputInterconnect(Component):
     def construct(s, buffer_width=1, mlb_width=-1, mlb_width_used=1,
                   num_buffers=1, num_mlbs=1, projection={},
                   inner_projection={}, inner_width=1, mux_urn=False,
-                  sim=False, dily=1):
+                  sim=False, dily=1, buffer_start_idx=0):
         """ Constructor for InputInterconnect
 
          :param buffer_width: Bit-width of buffer datain/dataout ports
@@ -1101,8 +1146,9 @@ class InputInterconnect(Component):
                             stream_idx / streams_per_buf_int)
                         section_idx = stream_idx % streams_per_buf_int
                         input_bus_start = section_idx * mlb_width_used
+                    i_order = (input_bus_idx + buffer_start_idx) % num_buffers
                     input_bus = getattr(s, "inputs_from_buffer_" +
-                                        str(input_bus_idx))
+                                        str(i_order))
                     if mux_urn and (mux_size > 1):
                         # For each separate input image connected to this MLB:
                         for (ugi, ubbi, unci, d) in utils.range4D(
@@ -1336,7 +1382,7 @@ class Datapath(Component):
          :type output_interconnect: MargeBusses Component
     """
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
-                  proj_specs=[], fast_gen=False):
+                  proj_specs=[], fast_gen=False, pingpong_w=False):
         """ Constructor for Datapath
 
          :param af_width: Bit-width of activation function input
@@ -1424,6 +1470,7 @@ class Datapath(Component):
                                         inner_bus_counts[dtype])]
                             for dtype in MAC_datatypes}
         buffer_counts = {}
+        num_w_banks = 2 if (pingpong_w) else 1
         buffer_counts['W'] = [utils.get_num_buffers_reqd(buffer_specs['W'],
                                                          outer_bus_count,
                                                          inner_bus_width)
@@ -1466,10 +1513,29 @@ class Datapath(Component):
                                     il) + "\n")
 
         # Instantiate MLBs, buffers
+        # Allocate buffers for each layer
+        buffer_counts['I'] = [utils.get_num_buffers_reqd(buffer_specs['I'],
+                                                         outer_bus_count,
+                                                         inner_bus_width, mw)
+                              for (outer_bus_count, inner_bus_width, mw) in
+                              zip(outer_bus_counts['I'],
+                                  inner_bus_widths['I'],
+                                  max_input_buf_widths)]
+
+        total_num_buffers = max(sum(x) for x in zip(buffer_counts['I'],
+                                                    buffer_counts['O']))
+        buffer_start_idxs = [sum(buffer_counts['I'][0:i+1]) %
+                             total_num_buffers
+                             for i in range(len(buffer_counts['I']) - 1)]
+        ibuffer_start_idxs = [0] + buffer_start_idxs
+        obuffer_start_idxs = [(a + b) % total_num_buffers
+                              for (a, b) in zip(ibuffer_start_idxs,
+                                                buffer_counts['I'])]
+
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
         utils.tie_off_port(s, s.sel)
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
-                                       max(buffer_counts['W']),
+                                       max(buffer_counts['W'])*num_w_banks,
                                        fast_gen=fast_gen)
         s.input_act_modules = InputBufferWrapper(
             buffer_specs['I'], buffer_counts['I'], buffer_counts['O'],
@@ -1477,7 +1543,8 @@ class Datapath(Component):
             add_SR=(("access_patterns" in mlb_spec) and
                     (mlb_spec["access_patterns"]["AP1"] <
                      inner_projs[i]["RX"]) and (inner_projs[i]["RX"] > 1)),
-            input_width=max(inner_data_widths['I']))
+            input_width=max(inner_data_widths['I']),
+            buffer_start_idxs=ibuffer_start_idxs)
         s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
                                     projections=proj_specs, fast_gen=fast_gen)
         s.input_act_modules.sel //= s.sel
@@ -1517,7 +1584,9 @@ class Datapath(Component):
                 num_mlbs=max(MLB_counts),
                 projection=outer_projs[i],
                 inner_projection=inner_projs[i],
-                dilx=proj_specs[i].get("dilation", {}).get("x", 1))
+                dilx=proj_specs[i].get("dilation", {}).get("x", 1),
+                num_banks=num_w_banks
+            )
             weight_interconnects += [weight_interconnect]
             setattr(s, "weight_interconnect" + newname, weight_interconnect)
             input_buf_width = utils.get_sum_datatype_width(buffer_specs['I'],
@@ -1547,7 +1616,8 @@ class Datapath(Component):
                 inner_projection=inner_projs[i],
                 inner_width=inner_width,
                 mux_urn=True,
-                dily=proj_specs[i].get("dilation", {}).get("y", 1)
+                dily=proj_specs[i].get("dilation", {}).get("y", 1),
+                buffer_start_idx=ibuffer_start_idxs[i]
             )
             setattr(s, "input_interconnect" + newname, input_interconnect)
             input_interconnects += [input_interconnect]
@@ -1568,7 +1638,7 @@ class Datapath(Component):
                 get_sum_datatype_width(buffer_specs['O'], 'DATA', ["in"]),
                 num_outs=max(sum(x) for x in zip(buffer_counts['I'],
                                                  buffer_counts['O'])),
-                start_bus=buffer_counts['I'][i])
+                start_bus=obuffer_start_idxs[i])
             output_interconnects += [output_interconnect]
             setattr(s, "output_interconnect" + newname, output_interconnect)
 

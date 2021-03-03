@@ -14,7 +14,20 @@ from verilog_ml_benchmark_generator import cli
 
 def test_MUXN():
     """Test Component class MUXN"""
-    testinst = module_helper_classes.MUXN(4,5)
+    testinst = module_helper_classes.MUXN(4,2)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    
+    testinst = module_helper_classes.MUXN(4,3)
     testinst.elaborate()
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
@@ -30,9 +43,157 @@ def test_MUXN():
     testinst.sel @= 2
     testinst.sim_tick()
     assert testinst.out == 8
+    
+    testinst = module_helper_classes.MUXN(4,4)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.in3 @= 9
     testinst.sel @= 0
     testinst.sim_tick()
     assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 3
+    testinst.sim_tick()
+    assert testinst.out == 9
+    
+    testinst = module_helper_classes.MUXN(4,5)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.in3 @= 9
+    testinst.in4 @= 10
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 3
+    testinst.sim_tick()
+    assert testinst.out == 9
+    testinst.sel @= 4
+    testinst.sim_tick()
+    assert testinst.out == 10
+    
+    testinst = module_helper_classes.MUXN(4,6)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.in3 @= 9
+    testinst.in4 @= 10
+    testinst.in5 @= 2
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 3
+    testinst.sim_tick()
+    assert testinst.out == 9
+    testinst.sel @= 4
+    testinst.sim_tick()
+    assert testinst.out == 10
+    testinst.sel @= 5
+    testinst.sim_tick()
+    assert testinst.out == 2
+    
+    testinst = module_helper_classes.MUXN(4,7)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.in3 @= 1
+    testinst.in4 @= 2
+    testinst.in5 @= 3
+    testinst.in6 @= 9
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 3
+    testinst.sim_tick()
+    assert testinst.out == 1
+    testinst.sel @= 4
+    testinst.sim_tick()
+    assert testinst.out == 2
+    testinst.sel @= 5
+    testinst.sim_tick()
+    assert testinst.out == 3
+    testinst.sel @= 6
+    testinst.sim_tick()
+    assert testinst.out == 9
+    
+    testinst = module_helper_classes.MUXN(4,8)
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.in0 @= 6
+    testinst.in1 @= 7
+    testinst.in2 @= 8
+    testinst.in3 @= 1
+    testinst.in4 @= 2
+    testinst.in5 @= 3
+    testinst.in6 @= 9
+    testinst.in7 @= 10
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 1
+    testinst.sim_tick()
+    assert testinst.out == 7
+    testinst.sel @= 2
+    testinst.sim_tick()
+    assert testinst.out == 8
+    testinst.sel @= 0
+    testinst.sim_tick()
+    assert testinst.out == 6
+    testinst.sel @= 3
+    testinst.sim_tick()
+    assert testinst.out == 1
+    testinst.sel @= 4
+    testinst.sim_tick()
+    assert testinst.out == 2
+    testinst.sel @= 5
+    testinst.sim_tick()
+    assert testinst.out == 3
+    testinst.sel @= 6
+    testinst.sim_tick()
+    assert testinst.out == 9
+    testinst.sel @= 7
+    testinst.sim_tick()
+    assert testinst.out == 10
     
 def test_MUX_NXN():
     """Test Component class MUXN"""

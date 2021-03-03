@@ -21,13 +21,13 @@ def merge_bus(v,width):
         sum += v[i] * (2 ** (width * i))
     return sum
 
-def load_buffers(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth, outertestinst=None):
+def load_buffers(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth, outertestinst=None, start_buffer=0):
     #eg. ibuf = [[[1
     #         for k in range(ivalues_per_buf)]            # values per word
     #         for i in range(ibuf_len)]                   # words per buffer
     #         for j in range (ibuf_count)]                # buffers
     for j in range(len(buffer_values)):  # For each buffer...
-        curr_we = we_portname.format(j)
+        curr_we = we_portname.format(j+start_buffer)
         load_buffer(testinst, curr_we, addr_portname, datain_portname, buffer_values[j], dwidth, outertestinst)
 
 def load_buffer(testinst, we_portname, addr_portname, datain_portname, buffer_values, dwidth, outertestinst=None):

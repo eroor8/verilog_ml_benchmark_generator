@@ -896,7 +896,7 @@ class WeightInterconnect(Component):
                     for mm in range(num_banks):
                         currin = getattr(newmux, "in" + str(mm))
                         inbus_mm = getattr(s, "inputs_from_buffer_" +
-                                           str(input_bus_idx*num_banks))
+                                           str(input_bus_idx + mm*num_buffers))
                         currin //= inbus_mm
                     input_bus = newmux.out
                     newmux.sel //= bank_sel
@@ -1471,6 +1471,9 @@ class Datapath(Component):
                             for dtype in MAC_datatypes}
         buffer_counts = {}
         num_w_banks = 2 if (pingpong_w) else 1
+        if (num_w_banks > 1):
+            utils.AddInPort(s, math.ceil(math.log(num_w_banks, 2)), "bank_sel")
+
         buffer_counts['W'] = [utils.get_num_buffers_reqd(buffer_specs['W'],
                                                          outer_bus_count,
                                                          inner_bus_width)
@@ -1589,6 +1592,8 @@ class Datapath(Component):
             )
             weight_interconnects += [weight_interconnect]
             setattr(s, "weight_interconnect" + newname, weight_interconnect)
+            if (num_w_banks > 1):
+                weight_interconnect.bank_sel //= s.bank_sel
             input_buf_width = utils.get_sum_datatype_width(buffer_specs['I'],
                                                            'DATA', ["in"])
             mlb_width_used = inner_bus_widths['I'][i]

@@ -782,3 +782,219 @@ def test_multiple_Datapaths():
                 
         prev_ibuf_len = len(ibuf)
 #    assert(1==0)
+
+def test_Datapath_pingpong():
+    """Test Component class Datapath"""
+    projection = {"name": "test",
+                  "activation_function": "RELU",
+                  "data_widths": {"W": 4,
+                                  "I": 4,
+                                  "O": 16},
+                  "inner_projection": {'C':2,'RX':1, 'RY':1,
+                                       'B':1,'PX':2,'PY':1,'E':2,
+                                       'G':2,
+                                       'PRELOAD':[{'dtype':'W','bus_count':1}]},
+                 # "inner_projection": {'C':2,'RX':3, 'RY':1,
+                  "outer_projection": {'C':2,'RX':1, 'RY':1,
+                                       'B':2,'PX':1,'PY':1,'E':1,
+                                       'G':2,
+                                       'PRELOAD':[{'dtype':'W','bus_count':1}]}
+                  #"outer_projection": {'C':2,'RX':1, 'RY':1,
+                  }
+    wb_spec = {
+        "block_name": "ml_block_weights",
+        "simulation_model": "Buffer",
+        "ports": [
+            {"name":"portaaddr", "width":4, "direction": "in", "type":"ADDRESS"},
+            {"name":"portadatain", "width":16, "direction": "in", "type":"DATA"},
+            {"name":"portadataout", "width":16, "direction": "out", "type":"DATA"},
+            {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
+         ]
+    }
+    ib_spec = {
+        "block_name": "ml_block_inputs",
+        "simulation_model": "Buffer",
+        "ports": [
+            {"name":"portaaddr", "width":3, "direction": "in", "type":"ADDRESS"},
+            {"name":"portadatain", "width":32, "direction": "in", "type":"DATA"},
+            {"name":"portadataout", "width":32, "direction": "out", "type":"DATA"},
+            {"name":"portawe", "width":1, "direction": "in", "type":"WEN"},
+        ]
+    }
+    mlb_spec = {
+        "block_name": "ml_block",
+        "simulation_model": "MLB",
+        "MAC_info": { "num_units": 128, "data_widths": {"W":8, "I":8, "O": 32} },
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"a_out", "width":32, "direction": "out", "type":"W"},
+            {"name":"b_in", "width":64, "direction": "in", "type":"I"},
+            {"name":"b_out", "width":64, "direction": "out", "type":"I"},
+            {"name":"res_in", "width":128, "direction": "in", "type":"O"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+            {"name":"a_en", "width":1, "direction": "in", "type":"W_EN"},
+            {"name":"b_en", "width":1, "direction": "in", "type":"I_EN"},
+            {"name":"acc_en", "width":1, "direction": "in", "type":"ACC_EN"},
+        ]
+    }
+    
+    testinst = module_classes.Datapath(
+        mlb_spec=mlb_spec,
+        wb_spec=wb_spec,
+        ib_spec=ib_spec,
+        ob_spec=ib_spec,
+        proj_specs=[projection],
+        pingpong_w=True
+    )
+
+    testinst.elaborate()
+    testinst.apply(DefaultPassGroup())
+    testinst.sim_reset()
+    testinst.bank_sel @= 0
+    
+    # Calculate required buffers etc.
+    mlb_count = utils.get_mlb_count(projection["outer_projection"])
+    mac_count = utils.get_mlb_count(projection["inner_projection"])
+    ibuf_len = 2**ib_spec["ports"][0]["width"]
+    obuf_len = 2**ib_spec["ports"][0]["width"]
+    wbuf_len = 2**wb_spec["ports"][0]["width"]
+
+    # Load the weight buffer
+    wbuf_count = 1
+    weight_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'W')
+    wvalues_per_stream = utils.get_proj_stream_count(projection["inner_projection"], 'W')
+    wstream_bitwidth = wvalues_per_stream*projection["data_widths"]["W"]
+    wstreams_per_buf = math.floor(wb_spec["ports"][1]["width"]/wstream_bitwidth)
+    wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
+    wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
+    
+    wbuf1 = [[[random.randint(0,(2**projection["data_widths"]["W"])-1)
+            for k in range(wvalues_per_buf)]    # values per word
+            for i in range(wbuf_len)]           # words per buffer
+            for j in range(wbuf_count)]         # buffer count
+    load_buffers(testinst, "weight_modules_portawe_{}_top",
+                "weight_modules_portaaddr_top", "weight_datain",
+                wbuf1, projection["data_widths"]["W"])
+    check_buffers(testinst, testinst.weight_modules,
+                  "ml_block_weights_inst_{}",
+                wbuf1, projection["data_widths"]["W"])
+    
+    wbuf2 = [[[random.randint(0,(2**projection["data_widths"]["W"])-1)
+            for k in range(wvalues_per_buf)]    # values per word
+            for i in range(wbuf_len)]           # words per buffer
+            for j in range(wbuf_count)]         # buffer count
+    load_buffers(testinst, "weight_modules_portawe_{}_top",
+                "weight_modules_portaaddr_top", "weight_datain",
+                 wbuf2, projection["data_widths"]["W"],
+                 start_buffer=len(wbuf1))
+    check_buffers(testinst, testinst.weight_modules,
+                  "ml_block_weights_inst_{}",
+                  wbuf2, projection["data_widths"]["W"],
+                  buf_start=len(wbuf1))
+    
+    # Calculate required buffers etc.
+    iouter_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'I')
+    iouter_stream_width = utils.get_proj_stream_count(projection["inner_projection"], 'I') * \
+                         projection["data_widths"]["I"]
+    ototal_stream_count = utils.get_proj_stream_count(projection["outer_projection"], 'O') * \
+                          utils.get_proj_stream_count(projection["inner_projection"], 'O') 
+    activation_width = projection["data_widths"]["I"]
+    istreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/iouter_stream_width)
+    ivalues_per_buf = istreams_per_buf*utils.get_proj_stream_count(projection["inner_projection"], 'I')
+    ostreams_per_buf = math.floor(ib_spec["ports"][1]["width"]/activation_width)
+    ibuf_count = math.ceil(iouter_stream_count/istreams_per_buf)
+    obuf_count = math.ceil(ototal_stream_count/ostreams_per_buf)
+    
+    # Load the input buffer
+    # Several values per word, words per buffer, buffers...
+    ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
+             for k in range(ivalues_per_buf)]            # values per word
+             for i in range(ibuf_len)]                   # words per buffer
+             for j in range (ibuf_count)]                # buffers
+    load_buffers(testinst, "input_act_modules_portawe_{}_top",
+                "input_act_modules_portaaddr_top", "input_datain",
+                ibuf, projection["data_widths"]["I"])
+    check_buffers(testinst, testinst.input_act_modules,
+                  "ml_block_inputs_inst_{}",
+                ibuf, projection["data_widths"]["I"])
+
+    # Now load the weights into the MLBs
+    inner_ub = projection["inner_projection"]["B"] * projection["inner_projection"]["PX"] * projection["inner_projection"]["PY"]
+    outer_ub = projection["outer_projection"]["B"] * projection["outer_projection"]["PY"] * projection["outer_projection"]["PX"]
+    wbi_section_length = projection["inner_projection"]["E"] * \
+                        projection["inner_projection"]["C"] * \
+                        projection["inner_projection"]["RY"] * \
+                        projection["inner_projection"]["RX"]
+    wbo_section_length = projection["outer_projection"]["E"] * \
+                        projection["outer_projection"]["C"] * \
+                        projection["outer_projection"]["RY"] * \
+                        projection["outer_projection"]["RX"] *\
+                        projection["inner_projection"]["G"] *  wbi_section_length
+
+    testinst.bank_sel @= 0
+    for wbuf in [wbuf1,wbuf2]:
+        starti = 0
+        for ugo in range(projection["outer_projection"]["G"]):
+            for ubo in range(outer_ub):
+                for ugi in range(projection["inner_projection"]["G"] *
+                                 projection["outer_projection"]["RX"] *
+                                 projection["outer_projection"]["RY"] *
+                                 projection["outer_projection"]["C"] *
+                                 projection["outer_projection"]["E"]):
+                    for ubi in range(inner_ub):
+                        wbi_section_start = wbo_section_length*ugo + wbi_section_length*ugi
+                        print(wbi_section_start)
+                        starti = stream_mlb_values(testinst, wbi_section_length,
+                                  ["weight_modules_portaaddr_top"],
+                                  [0],
+                                  [wbuf_len],
+                                  ["mlb_modules_a_en_top"], starti=wbi_section_start)
+          
+        # Check they are right
+        assert(check_mlb_chains_values(testinst, mlb_count, mac_count, 1, 1,
+                                "ml_block_inst_{}", "weight_out_{}", wbuf,
+                                projection["data_widths"]["W"],
+                                wbo_section_length, outer_ub,
+                                       wbi_section_length, inner_ub))
+        
+        
+        # Now stream the inputs, and check the outputs!
+        stream_mlb_values(testinst, obuf_len,
+                          ["input_act_modules_portaaddr_top", "input_act_modules_portaaddr_o_top"],
+                          [0, -1],
+                          [ibuf_len, obuf_len],
+                          ["mlb_modules_b_en_top"] +
+                          ["input_act_modules_portawe_{}_out_top".format(obi+len(ibuf))
+                           for obi in range(obuf_count)])
+        
+        obuf = [[[0
+                 for i in range(ostreams_per_buf)]
+                 for i in range(obuf_len)]
+                 for j in range (obuf_count)]
+        obuf = get_expected_outputs_old(obuf, ostreams_per_buf,
+                                    wbuf,
+                                    ibuf, ivalues_per_buf,
+                                    projection)
+        
+        obuf_results = [[[[0]
+                 for i in range(ostreams_per_buf)]
+                 for i in range(obuf_len)]
+                 for j in range (obuf_count)]
+        
+        obuf_results = read_out_stored_values(testinst, "input_act_modules_portaaddr_o_top", "dataout",
+                                              obuf_results, projection["data_widths"]["I"], start_buffer=len(ibuf))
+        
+        
+        print("EXPECTED: " + str(obuf))
+        print("ACTUAL: " + str(obuf_results))
+        
+        print("W: " + str(wbuf))
+        print("I: " + str(ibuf))
+        print("Bank")
+        print(testinst.bank_sel)
+        for bufi in range(obuf_count):
+            for olen in range(min(obuf_len,ibuf_len)-1): 
+                assert obuf[bufi][olen] == obuf_results[bufi][olen]
+        testinst.bank_sel @= 1        
+        testinst.sim_tick()
+        testinst.sim_tick()

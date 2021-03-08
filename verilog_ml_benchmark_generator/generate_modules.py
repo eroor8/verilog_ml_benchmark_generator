@@ -630,7 +630,7 @@ def postprocess_verilog_odin(filename_in):
 def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                        projection, write_to_file, emif_spec={},
                                        waddr=0, iaddr=0, oaddr=0, ws=True,
-                                       fast_gen=True):
+                                       fast_gen=True, pingpong_w=False):
     """ Validate input specifications, generate  a system including both
         the statemachines and datapath.
 
@@ -648,7 +648,8 @@ def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
     t = state_machine_classes.MultipleLayerSystem(mlb_spec, wb_spec, ab_spec,
                                                   ab_spec, emif_spec,
                                                   projection, waddr, iaddr,
-                                                  oaddr, ws, fast_gen)
+                                                  oaddr, ws, fast_gen,
+                                                  pingpong_w=pingpong_w)
     t.elaborate()
     return generate_verilog(t, write_to_file, module_name, not fast_gen)
 
@@ -742,7 +743,8 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
                                                   ab_spec, emif_spec,
                                                   projection, w_address=0,
                                                   i_address=iaddr,
-                                                  o_address=oaddr, ws=ws)
+                                                  o_address=oaddr, ws=ws,
+                                                  pingpong_w=False)
     t.elaborate()
     t.apply(DefaultPassGroup())
 
@@ -784,7 +786,8 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                          projections, write_to_file,
                          oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True,
                          validate_output=True, layer_sel=[0], simulate=True,
-                         gen_ver=False, include_sim_models=False):
+                         gen_ver=False, include_sim_models=False,
+                         pingpong_w=False):
     """
     Generate an accelerator
     Fill the off-chip memory with random data (or assume initial data is
@@ -819,7 +822,8 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                            ab_spec, projections[0],
                                            write_to_file, emif_spec, waddrs[0],
                                            iaddrs[0], oaddrs[0], ws,
-                                           fast_gen=(not include_sim_models))
+                                           fast_gen=(not include_sim_models),
+                                           pingpong_w=pingpong_w)
         if (not simulate):
             return
 
@@ -830,7 +834,8 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                                   projections,
                                                   w_address=waddrs,
                                                   i_address=iaddrs,
-                                                  o_address=oaddrs, ws=ws)
+                                                  o_address=oaddrs, ws=ws,
+                                                  pingpong_w=pingpong_w)
     t.elaborate()
     if (simulate):
         t.apply(DefaultPassGroup())

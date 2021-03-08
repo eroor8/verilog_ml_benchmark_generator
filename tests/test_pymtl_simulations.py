@@ -529,7 +529,7 @@ def test_simulate_multiple_layers(
 @pytest.mark.full_simulations
 @pytest.mark.skip
 def test_simulate_layer(
-        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True):
+        mlb_file, ab_file, wb_file, emif_file, proj_file, ws, v=True, pp=False):
     
     # Make sure that output gets through odin.
     mlb_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -683,7 +683,8 @@ def test_simulate_layer(
                                                     iaddrs=[iaddr],
                                                     oaddrs=[oaddr],
                                                     ws=ws,
-                                                    validate_output=v)
+                                                    validate_output=v,
+                                                    pingpong_w=pp)
     print("==> Done simulation")
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
@@ -942,6 +943,13 @@ def test_simulate_layer_n4():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_14.yaml", True, False)
+    
+def test_simulate_layer_n4_pp():
+    test_simulate_layer("mlb_spec_3.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_14.yaml", True, False, True)
     
 def test_simulate_layer_urn():
     test_simulate_layer("mlb_spec_3.yaml",

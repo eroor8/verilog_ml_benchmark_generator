@@ -165,6 +165,57 @@ def get_var_product(projection, var_array):
     return product
 
 
+def get_buffer_counts(proj_specs, ib_spec, ob_spec, wb_spec):
+    """ Calculate the number of each kind of buffer required """
+    inner_projs = [proj_spec['inner_projection']
+                   for proj_spec in proj_specs]
+    inner_bus_counts = {dtype: [get_proj_stream_count(inner_proj,
+                                                      dtype)
+                                for inner_proj in inner_projs]
+                        for dtype in ['W', 'I', 'O']}
+    inner_data_widths = {dtype: [proj_spec['data_widths'][dtype]
+                                 for proj_spec in proj_specs]
+                         for dtype in ['W', 'I', 'O']}
+    inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
+                                for (inner_bus_count, inner_data_width)
+                                in zip(inner_bus_counts[dtype],
+                                       inner_data_widths[dtype])]
+                        for dtype in ['W', 'I', 'O']}
+    outer_projs = [proj_spec['outer_projection']
+                   for proj_spec in proj_specs]
+    outer_bus_counts = {dtype: [get_proj_stream_count(outer_proj,
+                                                      dtype)
+                                for outer_proj in outer_projs]
+                        for dtype in ['W', 'I', 'O']}
+    max_input_buf_widths = [get_max_input_bus_width(
+        get_sum_datatype_width(ib_spec, "DATA", ["in"]),
+        proj, 'I') for proj in proj_specs]
+    buffer_counts = {}
+    buffer_counts['I'] = [get_num_buffers_reqd(ib_spec,
+                                               outer_bus_count,
+                                               inner_bus_width, mw)
+                          for (outer_bus_count, inner_bus_width, mw) in
+                          zip(outer_bus_counts['I'],
+                              inner_bus_widths['I'],
+                              max_input_buf_widths)]
+    buffer_counts['O'] = [get_num_buffers_reqd(ob_spec,
+                                               outer_bus_counto *
+                                               inner_bus_counto,
+                                               inner_data_widthi)
+                          for (outer_bus_counto, inner_bus_counto,
+                               inner_data_widthi) in
+                          zip(outer_bus_counts["O"],
+                              inner_bus_counts["O"],
+                              inner_data_widths["I"])]
+    buffer_counts['W'] = [get_num_buffers_reqd(wb_spec,
+                                               outer_bus_countw,
+                                               inner_bus_widthw)
+                          for (outer_bus_countw, inner_bus_widthw) in
+                          zip(outer_bus_counts["W"],
+                              inner_bus_widths["W"])]
+    return buffer_counts
+
+
 def get_mlb_count(projection):
     """ Calculate the number of ML Blocks required based on the projection
         definition (``projections``)

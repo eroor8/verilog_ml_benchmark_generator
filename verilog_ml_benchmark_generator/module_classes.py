@@ -954,7 +954,8 @@ class WeightInterconnect(Component):
                         for mm in range(num_banks):
                             currin = getattr(newmux, "in" + str(mm))
                             inbus_mm = getattr(s, "inputs_from_buffer_" +
-                                               str(input_bus_idx*num_banks))
+                                               str(input_bus_idx +
+                                                   mm*num_buffers))
                             currin //= inbus_mm
                         input_bus = newmux.out
                         newmux.sel //= bank_sel
@@ -1450,6 +1451,9 @@ class Datapath(Component):
                         mlb_spec['MAC_info']['data_widths'][dtype]), \
                     "MLB width insufficient for inner projection"
 
+        buffer_counts = utils.get_buffer_counts(proj_specs, ib_spec, ob_spec,
+                                                wb_spec)
+
         # Calculate required number of MLBs, IO streams, activations
         outer_projs = [proj_spec['outer_projection']
                        for proj_spec in proj_specs]
@@ -1469,36 +1473,13 @@ class Datapath(Component):
                                     zip(outer_bus_counts[dtype],
                                         inner_bus_counts[dtype])]
                             for dtype in MAC_datatypes}
-        buffer_counts = {}
-        num_w_banks = 2 if (pingpong_w) else 1
+        num_w_banks = 2 if pingpong_w else 1
         if (num_w_banks > 1):
             utils.AddInPort(s, math.ceil(math.log(num_w_banks, 2)), "bank_sel")
 
-        buffer_counts['W'] = [utils.get_num_buffers_reqd(buffer_specs['W'],
-                                                         outer_bus_count,
-                                                         inner_bus_width)
-                              for (outer_bus_count, inner_bus_width) in
-                              zip(outer_bus_counts['W'],
-                                  inner_bus_widths['W'])]
         max_input_buf_widths = [utils.get_max_input_bus_width(
             utils.get_sum_datatype_width(buffer_specs['I'], "DATA", ["in"]),
             proj, 'I') for proj in proj_specs]
-        buffer_counts['I'] = [utils.get_num_buffers_reqd(buffer_specs['I'],
-                                                         outer_bus_count,
-                                                         inner_bus_width, mw)
-                              for (outer_bus_count, inner_bus_width, mw) in
-                              zip(outer_bus_counts['I'],
-                                  inner_bus_widths['I'],
-                                  max_input_buf_widths)]
-        buffer_counts['O'] = [utils.get_num_buffers_reqd(buffer_specs['O'],
-                                                         outer_bus_counto *
-                                                         inner_bus_counto,
-                                                         inner_data_widthi)
-                              for (outer_bus_counto, inner_bus_counto,
-                                   inner_data_widthi) in
-                              zip(outer_bus_counts["O"],
-                                  inner_bus_counts["O"],
-                                  inner_data_widths["I"])]
 
         for (proj_spec, MAC_count, outer_bus_width, total_bus_count) in \
                 zip(proj_specs, MAC_counts, outer_bus_widths,

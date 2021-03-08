@@ -8,10 +8,10 @@ Test ASSUMPTIONS:
 """
 from pymtl3 import Component, OutPort, InPort, update, update_ff, Wire, Bits5
 import math
-import utils
-from utils import printi
 import module_helper_classes
 import module_classes
+import utils
+from utils import printi
 il = 1
 
 
@@ -561,7 +561,7 @@ class StateMachineEMIFSeparate(Component):
                   emif_spec={}, proj_spec={}, w_address=0, i_address=0,
                   o_address=0, ws=True, ibuf_start=0, load_inputs=True,
                   load_outputs=True, num_layers=1, curr_layer=0,
-                  total_num_buffers=-1):
+                  total_num_buffers=-1, pingpong_w=False):
         """ Constructor for Datapath
 
          :param mlb_spec: Contains information about ML block used
@@ -587,85 +587,63 @@ class StateMachineEMIFSeparate(Component):
                                     "block " +
                                     str(mlb_spec.get('block_name', "unnamed") +
                                         " <")))
-        MAC_datatypes = ['W', 'I', 'O']
         buffer_specs = {'W': wb_spec, 'I': ib_spec, 'O': ob_spec}
+        inner_proj = proj_spec['inner_projection']
+        outer_proj = proj_spec['outer_projection']
 
         # Make sure that projection makes sense
         if not ws:
             assert ("PRELOAD" not in proj_spec["inner_projection"])
             assert ("PRELOAD" not in proj_spec["outer_projection"])
 
-        # Calculate required MLB interface widths and print information
-        inner_proj = proj_spec['inner_projection']
-        inner_bus_counts = {dtype: utils.get_proj_stream_count(inner_proj,
-                                                               dtype)
-                            for dtype in MAC_datatypes}
-        inner_data_widths = {dtype: proj_spec['data_widths'][dtype]
-                             for dtype in MAC_datatypes}
-        inner_bus_widths = {dtype: inner_bus_counts[dtype] *
-                            inner_data_widths[dtype]
-                            for dtype in MAC_datatypes}
+        # Do some calculations...
+        buffer_counts = utils.get_buffer_counts([proj_spec], ib_spec, ob_spec,
+                                                wb_spec)
+        bank_count = 2 if pingpong_w else 1
 
-        # Calculate required number of MLBs, IO streams, activations
-        outer_proj = proj_spec['outer_projection']
-        outer_bus_counts = {dtype: utils.get_proj_stream_count(outer_proj,
-                                                               dtype)
-                            for dtype in MAC_datatypes}
-        max_input_buf_width = utils.get_max_input_bus_width(
-            utils.get_sum_datatype_width(buffer_specs['I'], "DATA", ["in"]),
-            proj_spec, 'I')
-        buffer_counts = {}
-        buffer_counts['W'] = utils.get_num_buffers_reqd(buffer_specs['W'],
-                                                        outer_bus_counts['W'],
-                                                        inner_bus_widths['W'])
-        buffer_counts['I'] = utils.get_num_buffers_reqd(buffer_specs['I'],
-                                                        outer_bus_counts['I'],
-                                                        inner_bus_widths['I'],
-                                                        max_input_buf_width)
-        buffer_counts['O'] = utils.get_num_buffers_reqd(buffer_specs['O'],
-                                                        outer_bus_counts['O'] *
-                                                        inner_bus_counts['O'],
-                                                        inner_data_widths['I'])
-        connected_ins = []
+        # Add top level ports
+        if (bank_count > 1):
+            bank_sel_w = utils.AddOutPort(
+                s, math.ceil(math.log(bank_count, 2)), "bank_sel")
+            bank_sel_w //= 0
         s.sel = InPort(math.ceil(math.log(max(num_layers, 2), 2)))
-
-        # Load data into weight buffers
         s.sm_start = InPort(1)
+
+        # Instantiate state machine to load data into weight buffers
         addrw_ports = list(utils.get_ports_of_type(buffer_specs['W'],
                                                    'ADDRESS', ["in"]))
         dataw_ports = list(utils.get_ports_of_type(buffer_specs['W'], 'DATA',
                                                    ["out"]))
         s.load_wbufs_emif = SM_LoadBufsEMIF(
-            buffer_counts['W'], 2 ** addrw_ports[0]["width"],
+            buffer_counts['W'][0] * bank_count, 2 ** addrw_ports[0]["width"],
             addrw_ports[0]["width"], dataw_ports[0]["width"],
             utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
             utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"),
             w_address)
         utils.connect_out_to_top(s, s.load_wbufs_emif.buf_writedata,
                                  "wbuf_writedata")
-        connected_ins += utils.connect_inst_ports_by_name(s, r"weight_wen",
-                                                          s.load_wbufs_emif,
-                                                          r"wen", parent_in=0)
+        connected_ins = utils.connect_inst_ports_by_name(s, r"weight_wen",
+                                                         s.load_wbufs_emif,
+                                                         r"wen", parent_in=0)
 
-        # Load data into input buffers
+        # Instantiate state machine to load data into input buffers
         addri_ports = list(utils.get_ports_of_type(buffer_specs['I'],
                                                    'ADDRESS', ["in"]))
         datai_ports = list(utils.get_ports_of_type(buffer_specs['I'], 'DATA',
                                                    ["out"]))
-
         s.load_ibufs_emif = SM_LoadBufsEMIF(
-            buffer_counts['I'] + buffer_counts['O'],
+            buffer_counts['I'][0] + buffer_counts['O'][0],
             2 ** addri_ports[0]["width"],
             addri_ports[0]["width"], datai_ports[0]["width"],
             utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
             utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"),
-            i_address, buffer_counts['I'])
+            i_address, buffer_counts['I'][0])
         utils.connect_out_to_top(s, s.load_ibufs_emif.buf_writedata,
                                  "ibuf_writedata")
         connected_ins += utils.connect_inst_ports_by_name(s, r"input_wen",
                                                           s.load_ibufs_emif,
                                                           r"wen", parent_in=0)
-        # Preload weights into MLBs
+        # Instantiate SM to preload weights into MLBs
         outer_tile_repeat_x = 1
         num_outer_tiles = 1
         inner_tile_size = 1
@@ -686,15 +664,29 @@ class StateMachineEMIFSeparate(Component):
                 outer_proj["RX"] * \
                 outer_proj["E"] * outer_tile_size
             num_outer_tiles = outer_proj["G"]
-        s.preload_weights = SM_PreloadMLB(
+        s.preload_weights0 = SM_PreloadMLB(
             addr_width=addrw_ports[0]["width"],
             num_outer_tiles=num_outer_tiles,
             outer_tile_size=outer_tile_size,
             inner_tile_size=inner_tile_size,
             outer_tile_repeat_x=outer_tile_repeat_x,
             inner_tile_repeat_x=inner_tile_repeat_x)
+        s.start_addr = Wire(addrw_ports[0]["width"])
+        s.plw_start = Wire(1)
+        s.preload_weights0.start_address //= s.start_addr
+        s.preload_weights0.start //= s.plw_start
+        if (bank_count > 1):
+            s.preload_weights1 = SM_PreloadMLB(
+                addr_width=addrw_ports[0]["width"],
+                num_outer_tiles=num_outer_tiles,
+                outer_tile_size=outer_tile_size,
+                inner_tile_size=inner_tile_size,
+                outer_tile_repeat_x=outer_tile_repeat_x,
+                inner_tile_repeat_x=inner_tile_repeat_x)
+            s.preload_weights1.start_address //= s.start_addr
+            s.preload_weights1.start //= s.plw_start
 
-        # Stream Inputs into MLB and read outputs into buffer
+        # SM to stream inputs into MLB and read outputs into buffer
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'],
                                                    'ADDRESS', ["in"]))
         obuf_len = 2 ** addro_ports[0]["width"]
@@ -702,8 +694,7 @@ class StateMachineEMIFSeparate(Component):
         outer_proj = proj_spec.get("outer_projection", {})
         inner_proj = proj_spec.get("inner_projection", {})
         unt = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
-        urw = inner_proj.get("RX", 1) * \
-            outer_proj.get("RX", 1)
+        urw = inner_proj.get("RX", 1) * outer_proj.get("RX", 1)
         uet = temp_proj.get("E", 1)
         ugt = temp_proj.get("G", 1)
         ubt = temp_proj.get("B", obuf_len) * temp_proj.get("PX", 1) * \
@@ -798,7 +789,7 @@ class StateMachineEMIFSeparate(Component):
         utils.connect_out_to_top(s, s.stream_inputs.wen, "stream_inputs_wen")
         utils.connect_out_to_top(s, s.stream_outputs.wen, "stream_outputs_wen")
         if (ws):
-            utils.connect_out_to_top(s, s.preload_weights.wen,
+            utils.connect_out_to_top(s, s.preload_weights0.wen,
                                      "stream_weights_wen")
         else:
             utils.connect_out_to_top(s, s.stream_weights.wen,
@@ -806,22 +797,22 @@ class StateMachineEMIFSeparate(Component):
         s.pstart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
                                          addrw_ports[0]["width"]) +
                                      addri_ports[0]["width"] + 1)
-        s.preload_weights.start_address //= \
-            s.pstart_address_wide[0:addrw_ports[0]["width"]]
+        s.start_addr //= s.pstart_address_wide[0:addrw_ports[0]["width"]]
 
         # Now read the outputs out to off-chip memory
         datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA',
                                                    ["out"]))
 
         if (total_num_buffers < 1):
-            total_num_buffers = buffer_counts['O'] + buffer_counts['I']
+            total_num_buffers = buffer_counts['O'][0] + buffer_counts['I'][0]
         s.write_off_emif = SM_WriteOffChipEMIF(
-            buffer_counts['O'], 2 ** addro_ports[0]["width"],
+            buffer_counts['O'][0], 2 ** addro_ports[0]["width"],
             addro_ports[0]["width"], datao_ports[0]["width"],
             utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
             utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"),
             o_address, total_num_buffers,
-            start_buffer=(buffer_counts['I'] + ibuf_start) % total_num_buffers)
+            start_buffer=(buffer_counts['I'][0] + ibuf_start) %
+            total_num_buffers)
 
         connected_ins += utils.connect_inst_ports_by_name(s, r"emif_datain",
                                                           s.write_off_emif,
@@ -883,7 +874,7 @@ class StateMachineEMIFSeparate(Component):
                 elif (s.state == LOADING_MLBS):
                     if (ws):
                         # Pre-load weights into the MLBs
-                        if s.preload_weights.rdy:
+                        if s.preload_weights0.rdy:
                             s.state <<= STREAMING_MLBS
                             if (s.uet_cnt < (uet-1)):
                                 s.uet_cnt <<= s.uet_cnt + 1
@@ -923,7 +914,7 @@ class StateMachineEMIFSeparate(Component):
         @update
         def connect_weight_address():
             if (s.state == LOADING_MLBS):
-                s.weight_addr_top @= s.preload_weights.address
+                s.weight_addr_top @= s.preload_weights0.address
             elif (s.state == STREAMING_MLBS):
                 s.weight_addr_top @= s.stream_weights.address
             else:
@@ -967,13 +958,13 @@ class StateMachineEMIFSeparate(Component):
             s.load_ibufs_emif.emif_readdata @= s.emif_readdata
             if (ws):
                 if (load_inputs):
-                    s.preload_weights.start @= \
+                    s.plw_start @= \
                         ((s.state == LOADING_I_BUFFERS) &
                          s.load_ibufs_emif.rdy) | \
                         ((s.state == STREAMING_MLBS) &
                          s.stream_inputs.rdy & (s.ugt_cnt < ugt))
                 else:
-                    s.preload_weights.start @= \
+                    s.plw_start @= \
                         ((s.state == LOADING_W_BUFFERS) &
                          s.load_wbufs_emif.rdy) | \
                         ((s.state == STREAMING_MLBS) &
@@ -981,11 +972,11 @@ class StateMachineEMIFSeparate(Component):
                 s.pstart_address_wide @= (s.ugt_cnt * uet + s.uet_cnt) * \
                     outer_tile_size
                 s.stream_inputs.start @= (s.state == LOADING_MLBS) & \
-                    s.preload_weights.rdy
+                    s.preload_weights0.rdy
                 s.stream_outputs.start @= (s.state == LOADING_MLBS) & \
-                    s.preload_weights.rdy
+                    s.preload_weights0.rdy
             else:
-                s.preload_weights.start @= 0
+                s.plw_start @= 0
                 s.stream_inputs.start @= (s.state == LOADING_MLBS) & \
                     s.load_ibufs_emif.rdy
                 s.stream_weights.start @= (s.state == LOADING_MLBS) & \
@@ -1004,7 +995,7 @@ class MultipleLayerSystem(Component):
     def construct(s, mlb_spec={}, wb_spec={}, ib_spec={}, ob_spec={},
                   emif_spec={}, proj_specs=[], w_address=[0], i_address=[0],
                   o_address=[0], ws=True, fast_gen=False,
-                  write_between_layers=False):
+                  write_between_layers=False, pingpong_w=False):
         """ Constructor
         """
         printi(il, "{:=^60}".format("> Constructing Accelerator, MLB block " +
@@ -1015,61 +1006,10 @@ class MultipleLayerSystem(Component):
             w_address = [w_address]
             i_address = [i_address]
             o_address = [o_address]
-        s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
-                                             ob_spec, proj_specs,
-                                             fast_gen=fast_gen)
 
-        s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True,
-                                             fast_gen=fast_gen)
-        s.synth_keep = OutPort(1)
-        s.synth_keep //= s.emif_inst.readdata[0]
-        statemachines = []
-        connected_ins = []
-        s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
-        s.datapath.sel //= s.sel
-        s.sm_start = InPort(1)
-
-        # Figure out how many buffers are required
-        inner_projs = [proj_spec['inner_projection']
-                       for proj_spec in proj_specs]
-        inner_bus_counts = {dtype: [utils.get_proj_stream_count(inner_proj,
-                                                                dtype)
-                                    for inner_proj in inner_projs]
-                            for dtype in ['W', 'I', 'O']}
-        inner_data_widths = {dtype: [proj_spec['data_widths'][dtype]
-                                     for proj_spec in proj_specs]
-                             for dtype in ['W', 'I', 'O']}
-        inner_bus_widths = {dtype: [inner_bus_count * inner_data_width
-                                    for (inner_bus_count, inner_data_width)
-                                    in zip(inner_bus_counts[dtype],
-                                           inner_data_widths[dtype])]
-                            for dtype in ['W', 'I', 'O']}
-        outer_projs = [proj_spec['outer_projection']
-                       for proj_spec in proj_specs]
-        outer_bus_counts = {dtype: [utils.get_proj_stream_count(outer_proj,
-                                                                dtype)
-                                    for outer_proj in outer_projs]
-                            for dtype in ['W', 'I', 'O']}
-        max_input_buf_widths = [utils.get_max_input_bus_width(
-            utils.get_sum_datatype_width(ib_spec, "DATA", ["in"]),
-            proj, 'I') for proj in proj_specs]
-        buffer_counts = {}
-        buffer_counts['I'] = [utils.get_num_buffers_reqd(ib_spec,
-                                                         outer_bus_count,
-                                                         inner_bus_width, mw)
-                              for (outer_bus_count, inner_bus_width, mw) in
-                              zip(outer_bus_counts['I'],
-                                  inner_bus_widths['I'],
-                                  max_input_buf_widths)]
-        buffer_counts['O'] = [utils.get_num_buffers_reqd(ob_spec,
-                                                         outer_bus_counto *
-                                                         inner_bus_counto,
-                                                         inner_data_widthi)
-                              for (outer_bus_counto, inner_bus_counto,
-                                   inner_data_widthi) in
-                              zip(outer_bus_counts["O"],
-                                  inner_bus_counts["O"],
-                                  inner_data_widths["I"])]
+        # Do some calculations...
+        buffer_counts = utils.get_buffer_counts(proj_specs, ib_spec, ob_spec,
+                                                wb_spec)
         total_num_buffers = max(sum(x) for x in zip(buffer_counts['I'],
                                                     buffer_counts['O']))
         buffer_start_idxs = [sum(buffer_counts['I'][0:i+1]) %
@@ -1077,7 +1017,23 @@ class MultipleLayerSystem(Component):
                              for i in range(len(buffer_counts['I']) - 1)]
         ibuffer_start_idxs = [0] + buffer_start_idxs
 
+        # Add top level ports
+        s.synth_keep = OutPort(1)
+        s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
+        s.sm_start = InPort(1)
+
+        # Instantiate sub-modules (datapath, EMIF, SM)
+        s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
+                                             ob_spec, proj_specs,
+                                             fast_gen=fast_gen,
+                                             pingpong_w=pingpong_w)
+
+        s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True,
+                                             fast_gen=fast_gen)
+
+        statemachines = []
         for i in range(len(proj_specs)):
+            # Instantiate and connect a statemachine
             if (i > 0):
                 newname = proj_specs[i].get("name", i)
             else:
@@ -1090,9 +1046,25 @@ class MultipleLayerSystem(Component):
                 load_outputs=((i == len(proj_specs) - 1) or
                               write_between_layers),
                 num_layers=len(proj_specs), curr_layer=i,
-                total_num_buffers=total_num_buffers)
+                total_num_buffers=total_num_buffers,
+                pingpong_w=pingpong_w)
             setattr(s, "statemachine" + newname, statemachine)
             statemachines += [statemachine]
+
+        # Connect sub modules
+        connected_ins = [s.datapath.weight_modules_portaaddr_top,
+                         s.datapath.weight_datain,
+                         s.datapath.input_datain, s.emif_inst.address,
+                         s.emif_inst.read,
+                         s.emif_inst.write,
+                         s.emif_inst.writedata,
+                         s.emif_inst.readdatavalid,
+                         s.emif_inst.readdata,
+                         s.emif_inst.waitrequest,
+                         s.datapath.sel]
+
+        # Connect statemachines to EMIF and top level
+        for statemachine in statemachines:
             statemachine.emif_waitrequest //= s.emif_inst.waitrequest
             statemachine.emif_readdatavalid //= s.emif_inst.readdatavalid
             statemachine.emif_readdata //= s.emif_inst.readdata
@@ -1101,23 +1073,14 @@ class MultipleLayerSystem(Component):
             connected_ins += utils.connect_ports_by_name(
                 s.datapath, r"portadataout_out_(\d+)", statemachine,
                 r"emif_datain_(\d+)")
-
             connected_ins += [statemachine.emif_waitrequest,
                               statemachine.emif_readdatavalid,
                               statemachine.emif_readdata,
                               statemachine.done,
                               statemachine.sm_start]
 
-        connected_ins += [s.datapath.weight_modules_portaaddr_top,
-                          s.datapath.weight_datain,
-                          s.datapath.input_datain, s.emif_inst.address,
-                          s.emif_inst.read,
-                          s.emif_inst.write,
-                          s.emif_inst.writedata,
-                          s.emif_inst.readdatavalid,
-                          s.emif_inst.readdata,
-                          s.emif_inst.waitrequest,
-                          s.datapath.sel]
+        s.synth_keep //= s.emif_inst.readdata[0]
+        s.datapath.sel //= s.sel
 
         acc_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'ACC_EN',
                                                         ["in"]))
@@ -1190,7 +1153,10 @@ class MultipleLayerSystem(Component):
         connected_ins += utils.mux_ports_by_name(
             s, statemachines, r"stream_outputs_wen", s.datapath,
             r"input_act_modules_portawe_(\d+)_out_top", insel=s.sel)
-
+        if (pingpong_w):
+            connected_ins += utils.mux_ports_by_name(
+                s, statemachines, r"bank_sel", s.datapath,
+                r"bank_sel", insel=s.sel)
         s.done = OutPort(1)
         utils.mux_inst_ports_by_name(s, "done", statemachines,
                                      "done", insel=s.sel, sim=False)

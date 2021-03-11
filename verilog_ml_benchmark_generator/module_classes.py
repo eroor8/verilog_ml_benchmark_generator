@@ -6,97 +6,40 @@ ASSUMPTIONS:
 - Inputs don't require muxing
 
 """
-from pymtl3 import InPort, Component, OutPort, connect, Wire, update, update_ff
+from pymtl3 import InPort, Component, OutPort, connect, Wire
 import math
 import copy
 import yaml
 import utils
+import inspect
 import module_helper_classes
+import activation_functions
 il = 1
 
 
-class RELU(Component):
-    """" This class implements a RELU function. It can either be registered
-         or unregistered (at compile time) and has a single input and output
-         in addition to clk and reset.
-         RELU function: fout = (fin > 0)? fin : 0.
-         Input and output widths are specified, and either one could be wider.
-
-         :param activation_function_in: Input port (fin)
-         :type activation_function_in: Component class
-         :param activation_function_out: Output port (fout)
-         :type activation_function_out: Component class
-         :param internal_out0/1: Internal port used to connect input to out
-         :type internal_out0/1: Component class
-    """
-    def construct(s, input_width=1, output_width=1, registered=False):
-        """ Constructor for RELU
-         :param input_width: Bit-width of ``activation_function_in``
-         :type input_width: int
-         :param output_width: Bit-width of ``activation_function_out``
-         :type output_width: int
-         :param registered: Whether to register the RELU output
-         :type registered: Boolean
-        """
-        # Shorten the module name to the provided name.
-        s.activation_function_in = InPort(input_width)
-        s.activation_function_out = OutPort(output_width)
-        utils.tie_off_clk_reset(s)
-        min_width = min(input_width, output_width)
-        max_width = max(input_width, output_width)
-        s.internal_out0 = Wire(min_width)
-        s.internal_out1 = Wire(max(output_width - min_width, 1))
-
-        if registered:
-            @update_ff
-            def upblk0():
-                if s.reset:
-                    s.internal_out0 <<= 0
-                    s.internal_out1 <<= 0
-                else:
-                    s.internal_out0 <<= (s.activation_function_in[0:min_width]
-                                         if (s.activation_function_in[
-                                                 input_width - 1] == 0) else 0)
-        else:
-            @update
-            def upblk3():
-                s.internal_out0 @= (s.activation_function_in[0:min_width]
-                                    if (s.activation_function_in[
-                                            input_width - 1] == 0) else 0)
-                s.internal_out1 @= 0
-        s.activation_function_out[0:min_width] //= s.internal_out0
-        if (output_width > min_width):
-            s.activation_function_out[min_width:max_width] //= s.internal_out1
-
-
 class ActivationWrapper(Component):
-    """" This module wraps several instantiations of an activation function.
-         It has the same inputs and outputs as the activation function * the
-         number of functions, named <activation_function_port>_<instance>.
-         Clock and reset are common.
+    """" Instantiate activation functions of specified type.
+         The function name must correspond
     """
-    def construct(s, count=1, function="RELU", input_width=1,
+    def construct(s, count=1, function={'type': "RELU"},
+                  input_width=1,
                   output_width=1, registered=False):
-        """ Constructor for ActivationWrapper
+        if 'type' in function:
+            function_name = function.get('type', 'RELU')
+        else:
+            function_name = function
+            function = {}
 
-         :param count: Number of activation functions to instantiate
-         :type count: int
-         :param function: Type of activation function (eg "RELU")
-         :type function: string
-         :param input_width: Bit-width of ``activation_function_in``
-         :type input_width: int
-         :param output_width: Bit-width of ``activation_function_out``
-         :type output_width: int
-         :param registered: Whether to register the RELU output
-         :type registered: Boolean
-        """
         for i in range(count):
-            assert (function == "RELU"), \
-                "NON-RELU functions not currently created automatically." + \
-                " If required, change the RELU module in the generated .v."
-            curr_inst = RELU(input_width, output_width, registered)
-            setattr(s, function + '_inst_' + str(i), curr_inst)
+            available_act_fns = [name for name, obj in
+                                 inspect.getmembers(activation_functions,
+                                                    inspect.isclass)]
+            assert(function_name in available_act_fns)
+            actclass = getattr(activation_functions, function_name)
+            curr_inst = actclass(input_width, output_width, registered,
+                                 params=function)
 
+            setattr(s, function_name + '_inst_' + str(i), curr_inst)
             for port in curr_inst.get_input_value_ports():
                 utils.connect_in_to_top(s, port, port._dsl.my_name + "_" +
                                         str(i))
@@ -153,19 +96,19 @@ class MLB_Wrapper(Component):
         assert(spec.get("simulation_model", "") == "MLB" or
                spec.get("simulation_model", "") == "ML_Block")
         assert len(projs) > 0, "Empty projection specification"
-        for req_port in ["W_in", "W_out", "I_in", "I_out",
-                         "O_in", "O_out"]:
+        for req_port in ["I_in", "I_out", "O_in", "O_out"]:
             assert req_port in ports_by_type, \
                 "To run simulation, you need port of type " + req_port
-        for req_port in ["W_EN_in", "I_EN_in", "ACC_EN_in"]:
+        for req_port in ["I_EN_in", "ACC_EN_in"]:
             assert req_port in ports_by_type, \
                 "To run simulation, you need port of type " + req_port + \
                 " in definition of " + spec["block_name"]
             assert len(ports_by_type[req_port]) == 1
 
         inner_projs = [proj['inner_projection'] for proj in copy_projs]
-        s.sim_model = module_helper_classes.MLB(copy_projs, sim=sim,
-                                                fast_gen=fast_gen)
+        s.sim_model = module_helper_classes.MLB(
+            copy_projs, sim=sim, fast_gen=fast_gen,
+            op_type=spec.get('MAC_info', {}).get("type", "MAC"))
         MAC_datatypes = ['W', 'I', 'O']
         inner_bus_counts = {
             dtype: [utils.get_proj_stream_count(inner_proj, dtype)
@@ -180,17 +123,12 @@ class MLB_Wrapper(Component):
                ports_by_type["I_in"][0][0]['width']), \
             "Input and output stream widths should be equal (MLB I ports)"
         i_out = ports_by_type["I_out"][0][1]
-        assert(ports_by_type["W_out"][0][0]['width'] ==
-               ports_by_type["W_in"][0][0]['width']), \
-            "Input and output stream widths should be equal (MLB W ports)"
         assert(ports_by_type["O_out"][0][0]['width'] ==
                ports_by_type["O_in"][0][0]['width']), \
             "Input and output stream widths should be equal (MLB O ports)"
         o_out = ports_by_type["O_out"][0][1]
-        assert(max(inner_bus_widths['W']) <=
-               ports_by_type["W_in"][0][0]['width']), \
-            "Specified MLB port width not wide enough for desired mapping"
-        w_in = ports_by_type["W_in"][0][1]
+        if "W_in" in ports_by_type:
+            w_in = ports_by_type["W_in"][0][1]
         assert(max(inner_bus_widths['I']) <=
                ports_by_type["I_in"][0][0]['width']), \
             "Specified MLB port width not wide enough for desired mappings"
@@ -199,9 +137,11 @@ class MLB_Wrapper(Component):
                ports_by_type["O_in"][0][0]['width']), \
             "Specified MLB port width not wide enough for desired mappings"
         o_in = ports_by_type["O_in"][0][1]
-        connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
-        connect(ports_by_type["W_out"][0][1][0:max(inner_bus_widths['W'])],
-                s.sim_model.W_OUT)
+        if "W_EN_in" in ports_by_type:
+            connect(ports_by_type["W_EN_in"][0][1], s.sim_model.W_EN)
+        if "W_out" in ports_by_type:
+            connect(ports_by_type["W_out"][0][1][0:max(inner_bus_widths['W'])],
+                    s.sim_model.W_OUT)
         connect(ports_by_type["I_EN_in"][0][1], s.sim_model.I_EN)
         connect(ports_by_type["ACC_EN_in"][0][1], s.sim_model.ACC_EN)
         if ("MODE_in" in ports_by_type):
@@ -211,7 +151,8 @@ class MLB_Wrapper(Component):
         inner_projs = [proj['inner_projection'] for proj in projs]
         connect(i_in[0:max(inner_bus_widths['I'])], s.sim_model.I_IN)
         connect(i_out[0:max(inner_bus_widths['I'])], s.sim_model.I_OUT)
-        connect(w_in[0:max(inner_bus_widths['W'])], s.sim_model.W_IN)
+        if "W_in" in ports_by_type:
+            connect(w_in[0:max(inner_bus_widths['W'])], s.sim_model.W_IN)
         connect(o_in[0:max(inner_bus_widths['O'])], s.sim_model.O_IN)
         connect(o_out[0:max(inner_bus_widths['O'])], s.sim_model.O_OUT)
 
@@ -367,8 +308,10 @@ class MLB_Wrapper_added_logic(Component):
 
         i_in_inner //= i_in_outer
         i_out_outer //= i_out_inner
-        w_in_inner //= w_in_outer
-        w_out_outer //= w_out_inner
+        if (w_in_inner):
+            w_in_inner //= w_in_outer
+        if (w_out_inner):
+            w_out_outer //= w_out_inner
 
 
 class HWB_Sim(Component):
@@ -838,6 +781,8 @@ class WeightInterconnect(Component):
         # Validate inputs
         if mlb_width < 0:
             mlb_width = mlb_width_used
+        if (mlb_width == 0):
+            return
         streams_per_buffer = math.floor(buffer_width / mlb_width_used)
 
         buffers_per_stream = math.ceil(mlb_width_used / buffer_width)
@@ -1445,11 +1390,12 @@ class Datapath(Component):
         assert MAC_count <= mlb_spec['MAC_info']['num_units']
         for dtype in MAC_datatypes:
             for i in range(len(inner_bus_widths[dtype])):
-                assert inner_bus_widths[dtype][i] <= \
-                    utils.get_sum_datatype_width(mlb_spec, dtype)
-                assert (inner_data_widths[dtype][i] <=
-                        mlb_spec['MAC_info']['data_widths'][dtype]), \
-                    "MLB width insufficient for inner projection"
+                if (utils.get_sum_datatype_width(mlb_spec, dtype) > 0):
+                    assert inner_bus_widths[dtype][i] <= \
+                        utils.get_sum_datatype_width(mlb_spec, dtype)
+                    assert (inner_data_widths[dtype][i] <=
+                            mlb_spec['MAC_info']['data_widths'][dtype]), \
+                        "MLB width insufficient for inner projection"
 
         buffer_counts = utils.get_buffer_counts(proj_specs, ib_spec, ob_spec,
                                                 wb_spec)
@@ -1536,7 +1482,7 @@ class Datapath(Component):
         for i in range(len(proj_specs)):
             new_act_modules = ActivationWrapper(
                 count=max(total_bus_counts['O']),
-                function=utils.get_activation_function_name(proj_specs[i]),
+                function=proj_specs[i]['activation_function'],
                 input_width=max(inner_data_widths['O']),
                 output_width=max(inner_data_widths['I']),
                 registered=False)
@@ -1696,12 +1642,12 @@ class Datapath(Component):
         for i in range(len(proj_specs)):
             output_ps_interconnect = output_ps_interconnects[i]
             output_interconnect = output_interconnects[i]
-            activation_functions = activation_function_modules[i]
+            act_functions = activation_function_modules[i]
             connected_ins += utils.connect_ports_by_name(
                 output_ps_interconnect, r"outputs_to_afs_(\d+)",
-                activation_functions, r"activation_function_in_(\d+)")
+                act_functions, r"activation_function_in_(\d+)")
             connected_ins += utils.connect_ports_by_name(
-                activation_functions, r"activation_function_out_(\d+)",
+                act_functions, r"activation_function_out_(\d+)",
                 output_interconnect, r"input_(\d+)")
 
         for portname in utils.get_ports_of_type(buffer_specs['O'], 'DATA',

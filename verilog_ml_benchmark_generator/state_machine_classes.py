@@ -1088,13 +1088,15 @@ class MultipleLayerSystem(Component):
                               acc_en_port_name[0]["name"] + "_top")
         w_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'W_EN',
                                                       ["in"]))
-        w_en_port = getattr(s.datapath, "mlb_modules_" +
-                            w_en_port_name[0]["name"] + "_top")
+        if (len(w_en_port_name) > 0):
+            w_en_port = getattr(s.datapath, "mlb_modules_" +
+                                w_en_port_name[0]["name"] + "_top")
+            connected_ins += [w_en_port]
         i_en_port_name = list(utils.get_ports_of_type(mlb_spec, 'I_EN',
                                                       ["in"]))
         i_en_port = getattr(s.datapath, "mlb_modules_" +
                             i_en_port_name[0]["name"] + "_top")
-        connected_ins += [w_en_port, i_en_port, acc_en_port]
+        connected_ins += [i_en_port, acc_en_port]
 
         connected_ins += utils.mux_ports_by_name(
             s, statemachines, "urn_sel", s.datapath,
@@ -1117,9 +1119,11 @@ class MultipleLayerSystem(Component):
         connected_ins += utils.mux_ports_by_name(
             s, statemachines, "acc_en_top", s.datapath,
             "mlb_modules_" + acc_en_port_name[0]["name"] + "_top", insel=s.sel)
-        connected_ins += utils.mux_ports_by_name(
-            s, statemachines, "stream_weights_wen", s.datapath,
-            "mlb_modules_" + w_en_port_name[0]["name"] + "_top", insel=s.sel)
+        if (len(w_en_port_name) > 0):
+            connected_ins += utils.mux_ports_by_name(
+                s, statemachines, "stream_weights_wen", s.datapath,
+                "mlb_modules_" + w_en_port_name[0]["name"] + "_top",
+                insel=s.sel)
         connected_ins += utils.mux_ports_by_name(
             s, statemachines, "stream_inputs_wen", s.datapath,
             "mlb_modules_" + i_en_port_name[0]["name"] + "_top", insel=s.sel)

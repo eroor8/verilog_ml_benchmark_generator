@@ -14,12 +14,16 @@ from jsonschema import validate
 from pymtl3 import DefaultPassGroup
 from pymtl3.passes.backends.verilog import VerilogTranslationPass
 import utils
+import inspect
+import activation_functions
 import state_machine_classes
 il = 1
 currstep = 0
 
 # Schemas to validate input yamls
-supported_activations = ["RELU"]
+supported_activations = [name for name, obj in
+                         inspect.getmembers(activation_functions,
+                                            inspect.isclass)]
 datatype_mlb = ["I", "O", "W", "C", "CLK", "RESET", "I_EN", "W_EN", "ACC_EN",
                 "WEN"]
 datatype_emif = ["AVALON_ADDRESS", "AVALON_READ", "AVALON_WRITE",
@@ -93,7 +97,8 @@ proj_schema = {
     "type": "object",
     "properties": {
         "name": {"type": "string"},
-        "activation_function": {"type": "string", "enum": ["RELU"]},
+        "activation_function": {"type": "string",
+                                "enum": supported_activations},
         "outer_projection": inner_proj_schema,
         "inner_projection": inner_proj_schema,
         "temporal_projection": inner_proj_schema,
@@ -123,6 +128,7 @@ proj_schema = {
 }
 MAC_info_schema = {"type": "object",
                    "properties": {
+                       "type": {"type": "string", "enum": ["MAC", "MAXPOOL"]},
                        "num_units": {"type": "number"},
                        "data_widths": datawidth_schema},
                    "additionalProperties": False}
@@ -189,6 +195,8 @@ def validate_inputs(wb_spec=None, ab_spec=None, mlb_spec=None,
             dtype: max([proj_spec['data_widths'][dtype]
                         for proj_spec in projections])
             for dtype in ['W', 'I', 'O']}
+        if not ("type" in mlb_spec["MAC_info"]):
+            mlb_spec["MAC_info"]["type"] = "MAC"
         if not ("data_widths" in mlb_spec["MAC_info"]):
             mlb_spec["MAC_info"]["data_widths"] = i_data_widths
         else:

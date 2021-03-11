@@ -75,21 +75,7 @@ def test_get_proj_stream_count():
     assert utils.get_proj_stream_count(projection_example,"W") == 7*5*2*11
     assert utils.get_proj_stream_count(projection_example,"O") == 2
     assert utils.get_proj_stream_count(projection_example,"WIO") == 7*5*2*11+7*3*11+2
-    
-    #with pytest.raises(AssertionError):
-    #    projection_example = {'URN':{'value':1},'URW':{'value':1},
-    #                          'UB':{'value':1},'UE':{'value':1}}
-    #    utils.get_proj_stream_count(projection_example,"O")
 
-def test_get_activation_function_name():
-    """Test util function get_activation_function_name"""
-    assert utils.get_activation_function_name({"somekey":"D",
-             "activation_function":"RELU"}) == "RELU"
-    assert utils.get_activation_function_name({"somekey":"D",
-             "activation_function":""}) == ""
-    
-    with pytest.raises(AssertionError):
-        utils.get_activation_function_name({"somekey":"D"})
 
 def test_get_ports_of_type():
     """Test util function get_ports_of_type"""

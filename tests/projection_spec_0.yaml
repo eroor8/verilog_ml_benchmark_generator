@@ -31,7 +31,7 @@ temporal_projection:
     PX: 5
     PY: 1
     G: 1
-activation_function: 'RELU'
+activation_function: 'NONE'
 data_widths:
     W: 4
     I: 4

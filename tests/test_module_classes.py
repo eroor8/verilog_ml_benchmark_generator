@@ -15,41 +15,23 @@ from verilog_ml_benchmark_generator import cli
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from test_helpers import *
-
-def test_RELU():
-    """Test Component class RELU"""
-    test_vecs = [
-        {"ins":[4,4, False], "outs":[[7,7],[8,0]]},
-        {"ins":[4,2, False], "outs":[[3,3],[5,1],[9,0]]},
-        {"ins":[3,5, False], "outs":[[3,Bits5(3)],[4,Bits5(0)]]},
-        {"ins":[4,4, True], "outs":[[7,7],[8,0]]},
-        {"ins":[4,2, True], "outs":[[3,3],[5,1],[9,0]]},
-        {"ins":[3,5, True], "outs":[[3,Bits5(3)],[4,Bits5(0)]]},
-    ]
-    for testvec in test_vecs:
-        testinst = module_classes.RELU(testvec["ins"][0],
-                                       testvec["ins"][1],
-                                       testvec["ins"][2])
-        testinst.elaborate()
-        testinst.apply(DefaultPassGroup()) 
-        for pair in testvec["outs"]:
-            testinst.sim_reset()
-            testinst.activation_function_in @= pair[0]
-            testinst.sim_tick()
-            assert testinst.activation_function_out == pair[1]
     
 def test_ActivationWrapper():
     """Test Component class RELU"""
     test_vecs = [
-        {"ins":[4,4, False], "outs":[[7,7],[8,0]]},
-        {"ins":[4,2, False], "outs":[[3,3],[5,1],[9,0]]},
-        {"ins":[3,5, False], "outs":[[3,Bits5(3)],[4,Bits5(0)]]},
+        {"ins":[4,3, False], "outs":[[7,7],[8,0]]},
+        {"ins":[4,2, False], "outs":[[3,3],[5,0],[9,0]]},
+        {"ins":[3,5, False], "outs":[[3,3],[4,0]]}, # 100 -> 0
         {"ins":[4,4, True], "outs":[[7,7],[8,0]]},
-        {"ins":[4,2, True], "outs":[[3,3],[5,1],[9,0]]},
+        {"ins":[4,2, True], "outs":[[3,3],[5,0],[9,0]]}, # 0101 
         {"ins":[3,5, True], "outs":[[3,Bits5(3)],[4,Bits5(0)]]},
     ]
+    i = 0
     for testvec in test_vecs:
-        testinst = module_classes.ActivationWrapper(len(testvec["outs"]), "RELU",
+        print("VEC" + str(testvec))
+        i = i + 1
+        testinst = module_classes.ActivationWrapper(len(testvec["outs"]),
+                                                    {'type': "RELU"},
                                        testvec["ins"][0],
                                        testvec["ins"][1],
                                        testvec["ins"][2])
@@ -65,7 +47,7 @@ def test_ActivationWrapper():
                                  str(pairidx))
             assert output_bus == testvec["outs"][pairidx][1]
 
-    testinst = module_classes.ActivationWrapper(2, "notrelu",
+    testinst = module_classes.ActivationWrapper(2, {'type': "notRELU"},
                                                 test_vecs[0]["ins"][0],
                                                 test_vecs[0]["ins"][1],
                                                 test_vecs[0]["ins"][2])
@@ -364,7 +346,7 @@ def test_OutputPSInterconnect():
 def test_Datapath():
     """Test Component class Datapath"""
     projection = {"name": "test",
-                  "activation_function": "RELU",
+                  "activation_function": "NONE",
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
@@ -443,7 +425,7 @@ def test_Datapath():
     wbuf_count = math.ceil(weight_stream_count / wstreams_per_buf)
     wvalues_per_buf = min(wstreams_per_buf*wvalues_per_stream, wvalues_per_stream*weight_stream_count)
     
-    wbuf = [[[random.randint(0,(2**projection["data_widths"]["W"])-1)
+    wbuf = [[[random.randint(0,3)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
             for j in range(wbuf_count)]         # buffer count
@@ -469,7 +451,7 @@ def test_Datapath():
     
     # Load the input buffer
     # Several values per word, words per buffer, buffers...
-    ibuf = [[[random.randint(0,(2**projection["data_widths"]["I"])-1)
+    ibuf = [[[random.randint(0,4)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
@@ -555,11 +537,11 @@ def test_Datapath():
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1): #(obuf_len-1): 
             assert obuf[bufi][olen] == obuf_results[bufi][olen]
-
+            
 def test_multiple_Datapaths():
     """Test Component class Datapath with > 1 projections"""
     projections = [{"name": "",
-                  "activation_function": "RELU",
+                  "activation_function": "NONE",
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
@@ -574,7 +556,7 @@ def test_multiple_Datapaths():
                   }
                   },
                   {"name": "test2",
-                  "activation_function": "RELU",
+                  "activation_function": "NONE",
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},
@@ -786,7 +768,7 @@ def test_multiple_Datapaths():
 def test_Datapath_pingpong():
     """Test Component class Datapath"""
     projection = {"name": "test",
-                  "activation_function": "RELU",
+                  "activation_function": "NONE",
                   "data_widths": {"W": 4,
                                   "I": 4,
                                   "O": 16},

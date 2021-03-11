@@ -116,7 +116,6 @@ class MUXN(Component):
             def upblk_set_wen0():
                 s.out @= s.in0
         else:
-            print(str(half_width1) + "," + str(half_width2))
             if (half_width1 > 1):
                 s.sub1 = MUXN(input_width, half_width1)
                 sel_half_width = math.ceil(math.log(half_width1, 2))
@@ -507,11 +506,47 @@ class MAC(Component):
                 s.sum_reg.input_data @= s.input_in_w * s.weight_in_w
 
 
+class MAXPOOL(Component):
+    """" This module implements a single max pool operation
+    """
+    def construct(s, input_width=8, sim=False,
+                  register_input=True):
+        utils.AddInPort(s, input_width, "input_in")
+        utils.AddInPort(s, 1, "input_en")
+        utils.AddOutPort(s, input_width, "input_out")
+        s.input_reg = Register(input_width, sim=sim)
+        s.input_reg.input_data //= s.input_in
+        s.input_reg.ena //= s.input_en
+        s.input_out //= s.input_reg.output_data
+
+        utils.AddInPort(s, input_width, "sum_in")
+        utils.AddInPort(s, 1, "acc_en")
+        utils.AddOutPort(s, input_width, "sum_out")
+        s.sum_reg = Register(input_width, sim=sim)
+        s.sum_reg.ena //= 1
+
+        @update
+        def upblk0():
+            if s.acc_en:
+                if (s.sum_reg.output_data < s.input_in):
+                    s.sum_out @= s.input_in
+                    s.sum_reg.input_data @= s.input_in
+                else:
+                    s.sum_out @= s.sum_reg.output_data
+                    s.sum_reg.input_data @= s.sum_reg.output_data
+            else:
+                if (s.sum_in < s.input_out):
+                    s.sum_out @= s.input_out
+                else:
+                    s.sum_out @= s.sum_in
+                s.sum_reg.input_data @= s.input_in
+
+
 class MACWrapper(Component):
     """" This module wraps several instantiations of MAC.
     """
     def construct(s, count=1, input_width=1, weight_width=1, sum_width=32,
-                  sim=False, register_input=True):
+                  sim=False, register_input=True, op_type="MAC"):
         """ Constructor for MACWrapper
 
          :param count: Number of activation functions to instantiate
@@ -521,8 +556,12 @@ class MACWrapper(Component):
          :param sim: Whether to skip synthesis
         """
         for i in range(count):
-            curr_inst = MAC(input_width, weight_width, sum_width, sim,
-                            register_input)
+            if (op_type == "MAC"):
+                curr_inst = MAC(input_width, weight_width, sum_width, sim,
+                                register_input)
+            elif (op_type == "MAXPOOL"):
+                curr_inst = MAXPOOL(input_width, sim,
+                                    register_input)
             setattr(s, 'MAC_inst_' + str(i), curr_inst)
 
             for port in curr_inst.get_input_value_ports():
@@ -537,7 +576,7 @@ class MLB(Component):
     """" This is the sim model for an MLB block with given projection.
     """
     def construct(s, proj_specs, sim=False, register_input=True,
-                  fast_gen=False):
+                  fast_gen=False, op_type="MAC"):
         """ Constructor for MLB
 
          :param proj_spec: Dictionary describing projection of computations
@@ -565,9 +604,10 @@ class MLB(Component):
             for dtype in MAC_datatypes}
 
         # Add input and output ports
-        utils.AddInPort(s, max(bus_widths['W']), "W_IN")
-        utils.AddOutPort(s, max(bus_widths['W']), "W_OUT")
-        utils.AddInPort(s, 1, "W_EN")
+        if (op_type == "MAC"):
+            utils.AddInPort(s, max(bus_widths['W']), "W_IN")
+            utils.AddOutPort(s, max(bus_widths['W']), "W_OUT")
+            utils.AddInPort(s, 1, "W_EN")
         utils.AddInPort(s, max(bus_widths['I']), "I_IN")
         utils.AddOutPort(s, max(bus_widths['I']), "I_OUT")
         utils.AddInPort(s, 1, "I_EN")
@@ -586,7 +626,8 @@ class MLB(Component):
         s.mac_modules = MACWrapper(max(MAC_counts),
                                    max(data_widths['I']),
                                    max(data_widths['W']),
-                                   max(data_widths['O']), sim, register_input)
+                                   max(data_widths['O']), sim, register_input,
+                                   op_type=op_type)
 
         # Instantiate interconnects
         weight_interconnects = []
@@ -598,6 +639,8 @@ class MLB(Component):
                 newname = proj_specs[i].get("name", i)
             else:
                 newname = ""
+            if not (op_type == "MAC"):
+                data_widths['W'][i] = 0
             weight_interconnect = module_classes.WeightInterconnect(
                 buffer_width=bus_widths['W'][i],
                 mlb_width_used=data_widths['W'][i],
@@ -637,18 +680,22 @@ class MLB(Component):
 
         # Connect between interconnects, MACs and top level
         for i in range(len(proj_specs)):
-            weight_interconnect = weight_interconnects[i]
-            utils.connect_ports_by_name(s.mac_modules, r"weight_out_(\d+)",
-                                        weight_interconnect,
-                                        r"inputs_from_mlb_(\d+)")
-            utils.connect_inst_ports_by_name(s, "W_IN", weight_interconnect,
-                                             "inputs_from_buffer")
-        utils.mux_ports_by_name(s, weight_interconnects,
-                                r"outputs_to_mlb_(\d+)", s.mac_modules,
-                                r"weight_in_(\d+)", insel=s.sel, sim=True)
-        utils.mux_inst_ports_by_name(s, "W_OUT", weight_interconnects,
-                                     r"outputs_to_buffer_(\d+)", insel=s.sel,
-                                     sim=True)
+            if (op_type == "MAC"):
+                weight_interconnect = weight_interconnects[i]
+                utils.connect_ports_by_name(s.mac_modules,
+                                            r"weight_out_(\d+)",
+                                            weight_interconnect,
+                                            r"inputs_from_mlb_(\d+)")
+                utils.connect_inst_ports_by_name(s, "W_IN",
+                                                 weight_interconnect,
+                                                 "inputs_from_buffer")
+        if (op_type == "MAC"):
+            utils.mux_ports_by_name(s, weight_interconnects,
+                                    r"outputs_to_mlb_(\d+)", s.mac_modules,
+                                    r"weight_in_(\d+)", insel=s.sel, sim=True)
+            utils.mux_inst_ports_by_name(s, "W_OUT", weight_interconnects,
+                                         r"outputs_to_buffer_(\d+)",
+                                         insel=s.sel, sim=True)
         for i in range(len(proj_specs)):
             input_interconnect = input_interconnects[i]
             utils.connect_ports_by_name(s.mac_modules, r"input_out_(\d+)",
@@ -679,7 +726,8 @@ class MLB(Component):
                                 r"sum_in_(\d+)", insel=s.sel, sim=True)
         utils.mux_inst_ports_by_name(s, "O_OUT", output_interconnects,
                                      r"output_(\d+)", insel=s.sel, sim=True)
-        utils.connect_inst_ports_by_name(s, "W_EN", s.mac_modules,
-                                         "weight_en")
+        if (op_type == "MAC"):
+            utils.connect_inst_ports_by_name(s, "W_EN", s.mac_modules,
+                                             "weight_en")
         utils.connect_inst_ports_by_name(s, "I_EN", s.mac_modules, "input_en")
         utils.connect_inst_ports_by_name(s, "ACC_EN", s.mac_modules, "acc_en")

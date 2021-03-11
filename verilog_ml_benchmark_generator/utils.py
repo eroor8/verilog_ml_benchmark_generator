@@ -2,6 +2,8 @@
 import math
 import re
 import sys
+import inspect
+import activation_functions
 import module_helper_classes
 from pymtl3 import connect, Wire, InPort, OutPort
 input_order = [['C'], ['B'], ['PX'], ['G'], ['RY'], ['PY']]
@@ -262,17 +264,6 @@ def get_proj_stream_count(projection, dtype='WIO'):
                     wo = pload.get("bus_count", 1)
         sum += wo
     return sum
-
-
-def get_activation_function_name(projection):
-    """ Lookup the name of the activation function in the projection yaml
-        schema (``projections``).
-
-        :param projection: Projection definition
-    """
-    assert 'activation_function' in projection, \
-        "Key activation_function not found in projection definition"
-    return projection['activation_function']
 
 
 def get_overall_idx_new(projection, idxs,
@@ -762,8 +753,6 @@ def connect_ports_by_name(inst1, name1, inst2, name2, factor1=1, factor2=1):
             connected_outs += [connectport]
             if (matching_name in match_dict):
                 del match_dict[matching_name]
-    assert len(match_dict) == 0, "Missing matches for ports " + \
-        str(match_dict) + " in list " + str(inst2.get_input_value_ports())
     return connected_ins + connected_outs
 
 
@@ -920,7 +909,8 @@ def read_out_stored_values_from_array(array,
         return buffer_values + [curr_buffer]
 
 
-def compute_layer(inputs, weights, layer):
+def compute_layer(inputs, weights, layer, layer_type="MAC", output_width=8,
+                  activation_function="NONE", final_width=0, qin=0, qout=0):
     """ Calculate expected outputs of given FC or convolutional layer
 
         :param inputs: Input activation array
@@ -939,6 +929,8 @@ def compute_layer(inputs, weights, layer):
     stridey = layer.get("stridey", 1)
     dilx = layer.get("dilx", 1)
     dily = layer.get("dily", 1)
+    if (final_width < 1):
+        final_width = output_width
 
     outputs = [[[[[0 for k in range(int(ubx / stridex))]  # x
                   for i in range(int(uby / stridey))]     # y
@@ -957,7 +949,33 @@ def compute_layer(inputs, weights, layer):
                     y_idx_out = int((ubyi - ury + 1) / stridey)
                     x_idx_out = int((ubxi - urx + 1) / stridex)
                     wi = inact * weight
-                    outputs[ugi][ubi][uei][y_idx_out][x_idx_out] += wi
+                    if (layer_type == "MAC"):
+                        outputs[ugi][ubi][uei][y_idx_out][x_idx_out] += wi
+                    elif (layer_type == "MAXPOOL"):
+                        if (inact >
+                                outputs[ugi][ubi][uei][y_idx_out][x_idx_out]):
+                            outputs[ugi][ubi][uei][y_idx_out][x_idx_out] = \
+                                inact
+                    else:
+                        assert 0, "Invalid layer type"
+
+    for t in range(ug):
+        for p in range(ub):
+            for j in range(ue):
+                for i in range(int(uby / stridey)):
+                    for k in range(int(ubx / stridex)):
+                        inact = outputs[t][p][j][i][k]
+                        act_functions = [name for name, obj in
+                                         inspect.getmembers(
+                                             activation_functions,
+                                             inspect.isfunction)]
+                        print(act_functions)
+                        print(activation_function + "_SW")
+                        assert(activation_function + "_SW" in act_functions)
+                        outact = getattr(activation_functions,
+                                         activation_function + "_SW")
+                        outputs[t][p][j][i][k] = outact(inact, output_width,
+                                                        final_width, qin, qout)
     return outputs
 
 
@@ -1209,3 +1227,33 @@ def range2D(a=1, b=1):
     for ai in range(a):
         for bi in range(b):
             yield(ai, bi)
+
+
+def negate(inval, width):
+    """ Convert 2's complement numbers
+    """
+    binary = [(math.floor(inval/2**i) % 2) for i in range(width)]
+    invert = [0 if binary[i] else 1 for i in range(width)]
+    retval = 0
+    for i in range(len(invert)):
+        retval = retval + invert[i]*(2**i)
+    return retval + 1
+
+
+def Qx_to_int(intval, x, width):
+    """ Convert fixed point values (Q = x) to python ints
+    """
+    sign = math.floor(intval/(2**(width-1)))
+    abs_val = negate(math.ceil(intval), width) if sign else intval
+    signed_val = -abs_val/(2**x) if sign else abs_val/(2**x)
+    return signed_val
+
+
+def int_to_Qx(intval, x, width):
+    """ Convert python integers to fixed point values (Q = x)
+    """
+    intval_abs = -intval*(2**x) if (intval < 0) else intval*(2**x)
+    abs_val = negate(math.ceil(intval_abs), width+1) % (2**width) \
+        if (intval < 0) else intval_abs
+    outval = math.floor(abs_val)
+    return outval

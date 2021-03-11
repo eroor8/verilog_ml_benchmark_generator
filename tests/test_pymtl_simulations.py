@@ -322,7 +322,9 @@ def test_simulate_multiple_layers(
         print(layer_outputs_i)
         print(weights[py_i])
         print(layers[py_i])
-        layer_outputs_i = utils.compute_layer(layer_outputs_i, weights[py_i], layers[py_i])
+        layer_outputs_i = utils.compute_layer(layer_outputs_i, weights[py_i], layers[py_i],
+                                              output_width=proj_yaml["data_widths"]["I"],
+                                              activation_function=proj_yaml["activation_function"])
 
     layer_output = [[[[[layer_outputs_i[t][l][j][i][k]%(2**proj_yaml["data_widths"]["I"])
                              for k in range(len(layer_outputs_i[t][l][j][i]))]  # x
@@ -555,6 +557,7 @@ def test_simulate_layer(
         emif_yaml = yaml.safe_load(stream)
 
     # Calculate buffer dimensions info
+    layer_type = mlb_yaml.get('MAC_info', {}).get('type', 'MAC')
     wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
         wb_yaml, proj_yaml, 'W')
     ivalues_per_buf, ibuf_len, ibuf_count = utils.get_iw_buffer_dimensions(
@@ -640,13 +643,16 @@ def test_simulate_layer(
                    for j in range(layer["in_chans"])]    # ichans
                    for l in range(layer["out_chans"])]   # ochans
                    for t in range(layer["group"])]       # group
-    inputs = [[[[[random.randint(0,4) #(2**proj_yaml["data_widths"]["I"])-1)
+    inputs = [[[[[random.randint(0,3) #(2**proj_yaml["data_widths"]["I"])-1)
                    for k in range(layer["image_x"])]     # x
                    for i in range(layer["image_y"])]     # y    
                    for j in range(layer["in_chans"])]    # chans
                    for l in range(layer["batches"])]     # batch
                    for t in range(layer["group"])]       # group
-    layer_outputs = utils.compute_layer(inputs, weights, layer)
+    layer_outputs = utils.compute_layer(inputs, weights, layer, layer_type,
+                                        output_width=proj_yaml["data_widths"]["O"],
+                                        final_width=proj_yaml["data_widths"]["I"],
+                                        activation_function=proj_yaml["activation_function"])
     layer_outputs = [[[[[layer_outputs[t][l][j][i][k]%(2**proj_yaml["data_widths"]["I"])
                          for k in range(len(layer_outputs[t][l][j][i]))]  # x
                          for i in range(len(layer_outputs[t][l][j]))]      # y    
@@ -885,6 +891,7 @@ def test_simulate_emif_statemachine(
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1):
             print(obuf[bufi][olen])
+            print(outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen])
             assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
 
     
@@ -950,6 +957,13 @@ def test_simulate_layer_n4_pp():
                         "weight_spec_3.yaml",
                         "emif_spec_1.yaml",
                         "projection_spec_14.yaml", True, False, True)
+    
+def test_simulate_layer_maxpool():
+    test_simulate_layer("mlb_spec_mp.yaml",
+                        "input_spec_2.yaml",
+                        "weight_spec_3.yaml",
+                        "emif_spec_1.yaml",
+                        "projection_spec_mp.yaml", True, False)
     
 def test_simulate_layer_urn():
     test_simulate_layer("mlb_spec_3.yaml",

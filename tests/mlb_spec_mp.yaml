@@ -1,17 +1,13 @@
-block_name: "ml_block"
-access_patterns:
-    AP1: 2
-    AP2: 2
-    AP3: 1
-    AP4: 1
-    AP5: 8
-output_accumulator: True
+block_name: "max_pool_block"
+MAC_info:
+    num_units: 64
+    type: "MAXPOOL"
+    data_widths:
+        W: 4
+        I: 4
+        O: 4
 ports:
-    -   name: a_en
-        width: 1
-        direction: "in"
-        type: "W_EN"
-    -   name: load_buf_sel
+    -   name: config_in
         width: 1
         direction: "in"
         type: "MODE"
@@ -19,11 +15,7 @@ ports:
         width: 1
         direction: "in"
         type: "I_EN"
-    -   name: feed_sel0
-        width: 1
-        direction: "in"
-        type: "C"
-    -   name: feed_sel1
+    -   name: hp_en
         width: 1
         direction: "in"
         type: "C"
@@ -31,32 +23,28 @@ ports:
         width: 1
         direction: "in"
         type: "ACC_EN"
-    -   name: zero_en
+    -   name: config_en
         width: 1
         direction: "in"
         type: "C"
-    -   name: data_in_w
-        width: 128
+    -   name: config_in
+        width: 1
         direction: "in"
-        type: "W"
-    -   name: data_in_i
-        width: 128
+        type: "C"
+    -   name: b_cas_in
+        width: 256
         direction: "in"
         type: "I"
-    -   name: cascade_data_in
-        width: 128
+    -   name: res_cas_in
+        width: 256
         direction: "in"
         type: "O"
     -   name: b_cas_out
-        width: 128
+        width: 256
         direction: "out"
         type: "I"
-    -   name: weight_cascade_out
-        width: 128
-        direction: "out"
-        type: "W"
-    -   name: cascade_data_out
-        width: 128
+    -   name: res_cas_out
+        width: 256
         direction: "out"
         type: "O"
     -   name: clk

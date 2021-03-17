@@ -388,6 +388,8 @@ class SM_LoadBufsEMIF(Component):
                 out_wen //= new_wen.we
 
         INIT, LOAD = 0, 1
+        max_wc = write_count-1
+        max_ib = ibuffer_count-1
 
         @update_ff
         def upblk_set_wen_ff():
@@ -426,14 +428,14 @@ class SM_LoadBufsEMIF(Component):
                         s.buf_wen <<= 0
 
                     if (s.buf_wen):
-                        if (s.buf_address == (write_count-1)) & \
-                           (s.buf_count == (ibuffer_count-1)):
+                        if (s.buf_address == max_wc) & \
+                           (s.buf_count == max_ib):
                             s.state <<= INIT
-                        elif (s.buf_address == (write_count-1)) & \
-                             (s.buf_count < (ibuffer_count-1)):
+                        elif (s.buf_address == max_wc) & \
+                             (s.buf_count < max_ib):
                             s.buf_count <<= s.buf_count + 1
                             s.buf_address <<= 0
-                        elif (s.buf_address < (write_count-1)):
+                        elif (s.buf_address < max_wc):
                             s.buf_address <<= s.buf_address + 1
 
         utils.tie_off_clk_reset(s)
@@ -1022,14 +1024,21 @@ class MultipleLayerSystem(Component):
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
         s.sm_start = InPort(1)
 
-        # Instantiate sub-modules (datapath, EMIF, SM)
         s.datapath = module_classes.Datapath(mlb_spec, wb_spec, ib_spec,
                                              ob_spec, proj_specs,
                                              fast_gen=fast_gen,
                                              pingpong_w=pingpong_w)
 
+        if isinstance(fast_gen, bool):
+            emif_fastgen = fast_gen
+            inner_emif_fastgen = fast_gen
+        else:
+            emif_fastgen = (emif_spec['block_name'] not in fast_gen)
+            inner_emif_fastgen = ('emif_inner' not in fast_gen)
+
         s.emif_inst = module_classes.HWB_Sim(emif_spec, {}, sim=True,
-                                             fast_gen=fast_gen)
+                                             fast_gen=emif_fastgen,
+                                             inner_fast_gen=inner_emif_fastgen)
 
         statemachines = []
         for i in range(len(proj_specs)):

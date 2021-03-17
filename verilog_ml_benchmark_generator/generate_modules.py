@@ -381,8 +381,11 @@ def generate_verilog(component, write_to_file, module_name,
             file.write(outtxt_o)
 
     # Post-process generated file into system verilog
+    include_sim = not include_sim_models \
+        if isinstance(include_sim_models, bool) \
+        else include_sim_models
     outtxt_sv = postprocess_verilog_sv(module_name + "_pymtl.v",
-                                       include_sim_models)
+                                       include_sim)
     if (write_to_file):
         with open(module_name + "_quartus_vivado.sv", 'w') as file:
             file.write(outtxt_sv)
@@ -562,15 +565,15 @@ def postprocess_verilog_sv(filename_in, include_sim_models=False):
     # Rename ML blocks to correct name
     line_list = filedata.splitlines()
     line_list = move_ios_into_module_body(line_list)
-    if (not include_sim_models):
-        line_list = remove_sim_block_defs(line_list, ["sim_True"])
+
+    #line_list = remove_sim_block_defs(line_list, ["sim_True__fast_gen_True"])
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
     line_list = remove_parameter_references(line_list)
     line_list = remove_width_0_ranges(line_list)
     filedata = '\n'.join(line_list)
 
     # replace HW block component names with actual names
-    if (not include_sim_models):
+    if (isinstance(include_sim_models, bool) and not include_sim_models):
         filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                           r"\2\4\5",
                           filedata)
@@ -580,6 +583,26 @@ def postprocess_verilog_sv(filename_in, include_sim_models=False):
         filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(\S+)_inst(.*)",
                           r"\4\3\4_inst\5",
                           filedata)
+    elif not isinstance(include_sim_models, bool):
+        tokeep = "|".join(include_sim_models)
+
+        filedata = re.sub(r"(MLB_Wrapper__spec_)(?!" + tokeep +
+                          r")(\S*)(__projs_\S*)(\s+)(.*)",
+                          r"\2\4\5",
+                          filedata)
+        filedata = re.sub(r"(HWB_Sim__spec_)(?!" + tokeep +
+                          r")(\S*)(__projs_\S*)(\s+)(.*)",
+                          r"\2\4\5",
+                          filedata)
+        filedata = re.sub(r"(HWB_Sim__)(\S*)(\s+)(?!" + tokeep +
+                          r")(\S+)_inst(.*)",
+                          r"\4\3\4_inst\5",
+                          filedata)
+        if ('emif_inner' not in include_sim_models):
+            filedata = re.sub(r"(Buffer__)(\S+)(\s+)(emif_inner)_inst(.*)",
+                              r"\4\3\4_inst\5",
+                              filedata)
+
     filedata = re.sub(r'\s+\[0:0\]\s+', r" ", filedata)
     return filedata
 
@@ -638,7 +661,7 @@ def postprocess_verilog_odin(filename_in):
 def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                        projection, write_to_file, emif_spec={},
                                        waddr=0, iaddr=0, oaddr=0, ws=True,
-                                       fast_gen=True, pingpong_w=False):
+                                       fast_gen=False, pingpong_w=False):
     """ Validate input specifications, generate  a system including both
         the statemachines and datapath.
 
@@ -659,7 +682,7 @@ def generate_accelerator_given_mapping(module_name, mlb_spec, wb_spec, ab_spec,
                                                   oaddr, ws, fast_gen,
                                                   pingpong_w=pingpong_w)
     t.elaborate()
-    return generate_verilog(t, write_to_file, module_name, not fast_gen)
+    return generate_verilog(t, write_to_file, module_name, fast_gen)
 
 
 def run_simulation(module, num_cycles, n=-1):
@@ -762,7 +785,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
 
     # Collect final EMIF data, and write it to a file.
     emif_vals = utils.read_out_stored_values_from_emif(
-        t.emif_inst.sim_model.bufi, ovalues_per_buf,
+        t.emif_inst.sim_model.emif_inner_inst, ovalues_per_buf,
         min(obuf_len, ibuf_len) * obuf_count,
         projection["data_widths"]["I"], oaddr)
     if (write_to_file):
@@ -794,7 +817,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                          projections, write_to_file,
                          oaddrs=[0], iaddrs=[0], waddrs=[0], ws=True,
                          validate_output=True, layer_sel=[0], simulate=True,
-                         gen_ver=False, include_sim_models=False,
+                         gen_ver=False, include_sim_models=True,
                          pingpong_w=False):
     """
     Generate an accelerator
@@ -830,10 +853,10 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
                                            ab_spec, projections[0],
                                            write_to_file, emif_spec, waddrs[0],
                                            iaddrs[0], oaddrs[0], ws,
-                                           fast_gen=(not include_sim_models),
+                                           fast_gen=include_sim_models,
                                            pingpong_w=pingpong_w)
         if (not simulate):
-            return
+            return 0, 0
 
     # Generate the statemachine
     utils.print_heading("Generating pyMTL model of accelerator", currstep + 1)
@@ -893,7 +916,7 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
     if (simulate):
         # Collect final EMIF data (and later write to file)
         emif_vals = utils.read_out_stored_values_from_emif(
-            t.emif_inst.sim_model.bufi, ovalues_per_buf,
+            t.emif_inst.sim_model.emif_inner_inst, ovalues_per_buf,
             min(obuf_len, ibuf_len) * obuf_count,
             projections[n]["data_widths"]["I"], oaddrs[n])
         output_vals[n] = emif_vals
@@ -1007,4 +1030,4 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         [oaddr], [iaddr], [waddr], ws, simulate=simulate,
-        gen_ver=True, include_sim_models=(not fast_gen))
+        gen_ver=True, include_sim_models=fast_gen)

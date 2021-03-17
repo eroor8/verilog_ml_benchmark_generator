@@ -378,7 +378,7 @@ def test_simulate_multiple_layers(
     print(ibuf_flat)
     print(emif_data)
     emif_vals = utils.read_out_stored_values_from_emif(
-        testinst.emif_inst.sim_model.bufi, ivalues_per_buf0, oaddrs[0]-iaddrs[0],
+        testinst.emif_inst.sim_model.emif_inner_inst, ivalues_per_buf0, oaddrs[0]-iaddrs[0],
         proj_yaml["data_widths"]["I"], iaddrs[0])
     print(emif_vals)
     print(ibuf)
@@ -395,7 +395,7 @@ def test_simulate_multiple_layers(
         print(" ========> Read out Weights from EMIF and check against expected - L" + str(py_i))
         endaddr = waddrs[py_i+1] if (py_i < len(proj_yamls)-1) else iaddrs[0]
         emif_vals = utils.read_out_stored_values_from_emif(
-            testinst.emif_inst.sim_model.bufi, wvalues_per_buf, endaddr-waddrs[py_i],
+            testinst.emif_inst.sim_model.emif_inner_inst, wvalues_per_buf, endaddr-waddrs[py_i],
             proj_yaml["data_widths"]["W"], waddrs[py_i])
         print(wbufs[py_i])
         print(emif_vals)
@@ -694,7 +694,7 @@ def test_simulate_layer(
     print("==> Done simulation")
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
-        testinst.emif_inst.sim_model.bufi, wvalues_per_buf, iaddr,
+        testinst.emif_inst.sim_model.emif_inner_inst, wvalues_per_buf, iaddr,
         proj_yaml["data_widths"]["W"], 0)
     print("==> Checking that weights are correctly stored in EMIF")
     print(wbuf)
@@ -704,7 +704,7 @@ def test_simulate_layer(
             for i in range(len(wbuf[k][j])):
                 assert emif_vals[k*len(wbuf[k])+j][i] == wbuf[k][j][i]
     emif_vals = utils.read_out_stored_values_from_emif(
-        testinst.emif_inst.sim_model.bufi, ivalues_per_buf, oaddr-iaddr,
+        testinst.emif_inst.sim_model.emif_inner_inst, ivalues_per_buf, oaddr-iaddr,
         proj_yaml["data_widths"]["I"], iaddr)
     print("==> Checking that inputs are correctly stored in EMIF")
     print(emif_vals)
@@ -826,7 +826,7 @@ def test_simulate_emif_statemachine(
     print("done simulating")
     # Check that EMIFs have the right data
     emif_vals = utils.read_out_stored_values_from_emif(
-        testinst.emif_inst.sim_model.bufi, wvalues_per_buf, iaddr,
+        testinst.emif_inst.sim_model.emif_inner_inst, wvalues_per_buf, iaddr,
         proj_yaml["data_widths"]["W"], 0)
     print(emif_vals)
     print(wbuf)
@@ -836,7 +836,7 @@ def test_simulate_emif_statemachine(
                 assert emif_vals[k*len(wbuf[k])+j][i] == wbuf[k][j][i]
                 
     emif_vals = utils.read_out_stored_values_from_emif(
-        testinst.emif_inst.sim_model.bufi, ivalues_per_buf, oaddr-iaddr,
+        testinst.emif_inst.sim_model.emif_inner_inst, ivalues_per_buf, oaddr-iaddr,
         proj_yaml["data_widths"]["I"], iaddr)
     print("\n\nCOMPARE")
     print(emif_vals)
@@ -888,11 +888,11 @@ def test_simulate_emif_statemachine(
     with open("final_offchip_data_contents.yaml") as outfile:
         outvals_yaml = yaml.safe_load(outfile)[0]
             
-    for bufi in range(obuf_count):
+    for emif_inner_inst in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1):
-            print(obuf[bufi][olen])
-            print(outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen])
-            assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
+            print(obuf[emif_inner_inst][olen])
+            print(outvals_yaml[emif_inner_inst*min(obuf_len,ibuf_len) + olen])
+            assert obuf[emif_inner_inst][olen] == outvals_yaml[emif_inner_inst*min(obuf_len,ibuf_len) + olen]
 
     
 def test_simulate_emif_statemachine_unit_ws_pl():

@@ -126,6 +126,7 @@ def test_yaml_schemas():
 @pytest.mark.skip
 def test_odin_emif_statemachine(mlb_file, ab_file, wb_file, emif_file,
                                 projection_file):
+    print(VTR_FLOW_PATH)
     assert VTR_FLOW_PATH, "Set environment variable VTR_FLOW_PATH to location " + \
         " of VTR flow scripts"
         

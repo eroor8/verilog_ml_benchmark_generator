@@ -214,7 +214,8 @@ class EMIF(Component):
     def construct(s, datawidth=8, length=1, startaddr=0,
                   preload_vector=[], pipelined=False,
                   max_pipeline_transfers=4, sim=False,
-                  fast_gen=False, synthesizeable=True):
+                  fast_gen=False, synthesizeable=True,
+                  inner_fast_gen=False):
         """ Constructor for Buffer
 
          :param datawidth: Bit-width of input, output data
@@ -239,8 +240,9 @@ class EMIF(Component):
         s.waddress = Wire(wide_addr_width)
         connect(s.waddress[0:addrwidth], s.avalon_address)
         s.waddress[addrwidth:wide_addr_width] //= 0
-        s.bufi = Buffer(datawidth, length, startaddr, preload_vector,
-                        sim=True, fast_gen=fast_gen)
+        s.emif_inner_inst = Buffer(datawidth, length, startaddr,
+                                   preload_vector, sim=True,
+                                   fast_gen=fast_gen)
         INIT, WAIT_READING, DONE_READ, WAIT_WRITING, DONE_WRITE = \
             Bits5(1), Bits5(2), Bits5(3), Bits5(4), Bits5(5)
         s.state = Wire(5)
@@ -298,9 +300,12 @@ class EMIF(Component):
                         s.avalon_readdatavalid <<= \
                             s.pending_transfers_r[curr_t[0:n]]
                         s.curr_pending_start <<= s.curr_pending_start + 1
-                        s.bufi.address <<= s.pending_transfers_a[curr_t[0:n]]
-                        s.bufi.wen <<= s.pending_transfers_w[curr_t[0:n]]
-                        s.bufi.datain <<= s.pending_transfers_wd[curr_t[0:n]]
+                        s.emif_inner_inst.address <<= \
+                            s.pending_transfers_a[curr_t[0:n]]
+                        s.emif_inner_inst.wen <<= \
+                            s.pending_transfers_w[curr_t[0:n]]
+                        s.emif_inner_inst.datain <<= \
+                            s.pending_transfers_wd[curr_t[0:n]]
                         s.latency_countdown <<= s.curr_rand
                     else:
                         if (s.latency_countdown > 0):
@@ -311,7 +316,7 @@ class EMIF(Component):
 
             @update
             def upblk0_pipe():
-                s.avalon_readdata @= s.bufi.dataout
+                s.avalon_readdata @= s.emif_inner_inst.dataout
                 num_pending_transfers = s.curr_pending_end - \
                     s.curr_pending_start
                 if (s.avalon_read | s.avalon_write) & \
@@ -330,13 +335,13 @@ class EMIF(Component):
                     if (s.state == INIT):
                         if s.avalon_read:
                             s.state <<= WAIT_READING
-                            s.bufi.address <<= s.avalon_address
+                            s.emif_inner_inst.address <<= s.avalon_address
                             s.latency_countdown <<= s.curr_rand
                         elif s.avalon_write:
                             s.state <<= WAIT_WRITING
-                            s.bufi.address <<= s.avalon_address
-                            s.bufi.datain <<= s.avalon_writedata
-                            s.bufi.wen <<= 1
+                            s.emif_inner_inst.address <<= s.avalon_address
+                            s.emif_inner_inst.datain <<= s.avalon_writedata
+                            s.emif_inner_inst.wen <<= 1
                             s.latency_countdown <<= s.curr_rand
                     elif (s.state == WAIT_READING):
                         s.latency_countdown <<= s.latency_countdown - 1
@@ -352,7 +357,7 @@ class EMIF(Component):
 
             @update
             def upblk0_n_pipe():
-                s.avalon_readdata @= s.bufi.dataout
+                s.avalon_readdata @= s.emif_inner_inst.dataout
                 if ((s.state == INIT) & (s.avalon_read == 0) &
                    (s.avalon_write == 0)) \
                    | (s.state == DONE_READ) \

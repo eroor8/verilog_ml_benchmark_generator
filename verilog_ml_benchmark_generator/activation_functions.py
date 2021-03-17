@@ -295,6 +295,63 @@ class SIGMOID_LUT(Component):
         utils.tie_off_clk_reset(s)
 
 
+class ELU_LUT(Component):
+    """" This class implements a sigmoid function using a lookup table.
+         Sigmoid function: fout = alpha *  (e^fin - 1) if (fin < 0) else fin
+         Inputs and outputs are fixed point, with any widths
+    """
+    def construct(s, input_width=1, output_width=1, registered=False,
+                  qin=0, qout=0, params={}):
+        s.activation_function_in = InPort(input_width)
+        s.activation_function_out = OutPort(output_width)
+        signed_vals = [utils.Qx_to_int(i, qin, input_width)
+                       for i in range(2**(input_width))]
+        sigmoid_vals = [params["alpha"] * (math.exp(signed_vals[i])-1)
+                        if (signed_vals[i] < 0) else signed_vals[i]
+                        for i in range(2**(input_width))]
+        out_vals = [utils.int_to_Qx(sigmoid_vals[i], qout, output_width)
+                    for i in range(2**(input_width))]
+        s.bufi = module_helper_classes.Buffer(output_width,
+                                              2**input_width,
+                                              startaddr=0,
+                                              preload_vector=out_vals,
+                                              sim=False, fast_gen=False)
+        s.bufi.address //= s.activation_function_in
+        s.bufi.wen //= 0
+        s.bufi.datain //= 0
+        s.activation_function_out //= s.bufi.dataout
+        utils.tie_off_clk_reset(s)
+
+
+class SELU_LUT(Component):
+    """" This class implements a sigmoid function using a lookup table.
+         Sigmoid function: fout = alpha *  (e^fin - 1) if (fin < 0) else fin
+         Inputs and outputs are fixed point, with any widths
+    """
+    def construct(s, input_width=1, output_width=1, registered=False,
+                  qin=0, qout=0, params={}):
+        s.activation_function_in = InPort(input_width)
+        s.activation_function_out = OutPort(output_width)
+        signed_vals = [utils.Qx_to_int(i, qin, input_width)
+                       for i in range(2**(input_width))]
+        sigmoid_vals = [params["alpha"] * params["scale"] *
+                        (math.exp(signed_vals[i])-1) if (signed_vals[i] < 0)
+                        else signed_vals[i] * params["scale"]
+                        for i in range(2**(input_width))]
+        out_vals = [utils.int_to_Qx(sigmoid_vals[i], qout, output_width)
+                    for i in range(2**(input_width))]
+        s.bufi = module_helper_classes.Buffer(output_width,
+                                              2**input_width,
+                                              startaddr=0,
+                                              preload_vector=out_vals,
+                                              sim=False, fast_gen=False)
+        s.bufi.address //= s.activation_function_in
+        s.bufi.wen //= 0
+        s.bufi.datain //= 0
+        s.activation_function_out //= s.bufi.dataout
+        utils.tie_off_clk_reset(s)
+
+
 class TANH_LUT(Component):
     """" This class implements a tanh function using a lookup table.
          Tanh function: fout = 1 / (1 + e^-fin)
@@ -308,10 +365,8 @@ class TANH_LUT(Component):
                        for i in range(2**(input_width))]
         sigmoid_vals = [math.tanh(signed_vals[i])
                         for i in range(2**(input_width))]
-        print(sigmoid_vals)
         out_vals = [utils.int_to_Qx(sigmoid_vals[i], qout, output_width)
                     for i in range(2**(input_width))]
-        print(out_vals)
         s.bufi = module_helper_classes.Buffer(output_width, 2**input_width,
                                               startaddr=0,
                                               preload_vector=out_vals,
@@ -421,7 +476,6 @@ def TANH_LUT_SW(input_act, input_width, output_width=0, qin=0, qout=0,
     assert(qin < input_width)
     signed_val = utils.Qx_to_int(input_act, qin, input_width)
     out_int = math.tanh(signed_val)
-    print(out_int)
     out_q = utils.int_to_Qx(out_int, qout, output_width)
     return math.floor(out_q)
 
@@ -436,3 +490,33 @@ def SIGMOID_LUT_SW(input_act, input_width, output_width=0, qin=0,
     out_int = 1 / (1 + math.exp(-signed_val))
     out_q = out_int * (2**qout)
     return out_q
+
+
+def ELU_LUT_SW(input_act, input_width, output_width=0, qin=0,
+               qout=0, params={}):
+    """" Python version of sigmoid activation function
+         (for pyMTL simulation validation)
+    """
+    assert(qin < input_width)
+    signed_val = utils.Qx_to_int(input_act, qin, input_width)
+    if (signed_val < 0):
+        out_int = params["alpha"] * (math.exp(signed_val)-1)
+    else:
+        out_int = signed_val
+    out_q = utils.int_to_Qx(out_int, qout, output_width)
+    return math.floor(out_q)
+
+
+def SELU_LUT_SW(input_act, input_width, output_width=0, qin=0,
+                qout=0, params={}):
+    """" Python version of sigmoid activation function
+         (for pyMTL simulation validation)
+    """
+    assert(qin < input_width)
+    signed_val = utils.Qx_to_int(input_act, qin, input_width)
+    if (signed_val < 0):
+        out_int = params["alpha"] * params["scale"] * (math.exp(signed_val)-1)
+    else:
+        out_int = signed_val * params["scale"]
+    out_q = utils.int_to_Qx(out_int, qout, output_width)
+    return math.floor(out_q)

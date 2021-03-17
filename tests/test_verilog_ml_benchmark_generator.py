@@ -39,8 +39,8 @@ def test_generate_v_odin():
     assert 'Final output files' in result.output
 
     
-    outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin.v")
+    outfile = os.path.join(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                           ".."), "test_odin.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "test_arch.xml")
     command = [VTR_FLOW_PATH, outfile, archfile,
@@ -74,11 +74,17 @@ def test_generate_simulate_sv_accelerator():
                             '--weight_buffer_definition', wb_spec,
                             '--emif_definition', emif_spec,
                             '--mapping_vector_definition', proj,
-                            '--include_sv_sim_models', "True"
+                            '--include_sv_sim_models', "False"
                             ])
     assert result.exit_code == 0
     assert 'Final output files' in result.output
 
+    mod_name = "test"
+    curr_dir = os.path.dirname(os.path.abspath(__file__))
+    proj_dir = os.path.join(curr_dir, "sv_project")
+    print("cp " + mod_name + "_quartus_vivado.sv " + os.path.join(proj_dir, mod_name + "_quartus_vivado.sv"))
+    os.system("rm -rf " + os.path.join(proj_dir, "*_quartus_vivado.sv"))
+    os.system("cp " + mod_name + "_quartus_vivado.sv " + os.path.join(proj_dir, mod_name + "_quartus_vivado.sv"))
     
     print("\n -- vlib") 
     vlib = os.path.join(VSIM_PATH, "vlib")
@@ -91,21 +97,29 @@ def test_generate_simulate_sv_accelerator():
 
     print("\n -- vlog") 
     vlog = os.path.join(VSIM_PATH, "vlog")
-    process = subprocess.Popen([vlog, "test_quartus_vivado.sv"],
+    process = subprocess.Popen([vlog, os.path.join(proj_dir, "*.sv")],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     outtxt = str(process.stdout.read())
     #print(outtxt)
+    if not ("Errors: 0" in outtxt):
+        print(outtxt)
     assert "Errors: 0" in outtxt
     
     print("\n -- vsim") 
     vsim = os.path.join(VSIM_PATH, "vsim")
 
-    vsim_script = "run 100ns; quit"
+    #vsim_script = "run 100ns; quit"
+    vsim_script = "run -all; quit"
     process = subprocess.Popen([vsim, "-c", "-do", vsim_script, "test"],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
     outtxt = str(process.stdout.read())
+    
+    with open('vsim_out.txt', 'w') as f:
+        print(outtxt, file=f)
+    if not ("Errors: 0" in outtxt):
+        print(outtxt)
     assert "Errors: 0" in outtxt
 
 def test_simulate_pymtl_accelerator():
@@ -184,18 +198,16 @@ def test_generate_simulate_odin_layer():
                             '--weight_buffer_definition', wb_spec,
                             '--emif_definition', emif_spec,
                             '--layer_definition', layer,
-                            '--eb_count', 988,
+                            '--eb_count', 50,
                             '--include_sv_sim_models', "False"
                             ])
     assert result.exit_code == 0
     assert 'Final output files' in result.output
 
-
-    
-    outfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_odin.v")
+    outfile = os.path.join(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                           ".."), "test_odin.v")
     archfile = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "test_arch.xml")
+                            "test_arch_intel_mini.xml")
     command = [VTR_FLOW_PATH, outfile, archfile,
                "-ending_stage", "abc"]
     print("ODIN command ::" + str(command))

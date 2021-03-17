@@ -325,7 +325,8 @@ class HWB_Sim(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, projs={}, sim=True, fast_gen=False):
+    def construct(s, spec={}, projs={}, sim=True, fast_gen=False,
+                  inner_fast_gen=False):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -411,7 +412,7 @@ class HWB_Sim(Component):
                     max_pipeline_transfers=spec.get(
                         'max_pipeline_transfers', {}).get(
                             'max_pipeline_transfers', 4),
-                    sim=True, fast_gen=fast_gen)
+                    sim=True, fast_gen=fast_gen, inner_fast_gen=inner_fast_gen)
                 connect(ports_by_type["AVALON_ADDRESS_in"][0][1],
                         s.sim_model.avalon_address)
                 connect(ports_by_type["AVALON_WRITEDATA_in"][0][1],
@@ -1464,19 +1465,27 @@ class Datapath(Component):
 
         s.sel = InPort(math.ceil(math.log(max(len(proj_specs), 2), 2)))
         utils.tie_off_port(s, s.sel)
+
+        buffer_fastgen = fast_gen if isinstance(fast_gen, bool) \
+            else (buffer_specs['W']['block_name'] not in fast_gen)
         s.weight_modules = HWB_Wrapper(buffer_specs['W'],
                                        max(buffer_counts['W'])*num_w_banks,
-                                       fast_gen=fast_gen)
+                                       fast_gen=buffer_fastgen)
+        buffer_fastgen = fast_gen if isinstance(fast_gen, bool) \
+            else (buffer_specs['I']['block_name'] not in fast_gen)
         s.input_act_modules = InputBufferWrapper(
             buffer_specs['I'], buffer_counts['I'], buffer_counts['O'],
-            projections=proj_specs, fast_gen=fast_gen,
+            projections=proj_specs, fast_gen=buffer_fastgen,
             add_SR=(("access_patterns" in mlb_spec) and
                     (mlb_spec["access_patterns"]["AP1"] <
                      inner_projs[i]["RX"]) and (inner_projs[i]["RX"] > 1)),
             input_width=max(inner_data_widths['I']),
             buffer_start_idxs=ibuffer_start_idxs)
+        mlb_fastgen = fast_gen if isinstance(fast_gen, bool) \
+            else (mlb_spec['block_name'] not in fast_gen)
         s.mlb_modules = HWB_Wrapper(mlb_spec, max(MLB_counts),
-                                    projections=proj_specs, fast_gen=fast_gen)
+                                    projections=proj_specs,
+                                    fast_gen=mlb_fastgen)
         s.input_act_modules.sel //= s.sel
         activation_function_modules = []
         for i in range(len(proj_specs)):

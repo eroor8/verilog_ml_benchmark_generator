@@ -67,7 +67,7 @@ def generate_accelerator_verilog(module_name, eb_definition,
         generate_modules.generate_accelerator_given_mapping(
             module_name, mlb_yaml, wb_yaml, ab_yaml, proj_yaml,
             write_to_file=True,
-            emif_spec=emif_yaml, fast_gen=(not include_sv_sim_models))
+            emif_spec=emif_yaml, fast_gen=include_sv_sim_models)
     else:
         assert (layer_definition), "Specify either a mapping vector " + \
             "definition, or layer definition"
@@ -76,7 +76,7 @@ def generate_accelerator_verilog(module_name, eb_definition,
         layer_yaml = yaml.safe_load(layer_definition)
         generate_modules.generate_accelerator_for_layers(
             module_name, mlb_yaml, wb_yaml, ab_yaml, emif_yaml, eb_count,
-            layer_yaml, simulate=False, fast_gen=(not include_sv_sim_models),
+            layer_yaml, simulate=False, fast_gen=include_sv_sim_models,
             preload_o=-1, preload_i=1, iaddr=input_address,
             waddr=weight_address, oaddr=output_address)
     return 0

@@ -49,6 +49,7 @@ def test_RELU():
             assert activation_functions.RELU_SW(pair[0], testvec["ins"][0], testvec["ins"][1], testvec["ins"][3], testvec["ins"][4]) == pair[1]
         i = i + 1
 
+
 def test_CLIPPED_RELU():
     """Test Component class RELU"""
     test_vecs = [
@@ -177,6 +178,63 @@ def test_SIGMOID_LUT():
             testinst.sim_tick()
             assert testinst.activation_function_out == pair[1]
             assert activation_functions.SIGMOID_LUT_SW(pair[0], testvec["ins"][0], testvec["ins"][1], testvec["ins"][3], testvec["ins"][4]) == testinst.activation_function_out
+        i = i + 1
+
+def test_ELU_LUT():
+    """Test Component class RELU"""
+    test_vecs = [
+        {"ins":[3,3, True, 0, 0, {"alpha": 1}], "outs":[[7,7],[2,2]]}, # 111. (-1) -> -0.632 ~0, 10.00 -> 10.00
+        {"ins":[3,4, True, 0, 1, {"alpha": 3}], "outs":[[2,4],[6,10]]}, # 010 -> .1100 , 110 (-2,6) -> -2.5 (10.11)    
+        {"ins":[3,4, True, 1, 3, {"alpha": 1}], "outs":[[1,4],[5,9]]}, # 001 (0.5) -> 0.622 (1001), -1.5 (10.1)-> -0.77 ~ -0.111 = -1.001 = 1000 
+    ]
+    
+    i = 0
+    for testvec in test_vecs:
+        print("VEC " + str(testvec))
+        testinst = activation_functions.ELU_LUT(testvec["ins"][0],
+                                       testvec["ins"][1],
+                                       testvec["ins"][2],
+                                       testvec["ins"][3],
+                                       testvec["ins"][4],
+                                       testvec["ins"][5])
+        testinst.elaborate()
+        testinst.apply(DefaultPassGroup()) 
+        for pair in testvec["outs"]:
+            testinst.sim_reset()
+            testinst.activation_function_in @= pair[0]
+            testinst.sim_tick()
+            assert testinst.activation_function_out == pair[1]
+            assert activation_functions.ELU_LUT_SW(pair[0], testvec["ins"][0], testvec["ins"][1], testvec["ins"][3], testvec["ins"][4], testvec["ins"][5]) == testinst.activation_function_out
+        i = i + 1
+        
+def test_SELU_LUT():
+    """Test Component class RELU"""
+    test_vecs = [
+        {"ins":[3,3, True, 0, 0, {"alpha": 1, "scale":1}], "outs":[[7,7],[2,2]]}, # 111. (-1) -> -0.632 ~-2, 10.00 -> 10.00
+        {"ins":[3,4, True, 0, 1, {"alpha": 3, "scale":1}], "outs":[[2,4],[6,10]]}, # 010 -> .1100 , 110 (-2,6) -> -2.5 (10.11)    
+        {"ins":[3,4, True, 1, 3, {"alpha": 1, "scale":1}], "outs":[[1,4],[5,9]]}, # 001 (0.5) -> 0.622 (1001), -1.5 (10.1)-> -0.77 ~ -0.111 = -1.001 = 1000 
+        {"ins":[3,3, True, 0, 0, {"alpha": 1, "scale":2}], "outs":[[7,6],[2,4]]}, # 111. (-1) -> -0.632 ~1, 10.00 -> 10.00
+        {"ins":[3,4, True, 0, 1, {"alpha": 3, "scale":0.25}], "outs":[[2,1],[6,14]]}, # 010 -> .1100 , 110 (-2,6) -> -2.5/4 = -0.62 (111.1)    
+        {"ins":[3,4, True, 1, 3, {"alpha": 1, "scale":0.5}], "outs":[[1,2],[5,12]]}, # 001 (0.5) -> 0.622 (1001), -1.5 (10.1)-> -0.39 ~ -0.011 = 1.101 
+    ]
+    
+    i = 0
+    for testvec in test_vecs:
+        print("VEC " + str(testvec))
+        testinst = activation_functions.SELU_LUT(testvec["ins"][0],
+                                       testvec["ins"][1],
+                                       testvec["ins"][2],
+                                       testvec["ins"][3],
+                                       testvec["ins"][4],
+                                       testvec["ins"][5])
+        testinst.elaborate()
+        testinst.apply(DefaultPassGroup()) 
+        for pair in testvec["outs"]:
+            testinst.sim_reset()
+            testinst.activation_function_in @= pair[0]
+            testinst.sim_tick()
+            assert testinst.activation_function_out == pair[1]
+            assert activation_functions.SELU_LUT_SW(pair[0], testvec["ins"][0], testvec["ins"][1], testvec["ins"][3], testvec["ins"][4], testvec["ins"][5]) == testinst.activation_function_out
         i = i + 1
 
         

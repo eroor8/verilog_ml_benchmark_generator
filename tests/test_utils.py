@@ -456,7 +456,7 @@ def test_read_out_from_emif():
     testinst.apply(DefaultPassGroup())
     testinst.sim_reset()
     testinst.sim_tick()
-    contents = utils.read_out_stored_values_from_emif(testinst.bufi, 1, 8, 8, 0)
+    contents = utils.read_out_stored_values_from_emif(testinst.emif_inner_inst, 1, 8, 8, 0)
     print(contents)
     for value in range(len(data)):
         assert data[value] == contents[value][0]

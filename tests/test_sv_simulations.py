@@ -25,7 +25,7 @@ WIDTH = 149
 @pytest.mark.full_simulations
 @pytest.mark.skip
 def test_simulate_emif_statemachine_sv(
-        mlb_file, ab_file, wb_file, emif_file, proj_file, ws=True, v=False, mod_name="test_sv",
+        mlb_file, ab_file, wb_file, emif_file, proj_file, ws=False, v=False, mod_name="test_sv",
         simulate_pymtl=True):
 
     assert VSIM_PATH, "Set environment variable VSIM_PATH to the location of the modelsim executables"
@@ -60,6 +60,7 @@ def test_simulate_emif_statemachine_sv(
         ab_yaml, proj_yaml)
     
     # Create random input data arrays to load into EMIF
+    wbuf_len = min(wbuf_len, utils.get_weight_buffer_len(proj_yaml))
     wbuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["W"])-1)
             for k in range(wvalues_per_buf)]    # values per word
             for i in range(wbuf_len)]           # words per buffer
@@ -69,10 +70,12 @@ def test_simulate_emif_statemachine_sv(
                      for i in range(len(inner))) \
                          for outer in wbuf for inner in outer]
     iaddr = len(wbuf_flat)
+    ibuf_len = min(ibuf_len, utils.get_input_buffer_len(proj_yaml))
     ibuf = [[[random.randint(0,(2**proj_yaml["data_widths"]["I"])-1)
              for k in range(ivalues_per_buf)]            # values per word
              for i in range(ibuf_len)]                   # words per buffer
              for j in range (ibuf_count)]                # buffers
+
     ibuf_flat = [sum((lambda i: inner[i] * \
                 (2**(i*proj_yaml["data_widths"]["I"])))(i) \
                      for i in range(len(inner))) \
@@ -89,7 +92,7 @@ def test_simulate_emif_statemachine_sv(
     with open("orig_emif_contents.mem", 'w') as file:
         file.write('\n'.join(mem_lines))
         
-    obuf = [[[0 for i in range(ovalues_per_buf)]
+    obuf = [[['X' for i in range(ovalues_per_buf)]
                  for i in range(obuf_len)]
                  for j in range (obuf_count)]
     obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
@@ -109,7 +112,7 @@ def test_simulate_emif_statemachine_sv(
                                                         waddrs=[0],
                                                         iaddrs=[iaddr],
                                                         oaddrs=[oaddr],
-                                                        ws=False,
+                                                        ws=ws,
                                                         validate_output=v,
                                                         gen_ver=True,
                                                         #include_sim_models=['emif', 'emif_inner', 'ml_block_weights', 'ml_block_input', 'mlb_model'],
@@ -171,7 +174,7 @@ def test_simulate_emif_statemachine_sv(
                 print(obuf[bufi][olen])
                 print()
                 assert obuf[bufi][olen] == outvals_yaml[bufi*min(obuf_len,ibuf_len) + olen]
-    #assert(0)
+
     # Now test with modelsim
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     proj_dir = os.path.join(curr_dir, "sv_project")
@@ -252,17 +255,26 @@ def test_simulate_emif_statemachine_sv(
     print("\n>> ACTUAL OUT")
     print(verilog_out)
 
+    emif_idx = 0
     for bufi in range(obuf_count):
         for olen in range(min(obuf_len,ibuf_len)-1):
             #print("compare")
             #print(obuf[bufi][olen])
-            assert obuf[bufi][olen] == verilog_out[bufi*obuf_len+olen]
+            empty = True
+            for v in range(len(obuf[bufi][olen])):
+                if not (obuf[bufi][olen][v] == 'X'):
+                    print(emif_idx, v)
+                    assert obuf[bufi][olen][v] == verilog_out[emif_idx][v]
+                    empty = False
+            if not empty:
+                emif_idx = emif_idx + 1
 
 
 @pytest.mark.requiresodin
 def test_modelsim_emif_statemachine_mini():
     test_simulate_emif_statemachine_sv("mlb_model.yaml",
                                 "buffer_spec_8.yaml",
-                                "b0_spec.yaml",
+                                "buffer_spec_8.yaml",
                                 "emif_spec_large.yaml",
                                        "projection_spec_3.yaml", simulate_pymtl=False)
+    #assert(0)

@@ -19,11 +19,11 @@ outer_projection:
     G: 1
 temporal_projection:
     RX: 1
-    RY: 3
+    RY: 1
     C: 1
     E: 3
     PX: 1
-    PY: 1
+    PY: 3
     B: 1 
     G: 1
 activation_function: 'RELU'

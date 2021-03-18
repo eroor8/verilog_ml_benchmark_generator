@@ -367,6 +367,7 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
     temp_uny = proj_yaml.get("temporal_projection",{}).get("RY",1)
     temp_un = temp_unc * temp_uny
     
+    ibuf_len = min(utils.get_input_buffer_len(proj_yaml), ibuf_len)
     ibuf = [[[0 for k in range(ivalues_per_buf)]
              for i in range(ibuf_len)]           
              for j in range (ibuf_count)]
@@ -435,6 +436,7 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
     
     wvalues_per_buf, wbuf_len, wbuf_count = utils.get_iw_buffer_dimensions(
         wb_yaml, proj_yaml, 'W')
+    #assert(wbuf_count > 1)
     inner_ug = proj_yaml["inner_projection"]["G"]
     outer_ug = proj_yaml["outer_projection"]["G"]
     temp_ug = proj_yaml.get("temporal_projection",{}).get("G",1)
@@ -458,12 +460,27 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
     inner_uwy = 1
     outer_uw = proj_yaml["outer_projection"]["RX"]
     outer_uwx = proj_yaml["outer_projection"]["RX"]
-    outer_uwy = 1  
+    outer_uwy = 1
 
     # Move the weights and inputs into the EMIF in the expected order
+    wbuf_len = min(utils.get_weight_buffer_len(proj_yaml), wbuf_len)
     wbuf = [[[0 for k in range(wvalues_per_buf)] 
             for i in range(wbuf_len)]              
             for j in range(wbuf_count)]
+    
+    stream_width = inner_ug*inner_ue*inner_un*inner_uw
+    mlb_chain_len=1
+    outer_chain_len=1
+    if ("PRELOAD" in proj_yaml["inner_projection"]):
+        mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
+        stream_width = 1
+    else:
+        stream_width=inner_ug*inner_ue*inner_un*inner_uw
+    if ("PRELOAD" in proj_yaml["outer_projection"]):
+        outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
+    else:
+        streams_per_buffer = max(math.floor(len(wbuf[0][0]) / stream_width),1)
+        
     print(weights)
     for ugt in range(temp_ug):
         for ugo in range(outer_ug): 
@@ -508,19 +525,16 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
                                                                                 mlb_chain_len=1
                                                                                 outer_chain_len=1
                                                                                 if ("PRELOAD" in proj_yaml["inner_projection"]):
-                                                                                    mlb_chain_len=inner_ug*inner_ue*inner_un*inner_uw
                                                                                     w_buf_inst_idx = \
                                                                                         ugi*inner_ue*inner_un*inner_uw + \
                                                                                         uei*inner_un*inner_uw + \
                                                                                         urni*inner_uw + \
                                                                                         urwi
-                                                                                    stream_width = 1
                                                                                 else:
                                                                                     bus_idx = ugi*inner_ue*inner_un*inner_uw + \
                                                                                               uei*inner_un*inner_uw + \
                                                                                               urni*inner_uw + \
                                                                                               urwi
-                                                                                    stream_width=inner_ug*inner_ue*inner_un*inner_uw
                                                                                 if ("PRELOAD" in proj_yaml["outer_projection"]):
                                                                                     w_buf_inst_idx = \
                                                                                         (ugo*outer_ue*outer_un*outer_uw + \
@@ -528,13 +542,11 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
                                                                                         urno*outer_uw + \
                                                                                         urwo)*mlb_chain_len + \
                                                                                         w_buf_inst_idx
-                                                                                    outer_chain_len = outer_ug*outer_ue*outer_uw*outer_un
                                                                                 else:
                                                                                     stream_idx = ugo*outer_ue*outer_un*outer_uw + \
                                                                                         ueo*outer_un*outer_uw + \
                                                                                         urno*outer_uw + \
                                                                                         urwo
-                                                                                    streams_per_buffer = max(math.floor(len(wbuf[0][0]) / stream_width),1)
                                                                                     buffer_cnt = math.floor(stream_idx / streams_per_buffer)
                                                                                     bus_idx = (stream_idx % streams_per_buffer)*stream_width + bus_idx
                                                                                 buffer_idx = (outer_chain_len*mlb_chain_len - w_buf_inst_idx - 1)
@@ -547,7 +559,6 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
 def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):    
     ovalues_per_buf, obuf_len, obuf_count = utils.get_obuffer_dimensions(
         ab_yaml, proj_yaml)
-    
     inner_uw = proj_yaml["inner_projection"]["RX"]
     inner_uwx = proj_yaml["inner_projection"]["RX"]
     inner_uwy = 1
@@ -590,6 +601,8 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
     inner_ue = proj_yaml["inner_projection"]["E"]
     outer_ue = proj_yaml["outer_projection"]["E"]
     temp_ue = proj_yaml.get("temporal_projection",{}).get("E",1)
+
+    values_per_buf = min(obuf_len, temp_ub*temp_ue*temp_ug)
     
     for ugt in range(temp_ug):
         for ugo in range(outer_ug): 
@@ -624,17 +637,12 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                 max_uby = outer_uby*inner_uby*temp_uby
                                                                 max_unx = inner_uwx*outer_uwx*outer_unx*temp_unx*inner_unx*outer_unx
                                                                 max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny
-                                                                #print("Add?")
-                                                                #print(uby)
-                                                                #print(max_uby)
-                                                                #print(max_uny)
-                                                                #print((max_uby - max_uny))
                                                                 if ((ubx <= (max_ubx - max_unx)/stridex) and ((uby <= (max_uby - max_uny)/stridey))):
                                                                     outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                         [ubb]\
                                                                         [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
                                                                         [uby][ubx] = \
-                                                                        outvals_yaml[obuf_idx*min(obuf_len,ibuf_len) + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]
+                                                                        outvals_yaml[obuf_idx*values_per_buf + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]
     return outarray
 
 def gen_constraint_file(chain_file, outfile,

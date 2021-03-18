@@ -566,7 +566,7 @@ def postprocess_verilog_sv(filename_in, include_sim_models=False):
     line_list = filedata.splitlines()
     line_list = move_ios_into_module_body(line_list)
 
-    #line_list = remove_sim_block_defs(line_list, ["sim_True__fast_gen_True"])
+    line_list = remove_sim_block_defs(line_list, ["sim_True__fast_gen_True"])
     line_list = remove_non_existant_ports(line_list, non_existant_ports)
     line_list = remove_parameter_references(line_list)
     line_list = remove_width_0_ranges(line_list)
@@ -752,12 +752,14 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     # Fill EMIF with random data
     utils.print_heading("Generating random data to initialize " +
                         "off-chip memory", currstep + 0)
+    wbuf_len = min(utils.get_weight_buffer_len(projection), wbuf_len)
     wbuf = [[[random.randint(0, (2 ** projection["data_widths"]["W"]) - 1)
               for k in range(wvalues_per_buf)]
              for i in range(wbuf_len)]
             for j in range(wbuf_count)]
     wbuf_flat = utils.flatten_array(wbuf, projection["data_widths"]["W"])
     iaddr = len(wbuf_flat)
+    ibuf_len = utils.get_input_buffer_len(projection)
     ibuf = [[[random.randint(0, (2 ** projection["data_widths"]["I"]) - 1)
               for k in range(ivalues_per_buf)]
              for i in range(ibuf_len)]
@@ -796,8 +798,9 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
     if (validate_output):
         utils.print_heading("Comparing final off-chip buffer contents " +
                             " with expected results", currstep + 3)
+        obuf_used = utils.get_output_buffer_len(projection)
         obuf = [[[0 for i in range(ovalues_per_buf)]
-                 for i in range(obuf_len)]
+                 for i in range(obuf_used)]
                 for j in range(obuf_count)]
         obuf = utils.get_expected_outputs(obuf, ovalues_per_buf,
                                           wbuf, ibuf, ivalues_per_buf,
@@ -805,7 +808,7 @@ def simulate_accelerator_with_random_input(module_name, mlb_spec, wb_spec,
         utils.printi(il, "Expected " + str(obuf))
         utils.printi(il, "Actual " + str(emif_vals))
         for bufi in range(obuf_count):
-            for olen in range(min(obuf_len, ibuf_len) - 1):
+            for olen in range(min(obuf_used, obuf_len) - 1):
                 assert obuf[bufi][olen] == emif_vals[bufi *
                                                      min(obuf_len, ibuf_len)
                                                      + olen]
@@ -889,14 +892,18 @@ def simulate_accelerator(module_name, mlb_spec, wb_spec, ab_spec, emif_spec,
         # Run the simulation for 2000 cycles
         if (simulate):
             print("Simulate layer " + str(n))
+            wbuf_len = min(utils.get_weight_buffer_len(projections[n]),
+                           wbuf_len)
             wbuf = utils.read_out_stored_values_from_array(
                 emif_spec["fill"], wvalues_per_buf,
                 wbuf_len * wbuf_count, projections[n]["data_widths"]["W"],
                 waddrs[n], wbuf_len)
+            ibuf_used = min(utils.get_input_buffer_len(projections[n]),
+                            ibuf_len)
             ibuf = utils.read_out_stored_values_from_array(
                 emif_spec["fill"], ivalues_per_buf,
-                ibuf_len * ibuf_count, projections[n]["data_widths"]["I"],
-                iaddrs[n], ibuf_len)
+                ibuf_used * ibuf_count, projections[n]["data_widths"]["I"],
+                iaddrs[n], ibuf_used)
             run_simulation(t, 2000, n)
 
             # Collect final EMIF data (and later write to file)

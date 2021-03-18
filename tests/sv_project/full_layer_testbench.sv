@@ -136,26 +136,3 @@ module emif_inner #(
       end
    end
 endmodule
-
-//module emif_inner 
-//(
-//  input  logic [7:0] address ,
-//  input  logic  clk ,
-//  input  logic [127:0] datain ,
-//  output logic [127:0] dataout ,
-//  input  logic  reset ,
-//  input  logic  wen 
-//);
-//   reg [127:0] 	data [0:(1<<8)-1];
-//   initial begin
-//      $readmemh("orig_emif_contents.mem", data);
-//   end
-//   always @ (*) begin
-//      dataout = data[address];
-//   end
-//   always @ (posedge clk) begin
-//      if (wen) begin
-//         data[address] <= datain;	 
-//      end
-//   end
-//endmodule

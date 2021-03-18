@@ -442,6 +442,54 @@ def read_out_stored_values_from_emif(emif_inst, bytes_per_word,
                                              words_per_buffer)
 
 
+def get_weight_buffer_len(proj_spec):
+    """ Calculate the number of weights in each buffer
+    """
+    num_outer_tiles = 1
+    outer_tile_size = 1
+    temp_proj = proj_spec.get("temporal_projection", {})
+    outer_proj = proj_spec.get("outer_projection", {})
+    inner_proj = proj_spec.get("inner_projection", {})
+    if ("PRELOAD" in proj_spec["inner_projection"]):
+        outer_tile_size = inner_proj["G"] * \
+            inner_proj["RY"] * inner_proj["C"] * inner_proj["RX"] * \
+            inner_proj["E"]
+    if ("PRELOAD" in proj_spec["outer_projection"]):
+        outer_tile_size = outer_proj["RY"] * outer_proj["C"] *\
+            outer_proj["RX"] * \
+            outer_proj["E"] * outer_tile_size
+        num_outer_tiles = outer_proj["G"]
+    uet = temp_proj.get("E", 1)
+    ugt = temp_proj.get("G", 1)
+    unt = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
+    weight_count = num_outer_tiles*outer_tile_size*uet*unt*ugt
+    return weight_count
+
+
+def get_input_buffer_len(proj_spec):
+    """ Calculate the number of input values in each buffer
+    """
+    temp_proj = proj_spec.get("temporal_projection", {})
+    ugt = temp_proj.get("G", 1)
+    ubt = temp_proj.get("B", 1) * temp_proj.get("PX", 1) * \
+        temp_proj.get("PY", 1)
+    unt = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
+    input_count = ubt*unt*ugt
+    return input_count
+
+
+def get_output_buffer_len(proj_spec):
+    """ Calculate the number of output values in each buffer
+    """
+    temp_proj = proj_spec.get("temporal_projection", {})
+    uet = temp_proj.get("E", 1)
+    ugt = temp_proj.get("G", 1)
+    ubt = temp_proj.get("B", 1) * temp_proj.get("PX", 1) * \
+        temp_proj.get("PY", 1)
+    output_count = ubt*ugt*uet
+    return output_count
+
+
 """
 =============================================================================
 Utility functions for adding to pyMTL models

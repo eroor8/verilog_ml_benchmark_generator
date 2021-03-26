@@ -635,13 +635,8 @@ class StateMachineEMIFSeparate(Component):
                          addri_ports[0]["width"] + 1)
         stridex = proj_spec.get("stride", {}).get("x", 1)
         stridey = proj_spec.get("stride", {}).get("y", 1)
-        mux_size = 1
-        if (outer_proj.get('RY', 1) *
-                inner_proj.get('RY', 1)) > 1:
-            mux_size = outer_proj.get('PY', 1) * \
-                   inner_proj.get('PY', 1) * \
-                   outer_proj.get('RY', 1) * \
-                   inner_proj.get('RY', 1)
+        mux_size = outer_proj.get('RY', 1) * inner_proj.get('RY', 1)
+
         if (ws):
             if (unt > 1):
                 input_count = 1
@@ -679,7 +674,7 @@ class StateMachineEMIFSeparate(Component):
             s.stream_outputs = SM_IterateThruAddresses(output_count + 1,
                                                        addri_ports[0]["width"],
                                                        skip_n=(unt-1),
-                                                       start_wait=1,
+                                                       start_wait=urw,
                                                        repeat_x=repeat_xo,
                                                        debug_name="out")
         outer_tile_repeat_x = 1
@@ -761,21 +756,18 @@ class StateMachineEMIFSeparate(Component):
             s.preload_weights1.start_address //= s.start_addr
             s.preload_weights1.start //= s.plw_start
 
-        if (ws and (mux_size > 1)):
+        if (mux_size > 1):
             os = ubx
         else:
             os = 1
-        if ws:
-            ms = mux_size
-        else:
-            ms = 1
         s.stream_inputs = SM_IterateThruAddresses(input_count + 1,
                                                   addri_ports[0]["width"],
                                                   repeat_x=repeat_xi,
                                                   repeat_len=unt * ubt,
                                                   debug_name="in",
                                                   addr_b_offset=os,
-                                                  sel_count=ms, stride=stridey)
+                                                  sel_count=mux_size,
+                                                  stride=stridey)
         s.istart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
                                          addrw_ports[0]["width"]) +
                                      addri_ports[0]["width"] + 1)
@@ -916,8 +908,11 @@ class StateMachineEMIFSeparate(Component):
                 if (ws):
                     s.acc_en_top <<= 0
                 else:
-                    s.acc_en_top <<= (s.state == STREAMING_MLBS) & \
-                        ~s.stream_outputs.wen
+                    if (unt > 1):
+                        s.acc_en_top <<= (s.state == STREAMING_MLBS) & \
+                            ~s.stream_outputs.wen
+                    else:
+                        s.acc_en_top <<= 0
 
         @update
         def connect_weight_address():

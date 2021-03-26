@@ -74,7 +74,7 @@ def test_generate_simulate_sv_accelerator():
                             '--weight_buffer_definition', wb_spec,
                             '--emif_definition', emif_spec,
                             '--mapping_vector_definition', proj,
-                            '--include_sv_sim_models', "False"
+                            '--include_sv_sim_models', "True"
                             ])
     assert result.exit_code == 0
     assert 'Final output files' in result.output
@@ -201,7 +201,9 @@ def test_generate_simulate_odin_layer():
                             '--eb_count', 50,
                             '--include_sv_sim_models', "False"
                             ])
+    print(result.exit_code)
     assert result.exit_code == 0
+    #assert(0)
     assert 'Final output files' in result.output
 
     outfile = os.path.join(os.path.join(os.path.dirname(os.path.abspath(__file__)),

@@ -519,11 +519,10 @@ class InputBufferWrapper(Component):
                                     "sel")
 
         # Mux between two input addresses for efficient convolution.
-        mux_sizes = [proj['outer_projection']['PY'] *
-                     proj['inner_projection']['PY'] *
-                     proj['inner_projection']['RY'] *
+        mux_sizes = [proj['inner_projection']['RY'] *
                      proj['outer_projection']['RY']
                      for proj in projections]
+
         utils.AddInPort(s, math.ceil(math.log(max(max(mux_sizes), 2), 2)),
                         "addr_sel")
         j = 0
@@ -571,7 +570,11 @@ class InputBufferWrapper(Component):
                             max_total_bcount
                         if (i_order < bcounts_i[pj]):
                             assert i_order < len(buffer_idxs)
-                            muxs += [muxes[pj][buffer_idxs[i_order]]]
+                            if (0 < len(muxes[pj])):
+                                muxs += [muxes[pj][
+                                    buffer_idxs[i_order] % len(muxes[pj])]]
+                            else:
+                                muxs += [s.omux]
                         else:
                             muxs += [s.omux]
                     # Which muxes to connect to?
@@ -676,6 +679,7 @@ class InputBufferWrapper(Component):
 
                     currmux = getattr(s, "input_data_mux" + str(i))
                     currmux.sel //= instport
+
         utils.tie_off_clk_reset(s)
 
 
@@ -1009,9 +1013,12 @@ class InputInterconnect(Component):
         else:
             full_projection = {"outer_projection": projection,
                                "inner_projection": inner_projection}
+
+        # First of all, do some calculations to figure out how many
+        # inputs come from each buffer etc.
         if mlb_width < 0:
             mlb_width = mlb_width_used
-        streams_per_buffer = buffer_width/mlb_width_used
+        streams_per_buffer = buffer_width / mlb_width_used
         assert mlb_width_used <= mlb_width
         assert num_mlbs >= utils.get_var_product(projection,
                                                  [['G'], ['E'], ['B'], ['PX'],
@@ -1031,20 +1038,17 @@ class InputInterconnect(Component):
                                            ins_per_buffer)
             streams_per_buffer = buffer_width / mlb_width_used
 
-        # Add inputs from buffers
+        # Add input ports from each buffer.
         utils.add_n_inputs(s, num_buffers, full_buffer_width,
                            "inputs_from_buffer_")
-        total_urn = inner_projection.get('RY', 1) * projection['RY']
-        mux_size = projection['PY'] * \
-            inner_projection.get('PY', 1) * total_urn
+
+        # 2D convolution requires extra connectivity between buffers
+        # and ML blocks. Figure out whether this is required:
+        mux_size = inner_projection.get('RY', 1) * projection['RY']
         max_ubbi = int(inner_projection.get('B', 1) *
                        inner_projection.get('PX', 1) *
                        inner_projection.get('PY', 1))
         max_unci = int(inner_projection.get('C', 1))
-        if (total_urn == 1):
-            mux_size = 1
-            max_unci = 1
-            max_ubbi = 1
         if (mux_urn and mux_size > 1):
             s.urn_sel = InPort(math.ceil(math.log(max(mux_size, 2), 2)))
             utils.tie_off_port(s, s.urn_sel)
@@ -1052,13 +1056,15 @@ class InputInterconnect(Component):
         # Add input and output ports from each MLB
         mux_count = 0
         mlb_chains = []
-
-        for (ug, ue, ubb, urnc, ubx, b, c, d) in utils.range8D(
+        for (ug, ue, ubb, urnc, ubx, uby, c, d) in utils.range8D(
                 projection['G'], projection['E'], projection['B'],
-                projection['C'], projection['PX']):
+                projection['C'], projection['PX'], projection['PY']):
             muxs = []
+            # For 2D convolution, mux between different buffer inputs
+            # Create these muxes here - one for each filter
             if (mux_size > 1) and mux_urn:
-                for mi in range(inner_projection['G'] * max_ubbi * max_unci):
+                for mi in range(inner_projection['G'] * max_ubbi *
+                                max_unci * inner_projection.get('PY', 1)):
                     newmux = module_helper_classes.MUX_NXN(inner_width,
                                                            mux_size)
                     muxs += [newmux]
@@ -1066,8 +1072,9 @@ class InputInterconnect(Component):
                     newmux.sel //= s.urn_sel
                     mux_count += 1
 
-            for (uby, urny) in utils.range2D(projection['PY'],
-                                             projection['RY']):
+            # For each input stream...
+            for urny in range(projection['RY']):
+                # Connect inputs between adjacent ML blocks where required.
                 chain_idx = utils.get_overall_idx(
                     projection, {'RY': urny, 'C': urnc, 'B': ubb,
                                  'PX': ubx, 'PY': uby, 'G': ug, 'E': ue})
@@ -1079,12 +1086,14 @@ class InputInterconnect(Component):
                                                   mlb_width)
                 mlb_chains += [list(range(start_idx, end_idx + 1))]
 
-                # Connect the chain's input
+                # Connect the chain's input from a buffer (or many)
                 stream_idx = utils.get_overall_idx_new(
                     projection, {'RY': urny, 'C': urnc, 'PY': uby,
                                  'PX': ubx, 'B': ubb, 'G': ug},
                     order=utils.input_order)
                 streams_per_buf_int = math.floor(streams_per_buffer)
+
+                # If many buffers connect to this MLB, connect each one
                 for buf in range(buffers_per_stream):
                     input_bus_idx = stream_idx * buffers_per_stream + buf
                     input_bus_start = 0
@@ -1114,21 +1123,14 @@ class InputInterconnect(Component):
                                     order=utils.input_order)
                                 if (math.floor(mlb_in_idx / ins_per_buffer) ==
                                         buf):
-                                    curr_uby = uby * inner_projection['PY'] + \
-                                        ubyi
-                                    total_uny = inner_projection['RY'] * \
-                                        projection['RY']
                                     curr_uny = urny * \
                                         inner_projection['RY'] + unyi
-                                    mux_in_idx = curr_uby * total_uny + \
-                                        curr_uny
-
                                     muxin = getattr(currmux, "in" +
-                                                    str(mux_in_idx))
+                                                    str(curr_uny))
                                     muxout = getattr(currmux, "out" +
-                                                     str(mux_in_idx))
+                                                     str(curr_uny))
                                     total_idx = input_bus_start + \
-                                        math.floor(mlb_in_idx %
+                                        math.floor(curr_uny %
                                                    ins_per_buffer) * \
                                         inner_width
                                     connect(input_bus[total_idx:total_idx +
@@ -1174,6 +1176,7 @@ class InputInterconnect(Component):
                 setattr(s, "outputs_to_mlb_" + str(i), newout)
                 newout //= 0
             utils.AddInPort(s, mlb_width, "inputs_from_mlb_" + str(i))
+
         utils.tie_off_clk_reset(s)
 
 

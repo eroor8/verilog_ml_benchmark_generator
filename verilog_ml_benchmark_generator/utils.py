@@ -31,27 +31,30 @@ def print_mapping(mapping, indent):
         :param mapping: unrolling factors to be printed
         :param indent: level of indentation to print at
     """
-    i = {"RX": mapping["RXI"],
-         "RY": mapping["RYI"],
-         "E": mapping["EI"],
-         "C": mapping["CI"],
-         "B": mapping["BI"],
-         "PX": mapping["PXI"],
-         "PY": mapping["PYI"]}
-    o = {"RX": mapping["RXO"],
-         "RY": mapping["RYO"],
-         "E": mapping["EO"],
-         "C": mapping["CO"],
-         "B": mapping["BO"],
-         "PX": mapping["PXO"],
-         "PY": mapping["PYO"]}
-    t = {"RX": mapping["RXT"],
-         "RY": mapping["RYT"],
-         "E": mapping["ET"],
-         "C": mapping["CT"],
-         "B": mapping["BT"],
-         "PX": mapping["PXT"],
-         "PY": mapping["PYT"]}
+    i = {"RX": mapping.get("RXI", 1),
+         "RY": mapping.get("RYI", 1),
+         "E": mapping.get("EI", 1),
+         "C": mapping.get("CI", 1),
+         "B": mapping.get("BI", 1),
+         "PX": mapping.get("PXI", 1),
+         "PY": mapping.get("PYI", 1),
+         "G": mapping.get("GI", 1)}
+    o = {"RX": mapping.get("RXO", 1),
+         "RY": mapping.get("RYO", 1),
+         "E": mapping.get("EO", 1),
+         "C": mapping.get("CO", 1),
+         "B": mapping.get("BO", 1),
+         "PX": mapping.get("PXO", 1),
+         "PY": mapping.get("PYO", 1),
+         "G": mapping.get("GO", 1)}
+    t = {"RX": mapping.get("RXT", 1),
+         "RY": mapping.get("RYT", 1),
+         "E": mapping.get("ET", 1),
+         "C": mapping.get("CT", 1),
+         "B": mapping.get("BT", 1),
+         "PX": mapping.get("PXT", 1),
+         "PY": mapping.get("PYT", 1),
+         "G": mapping.get("GT", 1)}
 
     return ("\n" + "\t" * indent + "Intra-PE unrolling factors: " + str(i) +
             "\n" + "\t" * indent + "Inter-PE unrolling factors: " + str(o) +
@@ -383,7 +386,8 @@ def get_max_input_bus_width(buf_width, projection, data_type, inner_width=-1):
         [['B'], ['PY'], ['PX'], ['G'], ['C']])
     if inner_width < 0:
         inner_width = projection["data_widths"][data_type]
-    urny = projection.get('inner_projection', {}).get('RY', 1)
+    urny = projection.get('inner_projection', {}).get('RY', 1) * \
+        projection.get('outer_projection', {}).get('RY', 1)
     if (urny > 1) and (data_type == "I"):
         buf_width = min(inner_width*max_vals_per_buf, buf_width)
     return buf_width
@@ -711,7 +715,6 @@ def mux_ports_by_name(s, srcs, name1, inst2, name2, factor1=1, factor2=1,
                         match_dict[matching_name] = [port]
                 else:
                     common_ports += [port]
-
     assert (len(match_dict) > 0) or (len(common_ports) == len(srcs)), \
         "Should have found outputs with name " + name1 + " in " + \
         str(srcs[0].get_output_value_ports()) + " and " + str(common_ports)
@@ -1228,12 +1231,17 @@ def map_buffer_idx_to_y_idx(proj_yaml, ab_yaml=None, ibuf_count=0,
                 buf_idx = math.floor(i_value_idx / ivalues_per_buf)
 
                 # Find the corresponding y index
-                inner_y = get_overall_idx_new(proj_yaml["inner_projection"],
-                                              {'RY': urniy, 'PY': ubiy},
-                                              order=[['RY'], ['PY']])
-                outer_y = get_overall_idx_new(proj_yaml["outer_projection"],
-                                              {'RY': urnoy, 'PY': uboy},
-                                              order=[['RY'], ['PY']])
+                inner_y = 0
+                outer_y = 0
+                if (inner_uny * outer_uny > 1):
+                    inner_y = get_overall_idx_new(
+                        proj_yaml["inner_projection"],
+                        {'RY': urniy, 'PY': ubiy},
+                        order=[['RY'], ['PY']])
+                    outer_y = get_overall_idx_new(
+                        proj_yaml["outer_projection"],
+                        {'RY': urnoy, 'PY': uboy},
+                        order=[['RY'], ['PY']])
                 total_y = outer_y * inner_uby * inner_uny + inner_y
                 output_map[buf_idx] = total_y
     return output_map

@@ -1,4 +1,4 @@
-block_name: "ml_block"
+block_name: "mlb_model"
 MAC_info:
     num_units: 30
     data_widths:
@@ -7,8 +7,8 @@ MAC_info:
         O: 32
 access_patterns:
     AP1: 0
-    AP2: 10
-    AP3: 3
+    AP2: 2
+    AP3: 1
     AP4: 1
     AP5: 1
 output_accumulator: False

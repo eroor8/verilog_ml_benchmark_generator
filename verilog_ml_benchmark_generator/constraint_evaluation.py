@@ -79,7 +79,7 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o,
         total_cycles = 0
         for layer in layer_info:
             for loop_bound in loop_bounds:
-                total_bound = layer[loop_bound]
+                total_bound = layer.get(loop_bound, 1)
                 spatial_factor = solution[loop_bound + 'I'] * \
                     solution[loop_bound + 'O']
                 temporal_factor = math.ceil(total_bound / spatial_factor)
@@ -94,21 +94,23 @@ def score_solution(solution, num_MACs, loop_bounds, preload_i, preload_o,
 
 
 def ApproximateProductConstraint(x, val0=1, val1=1, val2=1, val3=1, val4=1,
-                                 val5=1, val6=1):
+                                 val5=1, val6=1, val7=1):
     """ Make sure that product of given factors is greater than x,
         but not unneccessarily big.
 
     :param x: Expected product
-    :param val0-val6: Factors
+    :param val0-val7: Factors
     """
-    min_product = (val0 * val1 * val2 * val3 * val4 * val5 * val6)
-    max_product = max((val0 - 1) * val1 * val2 * val3 * val4 * val5 * val6,
-                      val0 * (val1 - 1) * val2 * val3 * val4 * val5 * val6,
-                      val0 * val1 * (val2 - 1) * val3 * val4 * val5 * val6,
-                      val0 * val1 * val2 * (val3 - 1) * val4 * val5 * val6,
-                      val0 * val1 * val2 * val3 * (val4 - 1) * val5 * val6,
-                      val0 * val1 * val2 * val3 * val4 * (val5 - 1) * val6,
-                      val0 * val1 * val2 * val3 * val4 * val5 * (val6 - 1))
+    min_product = (val0 * val1 * val2 * val3 * val4 * val5 * val6 * val7)
+    max_product = max(
+        (val0 - 1) * val1 * val2 * val3 * val4 * val5 * val6 * val7,
+        val0 * (val1 - 1) * val2 * val3 * val4 * val5 * val6 * val7,
+        val0 * val1 * (val2 - 1) * val3 * val4 * val5 * val6 * val7,
+        val0 * val1 * val2 * (val3 - 1) * val4 * val5 * val6 * val7,
+        val0 * val1 * val2 * val3 * (val4 - 1) * val5 * val6 * val7,
+        val0 * val1 * val2 * val3 * val4 * (val5 - 1) * val6 * val7,
+        val0 * val1 * val2 * val3 * val4 * val5 * (val6 - 1) * val7,
+        val0 * val1 * val2 * val3 * val4 * val5 * val6 * (val7 - 1))
     return ((min_product >= x) and (max_product <= x))
 
 
@@ -127,7 +129,7 @@ def get_product(var_dict, var_keys):
 def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
                   suggested_solution=None, preload_o=1, preload_i=1,
                   num_solutions=1, cost_function=score_solution,
-                  buffer_count=-1):
+                  buffer_count=-1, allow_px_tiling=False):
     """ Find the best set of mappings (according to a given cost function)
     that are achievable given the ML blocks available.
 
@@ -146,7 +148,7 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
     problem = constraint.Problem()
     hwbp = copy.deepcopy(hwb['access_patterns'])
     ws = not (hwb.get('output_accumulator', False))
-    loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY']
+    loop_bounds = ['B', 'C', 'E', 'PX', 'PY', 'RX', 'RY', 'G']
     levels = ['O', 'I', 'T']
     workloads = workload
     if type(workload) == dict:
@@ -154,10 +156,10 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
 
     # Mappings between access patterns and corresponding dimensions.
     access_patterns = {'AP1': ['RX'], 'AP2': ['RY', 'C'], 'AP3': ['E'],
-                       'AP4': ['B', 'PX', 'PY'], 'AP5': []}
+                       'AP4': ['B', 'PX', 'PY'], 'AP5': ['G']}
     access_patterns_r = {'B': ['AP4'], 'C': ['AP2'], 'E': ['AP3'],
                          'PX': ['AP4'], 'PY': ['AP4'], 'RX': ['AP1'],
-                         'RY': ['AP2']}
+                         'RY': ['AP2'], 'G': ['AP5']}
 
     if enable_soft_logic:
         if (hwbp['AP1'] < 2):
@@ -199,15 +201,16 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
         # physically possible. It also won't be greater than the total
         # loop bound.
         ap_product = 1
-        for ap in access_patterns_r[loop_bound]:
+        for ap in access_patterns_r.get(loop_bound, []):
             ap_product *= hwbp[ap]
         max_bound_i = min(max(curr_bounds), ap_product)
 
         # We probably want to unroll within the PE as much as possible
         # if this is the only loop bound corresponding to an access pattern.
         min_bound_i = 1
-        if (len(access_patterns_r[loop_bound]) == 1) and \
-           (len(access_patterns[access_patterns_r[loop_bound][0]]) == 1):
+        if (len(access_patterns_r.get(loop_bound, [])) == 1) and \
+           (len(access_patterns[access_patterns_r.get(loop_bound,
+                                                      [])[0]]) == 1):
             min_bound_i = min(max(math.floor(max_bound_i / 2), 1),
                               max(curr_bounds))
             if (max_bound_i == max(curr_bounds)):
@@ -216,7 +219,8 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
         for level in levels:
             if (suggested_solution):
                 problem.addVariable(loop_bound+level,
-                                    [suggested_solution[loop_bound + level]])
+                                    [suggested_solution.get(loop_bound +
+                                                            level, 1)])
             else:
                 if (level == 'O'):
                     var_range = get_factors(pe_count,
@@ -233,7 +237,8 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
 
         nested_bounds = [loop_bound + level for level in levels]
         problem.addConstraint(lambda val0=1, val1=1, val2=1, val3=1,
-                              val4=1, val5=1, val6=1, maxv=max(curr_bounds):
+                              val4=1, val5=1, val6=1, val7=1,
+                              maxv=max(curr_bounds):
                               ApproximateProductConstraint(maxv, val0, val1,
                                                            val2, val3, val4,
                                                            val5),
@@ -241,9 +246,9 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
 
     # Ensure that product of outer tiling factors is <= # PEs
     problem.addConstraint(
-        lambda val0=1, val1=1, val2=1, val3=1, val4=1, val5=1, val6=1,
+        lambda val0=1, val1=1, val2=1, val3=1, val4=1, val5=1, val6=1, val7=1,
         maxv=pe_count:
-        ((val0 * val1 * val2 * val3 * val4 * val5 * val6) <= maxv),
+        ((val0 * val1 * val2 * val3 * val4 * val5 * val6 * val7) <= maxv),
         [loop_bound + 'O' for loop_bound in loop_bounds])
 
     # Ensure that the inner tiling factors are compatible with the PE access
@@ -253,17 +258,31 @@ def find_mappings(hwb, workload, pe_count, enable_soft_logic=True,
                          access_patterns[access_pattern]]
         if len(nested_bounds) > 0:
             problem.addConstraint(
-                lambda val0=1, val1=1, val2=1, val3=1, val4=1, val5=1, val6=1,
+                lambda val0=1, val1=1, val2=1, val3=1,
+                val4=1, val5=1, val6=1, val7=1,
                 maxv=hwbp[access_pattern]:
-                ((val0 * val1 * val2 * val3 * val4 * val5 * val6) <= maxv),
+                ((val0 * val1 * val2 * val3 *
+                  val4 * val5 * val6 * val7) <= maxv),
                 nested_bounds)
 
     problem.addConstraint(constraint.InSetConstraint([1]), ['RXT'])
     problem.addConstraint(constraint.InSetConstraint([1]), ['RYT'])
 
-    # Only allow this if there is a single batch.
     if ws:
+        # If weight stationary, then we can't tile different input channels
+        # in time.
         problem.addConstraint(constraint.InSetConstraint([1]), ['CT'])
+    else:
+        # If output stationary, then we can't add many inputs in parallel
+        problem.addConstraint(constraint.InSetConstraint([1]), ['CI'])
+        problem.addConstraint(constraint.InSetConstraint([1]), ['CO'])
+
+    # If doing convolution, don't split the image in x dimensions.
+    # This simplifies things...
+    rx_bounds = [wld.get('RX', 1) for wld in workloads]
+    if (max(rx_bounds) > 1) and not allow_px_tiling:
+        problem.addConstraint(constraint.InSetConstraint([1]), ['PXO'])
+        problem.addConstraint(constraint.InSetConstraint([1]), ['PXI'])
 
     solutions = problem.getSolutions()
     assert len(solutions) > 0

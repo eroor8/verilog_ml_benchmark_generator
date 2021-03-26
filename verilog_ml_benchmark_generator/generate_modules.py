@@ -1010,21 +1010,17 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                 'C': mappings[0]["CO"],
                                 'RX': mappings[0]["RXO"],
                                 'E': mappings[0]["EO"],
-                                'PX': 1,
-                                'PY': 1,
-                                'B': (mappings[0]["BO"] *
-                                      mappings[0]["PXO"] *
-                                      mappings[0]["PYO"]),
+                                'PX': mappings[0]["PXO"],
+                                'PY': mappings[0]["PYO"],
+                                'B': mappings[0]["BO"],
                                 'G': 1}
     proj["inner_projection"] = {'RY': mappings[0]["RYI"],
                                 'C': mappings[0]["CI"],
                                 'RX': mappings[0]["RXI"],
                                 'E': mappings[0]["EI"],
-                                'PX': 1,
-                                'PY': 1,
-                                'B': (mappings[0]["BI"] *
-                                      mappings[0]["PXI"] *
-                                      mappings[0]["PYI"]),
+                                'PX': mappings[0]["PXI"],
+                                'PY': mappings[0]["PYI"],
+                                'B': mappings[0]["BI"],
                                 'G': 1}
     if (preload_o > 0):
         proj['outer_projection']['PRELOAD'] = [{'dtype': 'W',
@@ -1032,9 +1028,9 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
     if (preload_i > 0):
         proj['inner_projection']['PRELOAD'] = [{'dtype': 'W',
                                                 'bus_count': preload_i}]
-    print(proj)
-
-    simulate_accelerator(
+    utils.printi(il, "Selected mapping vector: " + str(proj), "GREEN")
+    sim_model = simulate_accelerator(
         module_name, mlb_spec, wb_spec,  ab_spec, emif_spec, proj, True,
         [oaddr], [iaddr], [waddr], ws, simulate=simulate,
         gen_ver=True, include_sim_models=fast_gen)
+    return [proj, sim_model]

@@ -379,9 +379,9 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                 for ubox in range(outer_ubx):
                     for ubix in range(inner_ubx):
                         for ubtx in range(temp_ubx):
-                            for uboy in range(outer_uby):
-                                for ubiy in range(inner_uby):
-                                    for ubty in range(0,temp_uby,div_factor):
+                            for ubty in range(0, temp_uby, div_factor):
+                                for uboy in range(outer_uby):
+                                    for ubiy in range(inner_uby):
                                         for ubob in range(outer_ubb):
                                             for ubib in range(inner_ubb):
                                                 for ubtb in range(temp_ubb):
@@ -394,8 +394,10 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             groups = ugt*outer_ug*inner_ug+ugo*inner_ug+ugi
                                                                             batches = ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib
                                                                             channels = urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic
-                                                                            uby = ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy
+                                                                            uby_spatial = uboy*inner_uby + ubiy
+                                                                            uby = uby_spatial*temp_uby + ubty
                                                                             uny = urnty*outer_uny*inner_uny+urnoy*inner_uny+urniy
+                                                                            
                                                                             uy = inner_uny*outer_uny*temp_uny
                                                                             ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
                                                                             i = inputs[groups][batches][channels]\
@@ -404,7 +406,7 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             
                                                                             ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
                                                                             ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
-                                                                            ubt = ubtb*temp_ubx*temp_uby + int(ubty/div_factor)*temp_ubx + ubtx
+                                                                            ubt = ubtb*temp_ubx*temp_uby + math.floor(ubty/div_factor)*temp_ubx + ubtx
                                                                             urno = urnoc*outer_unx*outer_uny + urnoy*outer_unx 
                                                                             urni = urnic*inner_unx*inner_uny + urniy*inner_unx 
                                                                             urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
@@ -426,9 +428,27 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                                  order=utils.input_order)
                                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                             iv_idx = i_value_idx % ivalues_per_buf
-                                                                            print("idx: " + str(i_value_idx))
                                                                             ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt)%ibuf_len][iv_idx] = i
-    print(ibuf)
+                                                                            if ((uby_spatial > 0) and (math.floor(ubty/div_factor)==0) and (temp_uby > 1) and (div_factor > 1)):
+                                                                                i_stream_idx = utils.get_overall_idx_new(
+                                                                                    proj_yaml["outer_projection"],
+                                                                                                                   {'RY':urnoy, 'C':urnoc,
+                                                                                                                    'PY':uboy-1, 'B':ubob,
+                                                                                                                    'PX':ubox,
+                                                                                                                    'G':ugo},
+                                                                                     order=utils.input_order)
+                                                                                i_value_idx = i_stream_idx*utils.get_proj_stream_count(proj_yaml["inner_projection"], 'I') + \
+                                                                                              utils.get_overall_idx_new(
+                                                                                                  proj_yaml["inner_projection"],
+                                                                                                                   {'RY':urniy, 'C':urnic,
+                                                                                                                    'PY':ubiy, 'B':ubib,
+                                                                                                                    'PX':ubix,
+                                                                                                                    'G': ugi},
+                                                                                     order=utils.input_order)
+                                                                                ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
+                                                                                iv_idx = i_value_idx % ivalues_per_buf
+                                                                                ubt_extra =  ubtb*temp_ubx*temp_uby + math.ceil((temp_uby-1)/div_factor)*temp_ubx + ubtx
+                                                                                ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt_extra*temp_un + urnt)%ibuf_len][iv_idx] = i
     return ibuf
 
 
@@ -619,8 +639,9 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                     for ueo in range(outer_ue):
                                                         for uei in range(inner_ue):
                                                             for uet in range(temp_ue):
-                                                                ubo = ubox*outer_uby + uboy + ubob*outer_ubx*outer_uby
-                                                                ubi = ubix*inner_uby + ubiy + ubib*inner_ubx*inner_uby 
+                                                                ubo = uboy*outer_ubx + ubox + ubob*outer_ubx*outer_uby
+                                                                ubi = ubiy*inner_ubx + ubix + ubib*inner_ubx*inner_uby
+                                                                ubs = ubo*inner_ubx*inner_uby*inner_ubb + ubi
                                                                 ubt = ubty*int(temp_ubx/stridex) + ubtx + ubtb*int(temp_ubx/stridex)*int(temp_uby/stridey)
                                                                 
                                                                 out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
@@ -631,7 +652,7 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                 obuf_idx = math.floor(out_act_idx/ovalues_per_buf)
                                                                 os_idx = out_act_idx % ovalues_per_buf
                                                                 ubx = ubtx*outer_ubx*inner_ubx+ubox*inner_ubx+ubix
-                                                                uby = ubty*outer_uby*inner_uby+uboy*inner_uby+ubiy
+                                                                uby = uboy*inner_uby*temp_uby+ubiy*temp_uby + ubty
                                                                 ubb = ubtb*outer_ubb*inner_ubb+ubob*inner_ubb+ubib
                                                                 max_ubx = outer_ubx*inner_ubx*temp_ubx
                                                                 max_uby = outer_uby*inner_uby*temp_uby

@@ -69,11 +69,11 @@ def test_suggested():
         ]
     }
     workload_conv0 = {'B':1,'C':3,
-                     'E':32,'PX':224,
+                     'E':32,'PX':32,
                      'PY':224,'RX':3,
                      'RY':3}
     suggested_soln = {'BO':1,'CO':1,
-                'EO':6,'PXO':7,
+                'EO':6,'PXO':1,
                 'PYO':1,'RXO':3,
                 'RYO':1,'BI':1,'CI':3,
                 'EI': 3,'PXI':1,
@@ -84,7 +84,7 @@ def test_suggested():
                 'RYT':1}
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, suggested_solution=suggested_soln)
     print(len(mappings))
-    assert tp == 21899
+    assert tp == 15419
 
     
 def test_preload():
@@ -100,11 +100,11 @@ def test_preload():
         ]
     }
     workload_conv0 = {'B':1,'C':3,
-                     'E':32,'PX':224,
+                     'E':32,'PX':32,
                      'PY':224,'RX':3,
                      'RY':3}
     suggested_soln = {'BO':1,'CO':1,
-                'EO':6,'PXO':7,
+                'EO':6,'PXO':1,
                 'PYO':1,'RXO':3,
                 'RYO':1,'BI':1,'CI':3,
                 'EI': 3,'PXI':1,
@@ -131,11 +131,11 @@ def test_CT():
         ]
     }
     workload_conv0 = {'B':1,'C':3,
-                     'E':32,'PX':224,
+                     'E':32,'PX':32,
                      'PY':224,'RX':3,
                      'RY':3}
     suggested_soln = {'BO':1,'CO':1,
-                'EO':6,'PXO':7,
+                'EO':6,'PXO':1,
                 'PYO':1,'RXO':3,
                 'RYO':1,'BI':1,'CI':1,
                 'EI': 3,'PXI':1,
@@ -175,7 +175,7 @@ def test_soft():
                 'ET': 2,'PXT':16,
                 'PYT':224,'RXT':1,
                 'RYT':1}
-    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, True, suggested_solution=suggested_soln, preload_o=-1, preload_i=-1)
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, True, suggested_solution=suggested_soln, preload_o=-1, preload_i=-1, allow_px_tiling=True)
     print(len(mappings))
     assert tp == 64515
 
@@ -354,6 +354,30 @@ def test_ANet_L8():
     mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 288, False, preload_o=-1, preload_i=-1)
     print(len(mappings))
     print(tp)
+    return tp
+
+
+def test_G():
+    """Test yaml schema validation"""
+    hwb = {
+        "block_name": "ml_block",
+        "output_accumulator": "True",
+        "MAC_info": { "num_units": 30, "data_widths": {"W":4, "I":4, "O": 8}},
+        "access_patterns": {"AP1":1, "AP2":10, "AP3": 3, "AP4": 1, "AP5": 1},
+        "ports": [
+            {"name":"a_in", "width":32, "direction": "in", "type":"W"},
+            {"name":"b_out", "width":32, "direction": "out", "type":"I"},
+            {"name":"res_out", "width":128, "direction": "out", "type":"O"},
+        ]
+    }
+    workload_conv0 = {'B':1,'C':2048,
+                      'E':16,'PX':1,
+                      'PY':1,'RX':1,
+                      'RY':1, 'G':8}
+    mappings, tp = constraint_evaluation.find_mappings(hwb, workload_conv0, 32, False, preload_o=-1, preload_i=-1)
+    print(len(mappings))
+    print(tp)
+#    assert(0)
     return tp
 
 

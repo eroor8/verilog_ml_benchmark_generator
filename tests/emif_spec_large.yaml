@@ -3,7 +3,7 @@ pipelined: "True"
 fill: []
 ports:
     -   name: address
-        width: 14
+        width: 12
         direction: "in"
         type: "AVALON_ADDRESS"
     -   name: read

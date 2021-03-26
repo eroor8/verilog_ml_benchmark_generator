@@ -291,7 +291,7 @@ def test_InputInterconnect():
         {"ins":[8,8,3,2,10,{'C':1, 'RX':2, 'RY':2,
                           'B':2,'PX':1,'PY':1,'E':1,
                           'G':1}],  
-         "outs":[[62,26],[1,2,3,4,5,6,7,8,9,10],[6,1,2,3,7,5,3,7,0,0]]},
+         "outs":[[62,26],[1,2,3,4,5,6,7,8,9,10],[6,1,6,3,2,5,2,7,0,0]]},
          # 111 110    /   011 010
         {"ins":[8,8,3,2,10,{'C':1,'RX':2, 'RY':1,
                           'B':2,'PX':1,'PY':1,'E':2,
@@ -301,7 +301,7 @@ def test_InputInterconnect():
     for testvec in test_vecs:
         testinst = module_classes.InputInterconnect(testvec["ins"][0],
                     testvec["ins"][1], testvec["ins"][2], testvec["ins"][3],
-                    testvec["ins"][4], testvec["ins"][5])
+                    testvec["ins"][4], testvec["ins"][5], inner_width=testvec["ins"][2])
         testinst.elaborate()
         testinst.apply(DefaultPassGroup())
         for i in range(len(testvec["outs"][0])):
@@ -313,9 +313,11 @@ def test_InputInterconnect():
         testinst.sim_tick()
         for i in range(len(testvec["outs"][2])):
             out_bus = getattr(testinst, "outputs_to_mlb_"+str(i))
+            print("--", testvec, " - ", i)
             print(out_bus)
+            print(testvec["outs"][2][i])
             assert out_bus == testvec["outs"][2][i]
-        #assert(0)
+        #assert(0) 0 111 1 110     and 11 010  
         
     
 def test_OutputPSInterconnect():

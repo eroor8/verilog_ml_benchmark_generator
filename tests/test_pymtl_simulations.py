@@ -1021,6 +1021,7 @@ def test_simulate_multiple_layer_ws_bc():
                                "weight_spec_3.yaml",
                                "emif_spec_1.yaml",
                                "projection_spec_multiple.yaml", True, False)
+    #assert(0)
 
     
 def test_simulate_emif_statemachine_unit_os_bc():

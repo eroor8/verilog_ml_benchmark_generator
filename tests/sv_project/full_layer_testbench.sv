@@ -112,7 +112,7 @@ endmodule
 
 
 module emif_inner #(
-    parameter ADDR_WIDTH = 14,
+    parameter ADDR_WIDTH = 12,
     parameter DATA_WIDTH = 128
 		    )
 (

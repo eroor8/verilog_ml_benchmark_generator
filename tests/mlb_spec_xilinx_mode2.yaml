@@ -11,7 +11,7 @@ access_patterns:
     AP3: 2
     AP4: 1
     AP5: 1
-output_accumulator: True
+output_accumulator: False
 ports:
     -   name: data_in_AD
         width: 16

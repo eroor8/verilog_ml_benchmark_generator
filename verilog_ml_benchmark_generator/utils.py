@@ -474,8 +474,10 @@ def get_input_buffer_len(proj_spec):
     """ Calculate the number of input values in each buffer
     """
     temp_proj = proj_spec.get("temporal_projection", {})
+    sx = proj_spec.get("stride", {}).get("x", 1)
     ugt = temp_proj.get("G", 1)
-    ubt = temp_proj.get("B", 1) * temp_proj.get("PX", 1) * \
+    ubt = temp_proj.get("B", 1) * \
+        math.ceil(temp_proj.get("PX", 1)/sx)*sx * \
         temp_proj.get("PY", 1)
     unt = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
     input_count = ubt*unt*ugt
@@ -983,8 +985,8 @@ def compute_layer(inputs, weights, layer, layer_type="MAC", output_width=8,
     if (final_width < 1):
         final_width = output_width
 
-    outputs = [[[[[0 for k in range(int(ubx / stridex))]  # x
-                  for i in range(int(uby / stridey))]     # y
+    outputs = [[[[[0 for k in range(math.ceil((ubx) / stridex))]  # x
+                  for i in range(math.ceil((uby) / stridey))]     # y
                  for j in range(ue)]                      # chans
                 for p in range(ub)]                       # batch
                for t in range(ug)]                        # group

@@ -6,8 +6,8 @@ MAC_info:
         I: 8
         O: 32
 access_patterns:
-    AP1: 0
-    AP2: 2
+    AP1: 2
+    AP2: 1
     AP3: 1
     AP4: 1
     AP5: 1
@@ -42,7 +42,7 @@ ports:
         direction: "in"
         type: "C"
     -   name: data_in_w
-        width: 16
+        width: 32
         direction: "in"
         type: "W"
     -   name: data_in_i
@@ -58,7 +58,7 @@ ports:
         direction: "out"
         type: "I"
     -   name: weight_cascade_out
-        width: 16
+        width: 32
         direction: "out"
         type: "W"
     -   name: cascade_data_out

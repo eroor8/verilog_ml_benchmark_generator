@@ -1071,7 +1071,6 @@ class InputInterconnect(Component):
                     setattr(s, "mux" + str(mux_count), newmux)
                     newmux.sel //= s.urn_sel
                     mux_count += 1
-
             # For each input stream...
             for urny in range(projection['RY']):
                 # Connect inputs between adjacent ML blocks where required.
@@ -1130,7 +1129,7 @@ class InputInterconnect(Component):
                                     muxout = getattr(currmux, "out" +
                                                      str(curr_uny))
                                     total_idx = input_bus_start + \
-                                        math.floor(curr_uny %
+                                        math.floor(unci %
                                                    ins_per_buffer) * \
                                         inner_width
                                     connect(input_bus[total_idx:total_idx +

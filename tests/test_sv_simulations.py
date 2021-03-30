@@ -348,7 +348,7 @@ def test_simulate_layer_sv(
         ab_yaml, proj_yaml)
 
     # Figure out the layer dimensions based on the projection...
-    layer = {"group": 1,
+    layer = {"group": workload["loop_dimensions"].get("G",1),
              "batches": workload["loop_dimensions"]["B"],
              "out_chans": workload["loop_dimensions"]["E"],
              "in_chans": workload["loop_dimensions"]["C"],
@@ -363,13 +363,13 @@ def test_simulate_layer_sv(
     }
     print("==> Layer information:")
     print(layer)
-    weights = [[[[[random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
+    weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans
                    for l in range(layer["out_chans"])]   # ochans
                    for t in range(layer["group"])]       # group
-    inputs = [[[[[random.randint(0,3) #(2**proj_yaml["data_widths"]["I"])-1)
+    inputs = [[[[[i #random.randint(0,5) #(2**proj_yaml["data_widths"]["I"])-1)
                    for k in range(layer["image_x"])]     # x
                    for i in range(layer["image_y"])]     # y    
                    for j in range(layer["in_chans"])]    # chans
@@ -518,6 +518,10 @@ def test_simulate_layer_sv(
     print("\n -- vsim") 
     vsim = os.path.join(VSIM_PATH, "vsim")
     obuf_len = utils.get_output_buffer_len(proj_yaml)
+    print("HEREs the len we were given:", utils.get_output_buffer_len(proj_yaml))
+    print(obuf_len)
+    print(obuf_count)
+    #assert(0)
     final_addr = oaddr + obuf_count*obuf_len
     #extract_buffer = " /full_layer_testbench/dut0/emif_inst/sim_model/bufi/data"
     vsim_script = "run -all; mem display -startaddress " + str(oaddr) + \
@@ -542,6 +546,7 @@ def test_simulate_layer_sv(
     print("parsing output")
     with open('vsim_out.txt', 'w') as f:
         print(outtxt, file=f)
+    print(outtxt)
     assert "Errors: 0" in outtxt
     assert "Starting system verilog simulation" in outtxt
     assert "Done asserted!" in outtxt
@@ -554,7 +559,7 @@ def test_simulate_layer_sv(
     for dump_line in mem_dump:
         n = ovalues_per_buf
         while(n > 0):
-            m = re.match(r'#\s+[0-9]+: x*[01]*' + '([01]{8})'*n + '$', dump_line)
+            m = re.match(r'#\s+[0-9]+: .*[01]*' + '([01]{8})'*n + '$', dump_line)
             if (m):
                 curr_word = [0]*(ovalues_per_buf-n)
                 for val in range(n):
@@ -566,14 +571,17 @@ def test_simulate_layer_sv(
                 break
             n = n - 1
 
-    print(verilog_out)
-    print(weights)
-    print(wbuf)
-    print(inputs)
-    print(ibuf)
-    actual_outputs = reorder_output_array(verilog_out, proj_yaml, ab_yaml, actual_outputs, ibuf_len)
-    print("reordered obuf", actual_outputs)
+    #for kk in range(len(verilog_out), obuf_count*obuf_len):
+    #    verilog_out = verilog_out + [verilog_out[-1]]
+    print("raw output", verilog_out)
+    print("weights", weights)
+    print("reordered weights", wbuf)
+    print("inputs", inputs)
+    print("reordered inputs", ibuf)
     print("expected obuf", layer_outputs)
+    actual_outputs = reorder_output_array(verilog_out, proj_yaml, ab_yaml, actual_outputs, ibuf_len)
+    print("expected obuf", layer_outputs)
+    print("reordered obuf", actual_outputs)
     
     not_all_x = False
     for j in range(len(actual_outputs)):
@@ -696,7 +704,7 @@ def test_sim_layer_c_px_ws():
                            "buffer_spec_8.yaml",
                            "buffer_spec_8.yaml",
                            "emif_spec_large.yaml", simulate_pymtl=False,
-                           ws=True, pe_count=17)
+                           ws=True, pe_count=33)
 
 
 def test_sim_layer_px_rx_os():
@@ -915,3 +923,113 @@ def test_sim_layer_py_px_ry_rx_os():
                            "buffer_spec_8.yaml",
                            "emif_spec_large.yaml", simulate_pymtl=False,
                            ws=False, pe_count=16)
+    
+def test_sim_layer_all_ws():
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':2, 
+                            'E':2, 'PX':4,
+                            'PY':8, 'RX':2,
+                            'RY':2, 'G':1},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=8)
+    
+    
+def test_sim_layer_all_ws_funny_dimensions_strides():
+    workload = {
+        "stride": {"x":2, "y":2},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':2, 
+                            'E':2, 'PX':4,
+                            'PY':8, 'RX':2,
+                            'RY':2, 'G':1},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=8)
+    
+    
+def test_sim_layer_all_ws_funny_dimensions_strides2():
+    workload = {
+        "stride": {"x":3, "y":1},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':2, 
+                            'E':2, 'PX':8,
+                            'PY':4, 'RX':2,
+                            'RY':2, 'G':1},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=8)
+    
+    
+def test_sim_layer_all_ws_funny_dimensions_strides3():
+    workload = {
+        "stride": {"x":2, "y":1},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':2, 
+                            'E':2, 'PX':8,
+                            'PY':8, 'RX':2,
+                            'RY':3, 'G':1},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=8)
+    
+    
+def test_sim_layer_all_ws_funny_dimensions_strides4():
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":3, "y":3},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':1, 
+                            'E':2, 'PX':4,
+                            'PY':8, 'RX':2,
+                            'RY':3, 'G':1},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=8)
+    #assert(0==5)
+    # Limitations:
+    #  stridey < ry
+    
+
+def test_sim_layer_all_os():
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':1, 
+                            'E':1, 'PX':8,
+                            'PY':8, 'RX':2,
+                            'RY':2},
+        "activation_function": 'NONE'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained_os.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=False, pe_count=8)

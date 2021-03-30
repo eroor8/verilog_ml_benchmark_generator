@@ -1005,7 +1005,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                    'PX': mappings[0]["PXT"],
                                    'PY': mappings[0]["PYT"],
                                    'B': mappings[0]["BT"],
-                                   'G': 1}
+                                   'G': mappings[0]["GT"]}
     proj["outer_projection"] = {'RY': mappings[0]["RYO"],
                                 'C': mappings[0]["CO"],
                                 'RX': mappings[0]["RXO"],
@@ -1013,7 +1013,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                 'PX': mappings[0]["PXO"],
                                 'PY': mappings[0]["PYO"],
                                 'B': mappings[0]["BO"],
-                                'G': 1}
+                                'G': mappings[0]["GO"]}
     proj["inner_projection"] = {'RY': mappings[0]["RYI"],
                                 'C': mappings[0]["CI"],
                                 'RX': mappings[0]["RXI"],
@@ -1021,7 +1021,7 @@ def generate_accelerator_for_layers(module_name, mlb_spec, wb_spec,
                                 'PX': mappings[0]["PXI"],
                                 'PY': mappings[0]["PYI"],
                                 'B': mappings[0]["BI"],
-                                'G': 1}
+                                'G': mappings[0]["GI"]}
     if (preload_o > 0):
         proj['outer_projection']['PRELOAD'] = [{'dtype': 'W',
                                                 'bus_count': preload_o}]

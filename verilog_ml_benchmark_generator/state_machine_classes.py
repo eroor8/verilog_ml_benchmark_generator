@@ -256,6 +256,7 @@ class SM_IterateThruAddresses(Component):
                     s.inner_incr <<= 0
                     s.section_incr <<= 0
                     s.skip_cnt <<= 1
+                    s.w_urn_sel <<= 0
                 elif (s.state == START_WAIT):
                     if (s.skip_cnt == swm):
                         s.state <<= LOAD
@@ -609,74 +610,128 @@ class StateMachineEMIFSeparate(Component):
                                                    ["out"]))
         addro_ports = list(utils.get_ports_of_type(buffer_specs['O'],
                                                    'ADDRESS', ["in"]))
+        datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA',
+                                                   ["out"]))
 
-        # Do some calculations...
+        # Do some calculations... # of buffers required and so on
         temp_proj = proj_spec.get("temporal_projection", {})
         outer_proj = proj_spec.get("outer_projection", {})
         inner_proj = proj_spec.get("inner_projection", {})
         buffer_counts = utils.get_buffer_counts([proj_spec], ib_spec, ob_spec,
                                                 wb_spec)
         bank_count = 2 if pingpong_w else 1
+        output_buffer_len = 2 ** addro_ports[0]["width"]
+        input_buffer_len = utils.get_input_buffer_len(proj_spec)
 
-        # SM to stream inputs into MLB and read outputs into buffer
-        obuf_len = 2 ** addro_ports[0]["width"]
+        # Get projection info
         unt = temp_proj.get("RY", 1) * temp_proj.get("C", 1)
         urw = inner_proj.get("RX", 1) * outer_proj.get("RX", 1)
         uet = temp_proj.get("E", 1)
         ugt = temp_proj.get("G", 1)
-        ubt = temp_proj.get("B", obuf_len) * temp_proj.get("PX", 1) * \
+        stridex = proj_spec.get("stride", {}).get("x", 1)
+        stridey = proj_spec.get("stride", {}).get("y", 1)
+        # -- Round up image x dimension to factor of stride
+        ubt = temp_proj.get("B", output_buffer_len) * \
+            math.ceil(temp_proj.get("PX", 1)/stridex) * stridex * \
             temp_proj.get("PY", 1)
-        ubx = temp_proj.get("PX", {})
+        # -- We need to mux between filter-y inputs for 2D convolution
+        mux_size = outer_proj.get('RY', 1) * inner_proj.get('RY', 1)
+        if (mux_size > 1):
+            input_addr_y_offset = math.ceil(
+                temp_proj.get("PX", {})/stridex) * stridex
+        else:
+            input_addr_y_offset = 1
+
+        # Add top level ports and wires
+        # -- Registers
         s.ugt_cnt = Wire(max(int(math.log(ubt * ubt + 1, 2)),
                              addrw_ports[0]["width"]) +
                          addri_ports[0]["width"] + 1)
         s.uet_cnt = Wire(max(int(math.log(ubt * ubt + 1, 2)),
                              addrw_ports[0]["width"]) +
                          addri_ports[0]["width"] + 1)
-        stridex = proj_spec.get("stride", {}).get("x", 1)
-        stridey = proj_spec.get("stride", {}).get("y", 1)
-        mux_size = outer_proj.get('RY', 1) * inner_proj.get('RY', 1)
+        s.ostart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
+                                         addrw_ports[0]["width"]) +
+                                     addri_ports[0]["width"] + 1)
+        s.istart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
+                                         addrw_ports[0]["width"]) +
+                                     addri_ports[0]["width"] + 1)
+
+        s.pstart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
+                                         addrw_ports[0]["width"]) +
+                                     addri_ports[0]["width"] + 1)
+        s.start_addr = Wire(addrw_ports[0]["width"])
+        s.plw_start = Wire(1)
+        s.start_addr //= s.pstart_address_wide[0:addrw_ports[0]["width"]]
+        s.state = Wire(5)
+        # -- Output ports
+        if (bank_count > 1):
+            bank_sel_w = utils.AddOutPort(
+                s, math.ceil(math.log(bank_count, 2)), "bank_sel")
+            bank_sel_w //= 0
+        s.acc_en_top = OutPort(1)
+        s.weight_addr_top = OutPort(addrw_ports[0]["width"])
+        s.input_addr_top_a = OutPort(addri_ports[0]["width"])
+        s.input_addr_top_b = OutPort(addri_ports[0]["width"])
+        s.output_addr_top = OutPort(addri_ports[0]["width"])
+        s.emif_address = OutPort(utils.get_sum_datatype_width(emif_spec,
+                                                              "AVALON_ADDRESS",
+                                                              "in"))
+        s.emif_read = OutPort(1)
+        s.emif_write = OutPort(1)
+        s.emif_writedata = OutPort(utils.get_sum_datatype_width(
+            emif_spec, "AVALON_WRITEDATA", "in"))
+        s.urn_sel = OutPort(math.ceil(math.log(max(mux_size, 2), 2)))
+        s.done = OutPort(1)
+        # -- Input Ports
+        s.sel = InPort(math.ceil(math.log(max(num_layers, 2), 2)))
+        s.sm_start = InPort(1)
+        s.emif_waitrequest = InPort(1)
+        s.emif_readdatavalid = InPort(1)
+        s.emif_readdata = InPort(utils.get_sum_datatype_width(
+            emif_spec, "AVALON_READDATA", "out"))
 
         if (ws):
             if (unt > 1):
                 input_count = 1
                 output_count = 1
                 weight_count = 1
-                # If we accumulate inside the MLBs,
-                # then there is no weight reuse since they
-                # need to be reloaded. So effectively
-                # ubt => 1
                 uet = uet * unt * ubt
                 ubt = 1
                 unt = 1
             else:
-                input_count = ubt * unt
-                output_count = ubt * unt
-                weight_count = ubt * unt
+                # Round up number of inputs to nearest stride, and divide
+                # by filter size in the y-direction.
+                input_count = math.ceil(temp_proj.get("PY", 1) /
+                                        (outer_proj.get('RY', 1) *
+                                         inner_proj.get('RY', 1))) \
+                        * unt * temp_proj.get("B", output_buffer_len) * \
+                        math.ceil(temp_proj.get("PX", 1)/stridex) * stridex
+                output_count = temp_proj.get("B", output_buffer_len) * \
+                    temp_proj.get("PX", 1) * \
+                    temp_proj.get("PY", 1) * unt
+                weight_count = temp_proj.get("B", output_buffer_len) * \
+                    temp_proj.get("PX", 1) * \
+                    temp_proj.get("PY", 1) * unt
             repeat_xi = 1
-            repeat_xo = 1
             repeat_xw = 1
-            s.stream_outputs = SM_IterateThruAddresses((output_count -
-                                                        (urw - 1)) / (stridex)
-                                                       + (stridex-1),
-                                                       addri_ports[0]["width"],
-                                                       start_wait=urw + 1,
-                                                       debug_name="out",
-                                                       skip_n=stridex-1,
-                                                       skip_after=1)
+            output_stride = stridex - 1
+            output_write_count = math.ceil((output_count - (urw - 1)) /
+                                           (stridey*stridex))
+            output_start_delay = urw + 1
+            output_skip_after = 1
         else:
             input_count = ubt * ugt * (unt)
             output_count = uet * ubt * ugt
             weight_count = uet * ugt * (unt)
             repeat_xi = uet
-            repeat_xo = 1
             repeat_xw = ubt
-            s.stream_outputs = SM_IterateThruAddresses(output_count + 1,
-                                                       addri_ports[0]["width"],
-                                                       skip_n=(unt-1),
-                                                       start_wait=urw,
-                                                       repeat_x=repeat_xo,
-                                                       debug_name="out")
+            output_stride = unt - 1
+            output_write_count = output_count + 1
+            output_start_delay = urw
+            output_skip_after = 0
+
+        # Calculate the order in which to read weights
         outer_tile_repeat_x = 1
         num_outer_tiles = 1
         inner_tile_size = 1
@@ -699,14 +754,19 @@ class StateMachineEMIFSeparate(Component):
             num_outer_tiles = outer_proj["G"]
         total_weight_count = utils.get_weight_buffer_len(proj_spec)
 
-        # Add top level ports
-        if (bank_count > 1):
-            bank_sel_w = utils.AddOutPort(
-                s, math.ceil(math.log(bank_count, 2)), "bank_sel")
-            bank_sel_w //= 0
-        s.sel = InPort(math.ceil(math.log(max(num_layers, 2), 2)))
-        s.sm_start = InPort(1)
+        # Statemachine to stream outputs into the on-chip output buffers
+        s.stream_outputs = SM_IterateThruAddresses(
+            write_count=output_write_count,
+            addr_width=addri_ports[0]["width"],
+            start_wait=output_start_delay,
+            debug_name="out",
+            skip_n=output_stride,
+            skip_after=output_skip_after)
+        s.stream_outputs.start_address //= \
+            s.ostart_address_wide[0:addri_ports[0]["width"]]
+        utils.connect_out_to_top(s, s.stream_outputs.wen, "stream_outputs_wen")
 
+        # Statemachine to load on-chip weight buffers from the EMIF
         s.load_wbufs_emif = SM_LoadBufsEMIF(
             buffer_counts['W'][0] * bank_count,
             min(2 ** addrw_ports[0]["width"], total_weight_count),
@@ -720,10 +780,10 @@ class StateMachineEMIFSeparate(Component):
                                                          s.load_wbufs_emif,
                                                          r"wen", parent_in=0)
 
-        total_input_count = utils.get_input_buffer_len(proj_spec)
+        # Statemachine to load on-chip input buffers from the EMIF
         s.load_ibufs_emif = SM_LoadBufsEMIF(
             buffer_counts['I'][0] + buffer_counts['O'][0],
-            min(2 ** addri_ports[0]["width"], total_input_count),
+            min(2 ** addri_ports[0]["width"], input_buffer_len),
             addri_ports[0]["width"], datai_ports[0]["width"],
             utils.get_sum_datatype_width(emif_spec, "AVALON_ADDRESS", "in"),
             utils.get_sum_datatype_width(emif_spec, "AVALON_WRITEDATA", "in"),
@@ -733,6 +793,7 @@ class StateMachineEMIFSeparate(Component):
         connected_ins += utils.connect_inst_ports_by_name(s, r"input_wen",
                                                           s.load_ibufs_emif,
                                                           r"wen", parent_in=0)
+
         # Instantiate SM to preload weights into MLBs
         s.preload_weights0 = SM_PreloadMLB(
             addr_width=addrw_ports[0]["width"],
@@ -741,8 +802,6 @@ class StateMachineEMIFSeparate(Component):
             inner_tile_size=inner_tile_size,
             outer_tile_repeat_x=outer_tile_repeat_x,
             inner_tile_repeat_x=inner_tile_repeat_x)
-        s.start_addr = Wire(addrw_ports[0]["width"])
-        s.plw_start = Wire(1)
         s.preload_weights0.start_address //= s.start_addr
         s.preload_weights0.start //= s.plw_start
         if (bank_count > 1):
@@ -755,52 +814,33 @@ class StateMachineEMIFSeparate(Component):
                 inner_tile_repeat_x=inner_tile_repeat_x)
             s.preload_weights1.start_address //= s.start_addr
             s.preload_weights1.start //= s.plw_start
+        if (ws):
+            utils.connect_out_to_top(s, s.preload_weights0.wen,
+                                     "stream_weights_wen")
 
-        if (mux_size > 1):
-            os = ubx
-        else:
-            os = 1
-        s.stream_inputs = SM_IterateThruAddresses(input_count + 1,
-                                                  addri_ports[0]["width"],
-                                                  repeat_x=repeat_xi,
-                                                  repeat_len=unt * ubt,
-                                                  debug_name="in",
-                                                  addr_b_offset=os,
-                                                  sel_count=mux_size,
-                                                  stride=stridey)
-        s.istart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
-                                         addrw_ports[0]["width"]) +
-                                     addri_ports[0]["width"] + 1)
+        # Statemachine to read inputs into MLBs
+        s.stream_inputs = SM_IterateThruAddresses(
+            input_count + 1, addri_ports[0]["width"], repeat_x=repeat_xi,
+            repeat_len=unt * ubt, debug_name="in",
+            addr_b_offset=input_addr_y_offset, sel_count=mux_size,
+            stride=stridey)
         s.stream_inputs.start_address //= \
             s.istart_address_wide[0:addri_ports[0]["width"]]
-        s.ostart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
-                                         addrw_ports[0]["width"]) +
-                                     addri_ports[0]["width"] + 1)
-        s.stream_outputs.start_address //= \
-            s.ostart_address_wide[0:addri_ports[0]["width"]]
+        utils.connect_out_to_top(s, s.stream_inputs.wen, "stream_inputs_wen")
+        s.urn_sel //= s.stream_inputs.urn_sel
+
+        # Statemachine to read weights into MLBs
         s.stream_weights = SM_IterateThruAddresses(weight_count + 1,
                                                    addrw_ports[0]["width"],
                                                    repeat_x=repeat_xw,
                                                    repeat_len=unt,
                                                    debug_name="weight")
         s.stream_weights.start_address //= 0
-        utils.connect_out_to_top(s, s.stream_inputs.wen, "stream_inputs_wen")
-        utils.connect_out_to_top(s, s.stream_outputs.wen, "stream_outputs_wen")
-        if (ws):
-            utils.connect_out_to_top(s, s.preload_weights0.wen,
-                                     "stream_weights_wen")
-        else:
+        if not ws:
             utils.connect_out_to_top(s, s.stream_weights.wen,
                                      "stream_weights_wen")
-        s.pstart_address_wide = Wire(max(int(math.log(ubt * ubt + 1, 2)),
-                                         addrw_ports[0]["width"]) +
-                                     addri_ports[0]["width"] + 1)
-        s.start_addr //= s.pstart_address_wide[0:addrw_ports[0]["width"]]
 
-        # Now read the outputs out to off-chip memory
-        datao_ports = list(utils.get_ports_of_type(buffer_specs['O'], 'DATA',
-                                                   ["out"]))
-
+        # Statemachine to write to off chip EMIF
         if (total_num_buffers < 1):
             total_num_buffers = buffer_counts['O'][0] + buffer_counts['I'][0]
         total_out_count = utils.get_output_buffer_len(proj_spec)
@@ -813,37 +853,17 @@ class StateMachineEMIFSeparate(Component):
             o_address, total_num_buffers,
             start_buffer=(buffer_counts['I'][0] + ibuf_start) %
             total_num_buffers)
-
         connected_ins += utils.connect_inst_ports_by_name(s, r"emif_datain",
                                                           s.write_off_emif,
                                                           r"datain")
-        s.state = Wire(5)
-        s.done = OutPort(1)
+
+        # State machine parameters
         INIT, LOADING_W_BUFFERS, LOADING_I_BUFFERS, LOADING_MLBS, \
             STREAMING_MLBS, WRITE_OFFCHIP, DONE = Bits5(1), Bits5(2), \
             Bits5(3), Bits5(4), Bits5(5), Bits5(6), Bits5(7)
         initial_val = 2 ** addri_ports[0]["width"] - 1
         if (ws):
             initial_val = initial_val + 1
-
-        s.acc_en_top = OutPort(1)
-        s.weight_addr_top = OutPort(addrw_ports[0]["width"])
-        s.input_addr_top_a = OutPort(addri_ports[0]["width"])
-        s.input_addr_top_b = OutPort(addri_ports[0]["width"])
-        s.output_addr_top = OutPort(addri_ports[0]["width"])
-        s.emif_address = OutPort(utils.get_sum_datatype_width(emif_spec,
-                                                              "AVALON_ADDRESS",
-                                                              "in"))
-        s.emif_read = OutPort(1)
-        s.emif_write = OutPort(1)
-        s.emif_waitrequest = InPort(1)
-        s.emif_readdatavalid = InPort(1)
-        s.emif_writedata = OutPort(utils.get_sum_datatype_width(
-            emif_spec, "AVALON_WRITEDATA", "in"))
-        s.emif_readdata = InPort(utils.get_sum_datatype_width(
-            emif_spec, "AVALON_READDATA", "out"))
-        s.urn_sel = OutPort(math.ceil(math.log(max(mux_size, 2), 2)))
-        s.urn_sel //= s.stream_inputs.urn_sel
 
         @update_ff
         def connect_weight_address_ff():

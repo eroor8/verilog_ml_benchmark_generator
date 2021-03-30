@@ -40,7 +40,10 @@ module full_layer_testbench();
 
 endmodule
 
-module ml_block_weights
+module ml_block_weights #(
+    parameter ADDR_WIDTH = 2,
+    parameter DATA_WIDTH = 128
+)
 (
   input  logic  clk ,
   input  logic  clk_portain ,
@@ -51,11 +54,11 @@ module ml_block_weights
   input  logic  ena1 ,
   input  logic  ena2 ,
   input  logic  ena3 ,
-  input  logic [1:0] portaaddr ,
+  input  logic [ADDR_WIDTH-1:0] portaaddr ,
   input  logic  portaaddrstall ,
   input  logic  portabyteenamasks ,
-  input  logic [127:0] portadatain ,
-  output logic [127:0] portadataout ,
+  input  logic [DATA_WIDTH-1:0] portadatain ,
+  output logic [DATA_WIDTH-1:0] portadataout ,
   input  logic  portare ,
   input  logic  portawe ,
   input  logic  reset 
@@ -73,7 +76,7 @@ endmodule
 
 module ml_block_input #(
     parameter ADDR_WIDTH = 8,
-    parameter DATA_WIDTH = 16
+    parameter DATA_WIDTH = 32
 		    )
 (
   input  logic  clk ,
@@ -94,7 +97,7 @@ module ml_block_input #(
   input  logic  portawe ,
   input  logic  reset 
 );
-   reg [15:0] 	Mem [0:(1<<ADDR_WIDTH)-1];
+   reg [DATA_WIDTH-1:0] 	Mem [0:(1<<ADDR_WIDTH)-1];
     
    initial begin
       for (integer i=0; i < 1<<ADDR_WIDTH; i++)

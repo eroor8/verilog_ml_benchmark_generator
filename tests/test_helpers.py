@@ -352,7 +352,6 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
     temp_ubb = proj_yaml.get("temporal_projection",{}).get("B", 1)
     temp_ubx = proj_yaml.get("temporal_projection",{}).get("PX",obuf_len)
     temp_uby = proj_yaml.get("temporal_projection",{}).get("PY", 1)
-    temp_ub = temp_ubb * temp_ubx * temp_uby
 
     inner_unc = proj_yaml["inner_projection"]["C"]
     inner_unx = 1
@@ -366,6 +365,8 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
     temp_unx = 1
     temp_uny = proj_yaml.get("temporal_projection",{}).get("RY",1)
     temp_un = temp_unc * temp_uny
+    stridex = proj_yaml.get("stride",{}).get("x",1)
+    stridey = proj_yaml.get("stride",{}).get("y",1)
     
     ibuf_len = min(utils.get_input_buffer_len(proj_yaml), ibuf_len)
     ibuf = [[[0 for k in range(ivalues_per_buf)]
@@ -373,6 +374,12 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
              for j in range (ibuf_count)]
     print(inputs)
     div_factor = (outer_uny*inner_uny)
+    if ((div_factor > 1) and (temp_uby > 1)):
+        ubty_len = math.ceil(temp_uby/div_factor)
+    else:
+        ubty_len = temp_uby
+    
+    temp_ub_len=temp_ubb * (math.ceil(temp_ubx/stridex)*stridex) * ubty_len
     for ugt in range(temp_ug):
         for ugo in range(outer_ug): 
             for ugi in range(inner_ug):
@@ -406,7 +413,6 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                             
                                                                             ubo = ubob*outer_ubx*outer_uby + ubox*outer_uby + uboy
                                                                             ubi = ubib*inner_ubx*inner_uby + ubix*inner_uby + ubiy
-                                                                            ubt = ubtb*temp_ubx*temp_uby + math.floor(ubty/div_factor)*temp_ubx + ubtx
                                                                             urno = urnoc*outer_unx*outer_uny + urnoy*outer_unx 
                                                                             urni = urnic*inner_unx*inner_uny + urniy*inner_unx 
                                                                             urnt = urntc*temp_unx*temp_uny + urnty*temp_unx
@@ -428,7 +434,8 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                                  order=utils.input_order)
                                                                             ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                             iv_idx = i_value_idx % ivalues_per_buf
-                                                                            ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt*temp_un + urnt)%ibuf_len][iv_idx] = i
+                                                                            ubt_len = ubtb*(math.ceil(temp_ubx/stridex)*stridex)*math.ceil((temp_uby)/div_factor) + math.floor(ubty/div_factor)*(math.ceil(temp_ubx/stridex)*stridex) + ubtx
+                                                                            ibuf[ibuf_idx][(ugt*temp_ub_len*temp_un+ubt_len*temp_un + urnt)%ibuf_len][iv_idx] = i
                                                                             if ((uby_spatial > 0) and (math.floor(ubty/div_factor)==0) and (temp_uby > 1) and (div_factor > 1)):
                                                                                 i_stream_idx = utils.get_overall_idx_new(
                                                                                     proj_yaml["outer_projection"],
@@ -447,8 +454,8 @@ def reorder_input_array(inputs, proj_yaml, ab_yaml, obuf_len):
                                                                                      order=utils.input_order)
                                                                                 ibuf_idx = math.floor(i_value_idx / ivalues_per_buf)
                                                                                 iv_idx = i_value_idx % ivalues_per_buf
-                                                                                ubt_extra =  ubtb*temp_ubx*temp_uby + math.ceil((temp_uby-1)/div_factor)*temp_ubx + ubtx
-                                                                                ibuf[ibuf_idx][(ugt*temp_ub*temp_un+ubt_extra*temp_un + urnt)%ibuf_len][iv_idx] = i
+                                                                                ubt_extra =  ubtb*(math.ceil(temp_ubx/stridex)*stridex) *temp_uby + math.ceil((temp_uby-1)/div_factor)*(math.ceil(temp_ubx/stridex)*stridex)  + ubtx
+                                                                                ibuf[ibuf_idx][(ugt*temp_ub_len*temp_un+ubt_extra*temp_un + urnt)%ibuf_len][iv_idx] = i
     return ibuf
 
 
@@ -525,17 +532,17 @@ def reorder_weight_array(weights, proj_yaml, wb_yaml):
                                                                                 urni = urnix*inner_uny + urniy + urnic*inner_unx*inner_uny 
                                                                                 urnt = urntx*temp_uny  + urnty + urntc*temp_unx*temp_uny
                                                                                 ury = urwoy*inner_uwy+urwiy + urnoy*inner_uny+urniy
-                                                                                w = weights[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                if (urwox*inner_uwx+urwix < len(weights[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                                           [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
+                                                                                           [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
+                                                                                           [ury])):
+                                                                                    w = weights[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                                            [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
                                                                                            [urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic]\
                                                                                            [ury]\
                                                                                            [urwox*inner_uwx+urwix]
-                                                                                print("Value: " + str(w))
-                                                                                print("ug: " + str(ugt*outer_ug*inner_ug+ugo*inner_ug+ugi))
-                                                                                print("ue: " + str(uet*outer_ue*inner_ue+ueo*inner_ue+uei))
-                                                                                print("uc: " + str(urntc*outer_unc*inner_unc+urnoc*inner_unc+urnic))
-                                                                                print("ury: " + str(urwoy*inner_uwy+urwiy))
-                                                                                print("urx: " + str(urwox*inner_uwx+urwix))
+                                                                                else:
+                                                                                    w = 0
                                                                                 urwo = max(urwox,urwoy)
                                                                                 urwi = max(urwix,urwiy)
                                                                                 w_buf_inst_idx = 0
@@ -617,7 +624,12 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
     temp_ubx = proj_yaml.get("temporal_projection",{}).get("PX", obuf_len)
     temp_uby = proj_yaml.get("temporal_projection",{}).get("PY",1)
     temp_ub = temp_ubb * temp_ubx * temp_uby
-    
+    if (temp_uby > 1) and ((inner_uny * outer_uny) > 1):
+        ubyt_with_halo = math.ceil(temp_uby/(inner_uny * outer_uny))*(inner_uny * outer_uny)
+        temp_ub_with_halo = temp_ubb * temp_ubx * temp_uby
+    else:
+        ubyt_with_halo = temp_uby
+        temp_ub_with_halo = temp_ubb * temp_ubx * temp_uby
     inner_ue = proj_yaml["inner_projection"]["E"]
     outer_ue = proj_yaml["outer_projection"]["E"]
     temp_ue = proj_yaml.get("temporal_projection",{}).get("E",1)
@@ -629,21 +641,19 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
             for ugi in range(inner_ug):
                 for ubox in range(outer_ubx):
                     for ubix in range(inner_ubx):
-                        for ubtx in range(int(temp_ubx/stridex)):
+                        for ubtx in range(math.ceil(temp_ubx/stridex)):
                             for uboy in range(outer_uby):
                                 for ubiy in range(inner_uby):
-                                    for ubty in range(int(temp_uby/stridey)):
+                                    for ubty in range(math.ceil(temp_uby/stridey)):
                                         for ubob in range(outer_ubb):
                                             for ubib in range(inner_ubb):
                                                 for ubtb in range(temp_ubb):
                                                     for ueo in range(outer_ue):
                                                         for uei in range(inner_ue):
                                                             for uet in range(temp_ue):
-                                                                ubo = uboy*outer_ubx + ubox + ubob*outer_ubx*outer_uby
-                                                                ubi = ubiy*inner_ubx + ubix + ubib*inner_ubx*inner_uby
-                                                                ubs = ubo*inner_ubx*inner_uby*inner_ubb + ubi
-                                                                ubt = ubty*int(temp_ubx/stridex) + ubtx + ubtb*int(temp_ubx/stridex)*int(temp_uby/stridey)
-                                                                
+                                                                ubo = ubox*outer_ubb + ubob + uboy*outer_ubx*outer_ubb
+                                                                ubi = ubix*inner_ubb + ubiy*inner_ubx*inner_ubb + ubib
+                                                                ubt = ubty*math.ceil(temp_ubx/stridex) + ubtx + ubtb*math.ceil(temp_ubx/stridex)*math.ceil(ubyt_with_halo/stridey)
                                                                 out_act_idx = ugo*outer_ub*outer_ue*inner_ug*inner_ub*inner_ue + \
                                                                               ubo*outer_ue*inner_ug*inner_ub*inner_ue + \
                                                                               ueo*inner_ug*inner_ub*inner_ue + \
@@ -659,11 +669,14 @@ def reorder_output_array(outvals_yaml, proj_yaml, ab_yaml, outarray, ibuf_len):
                                                                 max_unx = inner_uwx*outer_uwx*outer_unx*temp_unx*inner_unx*outer_unx
                                                                 max_uny = inner_uwy*outer_uwy*inner_uny*outer_uny*temp_uny
                                                                 if ((ubx <= (max_ubx - max_unx)/stridex) and ((uby <= (max_uby - max_uny)/stridey))):
-                                                                    outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                    if (uby < len(outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
                                                                         [ubb]\
-                                                                        [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
-                                                                        [uby][ubx] = \
-                                                                        outvals_yaml[obuf_idx*values_per_buf + ugt*temp_ub*temp_ue+uet*temp_ub+ubt][os_idx]
+                                                                        [uet*outer_ue*inner_ue+ueo*inner_ue+uei])):
+                                                                        outarray[ugt*outer_ug*inner_ug+ugo*inner_ug+ugi]\
+                                                                            [ubb]\
+                                                                            [uet*outer_ue*inner_ue+ueo*inner_ue+uei]\
+                                                                            [uby][ubx] = \
+                                                                            outvals_yaml[obuf_idx*values_per_buf + ugt*temp_ub_with_halo*temp_ue+uet*temp_ub_with_halo+ubt][os_idx]
     return outarray
 
 def gen_constraint_file(chain_file, outfile,

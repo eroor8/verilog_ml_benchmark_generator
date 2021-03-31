@@ -866,8 +866,8 @@ def test_simulate_emif_statemachine(
     #              ibuf, proj_yaml["data_widths"]["I"], testinst)
     
     # Check that the right data is in the MLBs
-    print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.input_out_0)
-    print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.sum_out_0)
+    #print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.input_out_0)
+    #print(testinst.datapath.mlb_modules.ml_block_inst_0.curr_inst.sim_model.mac_modules.sum_out_0)
     #if (ws):
     #    assert(check_weight_contents(
     #        testinst.datapath, proj_yaml,

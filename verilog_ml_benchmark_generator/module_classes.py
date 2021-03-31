@@ -22,8 +22,10 @@ class ActivationWrapper(Component):
          The function name must correspond
     """
     def construct(s, count=1, function={'type': "RELU"},
-                  input_width=1,
-                  output_width=1, registered=False):
+                  input_width=1, output_width=1,
+                  registered=False, output_bus_width=-1):
+        if (output_bus_width < 1):
+            output_bus_width = output_width
         if 'type' in function:
             function_name = function.get('type', 'RELU')
         else:
@@ -44,8 +46,13 @@ class ActivationWrapper(Component):
                 utils.connect_in_to_top(s, port, port._dsl.my_name + "_" +
                                         str(i))
             for port in curr_inst.get_output_value_ports():
-                utils.connect_out_to_top(s, port, port._dsl.my_name + "_" +
-                                         str(i))
+                newoport = utils.AddOutPort(s, output_bus_width,
+                                            port._dsl.my_name + "_" +
+                                            str(i))
+                connect(port, newoport[0:output_width])
+                assert(output_bus_width >= output_width)
+                if (output_bus_width > output_width):
+                    newoport[output_width+1:output_bus_width] //= 0
 
 
 class MLB_Wrapper(Component):
@@ -59,7 +66,7 @@ class MLB_Wrapper(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, projs={}, sim=True, fast_gen=False):
+    def construct(s, spec={}, projs={}, sim=True, fast_gen=False, idx=0):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -76,6 +83,28 @@ class MLB_Wrapper(Component):
             special_outs = ["DATA", "W", "I", "O", "AVALON_READDATA",
                             "AVALON_WAITREQUEST", "AVALON_READDATAVALID"]
 
+        act_functions = []
+        for proj in projs:
+            required_act_function = proj.get('activation_function', 'NONE')
+            if (required_act_function in spec.get("output_functions", [])):
+                projection = proj["outer_projection"]
+                curr_act_function = "NONE"
+                for (ug, ue, ubb, ubx, uby, a, b, c) in utils.range8D(
+                        projection['G'], projection['E'], projection['B'],
+                        projection['PX'], projection['PY']):
+                    chain_idx = utils.get_overall_idx(
+                        projection, {'B': ubb, 'G': ug, 'E': ue, 'PX': ubx,
+                                     'PY': uby})
+                    chain_len = projection['RX'] * projection['C'] * \
+                        projection['RY']
+                    start_idx = chain_idx * chain_len
+                    end_idx = start_idx + chain_len - 1
+                    if (end_idx == idx):
+                        curr_act_function = required_act_function
+                        break
+                act_functions = act_functions + [curr_act_function]
+            else:
+                act_functions = act_functions + ["NONE"]
         for port in spec['ports']:
             if not port["type"] in ("CLK", "RESET"):
                 if (port["direction"] == "in"):
@@ -106,9 +135,12 @@ class MLB_Wrapper(Component):
             assert len(ports_by_type[req_port]) == 1
 
         inner_projs = [proj['inner_projection'] for proj in copy_projs]
+
+        # Apply activation functions on the last MLB in the chain.
         s.sim_model = module_helper_classes.MLB(
             copy_projs, sim=sim, fast_gen=fast_gen,
-            op_type=spec.get('MAC_info', {}).get("type", "MAC"))
+            op_type=spec.get('MAC_info', {}).get("type", "MAC"),
+            output_functions=act_functions)
         MAC_datatypes = ['W', 'I', 'O']
         inner_bus_counts = {
             dtype: [utils.get_proj_stream_count(inner_proj, dtype)
@@ -168,7 +200,7 @@ class MLB_Wrapper_added_logic(Component):
          One port is added for each port listed in the json port list.
          The module will end up being named "HWB_Sim__<block_name>"
     """
-    def construct(s, spec={}, projs={}, fast_gen=False):
+    def construct(s, spec={}, projs={}, fast_gen=False, idx=0):
         """ Constructor for HWB
 
          :param spec: Dictionary describing hardware block ports and
@@ -211,8 +243,10 @@ class MLB_Wrapper_added_logic(Component):
 
                 assert(ip["G"] <= spec_keys["AP5"])
 
-        s.curr_inst = MLB_Wrapper(spec, copy_projs, sim=True,
-                                  fast_gen=fast_gen)
+        curr_inst = MLB_Wrapper(spec, copy_projs, sim=True,
+                                fast_gen=fast_gen, idx=idx)
+        setattr(s, spec.get('block_name', "unnamed") + '_inst',
+                curr_inst)
         i_out_inner = None
         i_in_inner = None
         i_out_outer = None
@@ -226,35 +260,35 @@ class MLB_Wrapper_added_logic(Component):
                  port['type'] == 'W_EN' or port['type'] == 'I_EN' or
                  port['type'] == 'ACC_EN' or port['type'] == 'MODE')
                     and port["direction"] == "in"):
-                instport = getattr(s.curr_inst, port["name"])
+                instport = getattr(curr_inst, port["name"])
                 new_p = utils.AddInPort(s,  port['width'], port["name"])
                 instport //= new_p
             elif port['type'] not in ('CLK', 'RESET'):
                 if (port['direction'] == "in"):
                     if (port['type'] == 'I'):
-                        i_in_inner = getattr(s.curr_inst, port["name"])
+                        i_in_inner = getattr(curr_inst, port["name"])
                         i_in_width = port["width"]
                         i_in_outer = utils.AddInPort(s, port['width'],
                                                      port["name"])
                     elif (port['type'] == 'W'):
-                        w_in_inner = getattr(s.curr_inst, port["name"])
+                        w_in_inner = getattr(curr_inst, port["name"])
                         w_in_width = port["width"]
                         w_in_outer = utils.AddInPort(s, port['width'],
                                                      port["name"])
                     else:
-                        utils.connect_in_to_top(s, getattr(s.curr_inst,
+                        utils.connect_in_to_top(s, getattr(curr_inst,
                                                 port["name"]), port["name"])
                 else:
                     if (port['type'] == 'I'):
-                        i_out_inner = getattr(s.curr_inst, port["name"])
+                        i_out_inner = getattr(curr_inst, port["name"])
                         i_out_outer = utils.AddOutPort(s, port['width'],
                                                        port["name"])
                     elif (port['type'] == 'W'):
-                        w_out_inner = getattr(s.curr_inst, port["name"])
+                        w_out_inner = getattr(curr_inst, port["name"])
                         w_out_outer = utils.AddOutPort(s, port['width'],
                                                        port["name"])
                     else:
-                        utils.connect_out_to_top(s, getattr(s.curr_inst,
+                        utils.connect_out_to_top(s, getattr(curr_inst,
                                                  port["name"]), port["name"])
 
         inner_projs = [proj['inner_projection'] for proj in projs]
@@ -454,7 +488,8 @@ class HWB_Wrapper(Component):
             if (spec.get("simulation_model", "") == "MLB" or
                     spec.get("simulation_model", "") == "ML_Block"):
                 curr_inst = MLB_Wrapper_added_logic(spec, projections,
-                                                    fast_gen=fast_gen)
+                                                    fast_gen=fast_gen,
+                                                    idx=i)
             else:
                 curr_inst = HWB_Sim(spec, projections, sim=True,
                                     fast_gen=fast_gen)
@@ -1491,9 +1526,14 @@ class Datapath(Component):
         s.input_act_modules.sel //= s.sel
         activation_function_modules = []
         for i in range(len(proj_specs)):
+            if not proj_specs[i]['activation_function'] in \
+               mlb_spec.get('output_functions', []):
+                func = proj_specs[i]['activation_function']
+            else:
+                func = "NONE"
             new_act_modules = ActivationWrapper(
                 count=max(total_bus_counts['O']),
-                function=proj_specs[i]['activation_function'],
+                function=func,
                 input_width=max(inner_data_widths['O']),
                 output_width=max(inner_data_widths['I']),
                 registered=False)

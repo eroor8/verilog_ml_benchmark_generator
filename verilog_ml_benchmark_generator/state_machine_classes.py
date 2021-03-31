@@ -478,8 +478,6 @@ class SM_WriteOffChipEMIF(Component):
          :param startaddr: Start address of EMIF data
          :type  startaddr: int
         """
-        if (total_buffer_count < 0):
-            total_buffer_count = obuffer_count
         assert (addr_width > 0)
         assert (emif_addr_width >= addr_width)
         assert (datawidth > 0)
@@ -513,11 +511,7 @@ class SM_WriteOffChipEMIF(Component):
             currin //= getattr(s, "datain_{}".format(wb))
         newmux.sel //= s.buf_idx
         s.bufdata //= newmux.out
-
         INIT, LOAD = 0, 1
-
-        if (start_buffer < 0):
-            start_buffer = total_buffer_count - obuffer_count
 
         @update_ff
         def upblk_set_wen_ff():
@@ -692,27 +686,19 @@ class StateMachineEMIFSeparate(Component):
             emif_spec, "AVALON_READDATA", "out"))
 
         if (ws):
-            if (unt > 1):
-                input_count = 1
-                output_count = 1
-                weight_count = 1
-                uet = uet * unt * ubt
-                ubt = 1
-                unt = 1
-            else:
-                # Round up number of inputs to nearest stride, and divide
-                # by filter size in the y-direction.
-                input_count = math.ceil(temp_proj.get("PY", 1) /
-                                        (outer_proj.get('RY', 1) *
-                                         inner_proj.get('RY', 1))) \
-                        * unt * temp_proj.get("B", output_buffer_len) * \
-                        math.ceil(temp_proj.get("PX", 1)/stridex) * stridex
-                output_count = temp_proj.get("B", output_buffer_len) * \
-                    temp_proj.get("PX", 1) * \
-                    temp_proj.get("PY", 1) * unt
-                weight_count = temp_proj.get("B", output_buffer_len) * \
-                    temp_proj.get("PX", 1) * \
-                    temp_proj.get("PY", 1) * unt
+            # Round up number of inputs to nearest stride, and divide
+            # by filter size in the y-direction.
+            input_count = math.ceil(temp_proj.get("PY", 1) /
+                                    (outer_proj.get('RY', 1) *
+                                     inner_proj.get('RY', 1))) \
+                    * unt * temp_proj.get("B", output_buffer_len) * \
+                    math.ceil(temp_proj.get("PX", 1)/stridex) * stridex
+            output_count = temp_proj.get("B", output_buffer_len) * \
+                temp_proj.get("PX", 1) * \
+                temp_proj.get("PY", 1) * unt
+            weight_count = temp_proj.get("B", output_buffer_len) * \
+                temp_proj.get("PX", 1) * \
+                temp_proj.get("PY", 1) * unt
             repeat_xi = 1
             repeat_xw = 1
             output_stride = stridex - 1
@@ -841,8 +827,6 @@ class StateMachineEMIFSeparate(Component):
                                      "stream_weights_wen")
 
         # Statemachine to write to off chip EMIF
-        if (total_num_buffers < 1):
-            total_num_buffers = buffer_counts['O'][0] + buffer_counts['I'][0]
         total_out_count = utils.get_output_buffer_len(proj_spec)
         s.write_off_emif = SM_WriteOffChipEMIF(
             buffer_counts['O'][0], min(2 ** addro_ports[0]["width"],

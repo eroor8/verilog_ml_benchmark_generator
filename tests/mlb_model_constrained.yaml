@@ -12,6 +12,8 @@ access_patterns:
     AP4: 1
     AP5: 1
 output_accumulator: False
+output_functions:
+    -   "RELU"
 ports:
     -   name: a_en
         width: 1

@@ -159,6 +159,7 @@ mlb_spec_schema = {
         "ports": {"type": "array", "items": port_schema},
         "access_patterns": access_pattern_schema,
         "output_accumulator": {"type": "boolean"},
+        "output_functions": {"type": "array"},
     },
     "required": ["ports", "block_name"],
     "additionalProperties": False
@@ -577,6 +578,9 @@ def postprocess_verilog_sv(filename_in, include_sim_models=False):
         filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                           r"\2\4\5",
                           filedata)
+        filedata = re.sub(r"(MLB_Wrapper__)(\S*)(\s+)(\S*)_inst(.*)",
+                          r"\4\3\4_inst\5",
+                          filedata)
         filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                           r"\2\4\5",
                           filedata)
@@ -589,6 +593,10 @@ def postprocess_verilog_sv(filename_in, include_sim_models=False):
         filedata = re.sub(r"(MLB_Wrapper__spec_)(?!" + tokeep +
                           r")(\S*)(__projs_\S*)(\s+)(.*)",
                           r"\2\4\5",
+                          filedata)
+        filedata = re.sub(r"(MLB_Wrapper__)(\S*)(\s+)(?!" + tokeep +
+                          r")(\S*)_inst(.*)",
+                          r"\4\3\4_inst\5",
                           filedata)
         filedata = re.sub(r"(HWB_Sim__spec_)(?!" + tokeep +
                           r")(\S*)(__projs_\S*)(\s+)(.*)",
@@ -647,6 +655,9 @@ def postprocess_verilog_odin(filename_in):
     # replace HW block component names with actual names
     filedata = re.sub(r"(MLB_Wrapper__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                       r"\2\4\5",
+                      filedata)
+    filedata = re.sub(r"(MLB_Wrapper__)(\S*)(\s+)(\S*)_inst(.*)",
+                      r"\4\3\4_inst\5",
                       filedata)
     filedata = re.sub(r"(HWB_Sim__spec_)(\S*)(__projs_\S*)(\s+)(.*)",
                       r"\2\4\5",

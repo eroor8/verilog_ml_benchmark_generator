@@ -86,7 +86,7 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
         ubi = proj_yaml["inner_projection"]["B"] * proj_yaml["inner_projection"]["PX"] * proj_yaml["inner_projection"]["PY"]
         buflen = len(buffer_values)
         for r in range(mac_count-1,-1,-1):
-            curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules, weight_out_name.format(r))
+            curr_out = getattr(curr_mlb.ml_block_inst.sim_model.mac_modules, weight_out_name.format(r))
             mac_idx = mac_count-r-1
             
             # Calculate expected buffer value
@@ -102,7 +102,7 @@ def check_mac_weight_values(proj_yaml, curr_mlb,
                         for uwi in range(proj_yaml["inner_projection"]["RX"]):
                             mac_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'C': uni, 'B': ubi, 'G': ugi, 'E': uei, 'RX':uwi})
-                            curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules,
+                            curr_out = getattr(curr_mlb.ml_block_inst.sim_model.mac_modules,
                                                weight_out_name.format(mac_idx))
                             stream_idx = utils.get_overall_idx(proj_yaml["inner_projection"],
                                 {'C': uni, 'G': ugi, 'E': uei, 'RX':uwi})
@@ -142,7 +142,7 @@ def check_mlb_chain_values(testinst,
 
             for r in range(mac_count-1,-1,-1):
                 mac_idx = t*mac_count + r
-                curr_out = getattr(curr_mlb.curr_inst.sim_model.mac_modules, weight_out_name.format(r))
+                curr_out = getattr(curr_mlb.ml_block_inst.sim_model.mac_modules, weight_out_name.format(r))
                 
                 # Inner weight buffer index
                 total_mac_idx = mac_count*mlb_count-mac_idx-1

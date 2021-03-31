@@ -192,6 +192,7 @@ def test_simulate_emif_statemachine_sv(
 
     print("\n -- vlog") 
     vlog = os.path.join(VSIM_PATH, "vlog")
+    
     process = subprocess.Popen([vlog, os.path.join(proj_dir, "*.sv")],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
@@ -363,13 +364,13 @@ def test_simulate_layer_sv(
     }
     print("==> Layer information:")
     print(layer)
-    weights = [[[[[1 #random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
+    weights = [[[[[random.randint(1,4) #(2**proj_yaml["data_widths"]["W"])-1)
                    for k in range(layer["filter_x"])]    # x
                    for i in range(layer["filter_y"])]    # y    
                    for j in range(layer["in_chans"])]    # ichans
                    for l in range(layer["out_chans"])]   # ochans
                    for t in range(layer["group"])]       # group
-    inputs = [[[[[i #random.randint(0,5) #(2**proj_yaml["data_widths"]["I"])-1)
+    inputs = [[[[[random.randint(0,5) #(2**proj_yaml["data_widths"]["I"])-1)
                    for k in range(layer["image_x"])]     # x
                    for i in range(layer["image_y"])]     # y    
                    for j in range(layer["in_chans"])]    # chans
@@ -398,7 +399,7 @@ def test_simulate_layer_sv(
     ibuf = reorder_input_array(inputs,proj_yaml, ab_yaml, obuf_len)
     print(inputs)
     print(ibuf)
-    #assert(0)
+
     wbuf_len = min(wbuf_len, utils.get_weight_buffer_len(proj_yaml))
     wbuf_flat = [sum((lambda i: inner[i] * \
                       (2**(i*proj_yaml["data_widths"]["W"])))(i) \
@@ -507,6 +508,8 @@ def test_simulate_layer_sv(
 
     print("\n -- vlog") 
     vlog = os.path.join(VSIM_PATH, "vlog")
+    print([vlog, os.path.join(proj_dir, "*.sv")])
+    #assert(0)
     process = subprocess.Popen([vlog, os.path.join(proj_dir, "*.sv")],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE)
@@ -592,6 +595,7 @@ def test_simulate_layer_sv(
                         if not (actual_outputs[j][k][l][m][n] == 'x'):
                             not_all_x = True
                             assert(actual_outputs[j][k][l][m][n] == layer_outputs[j][k][l][m][n])
+    #assert(99==0)
 
 def test_sim_layer_c_e_os():
             
@@ -610,7 +614,6 @@ def test_sim_layer_c_e_os():
                            "buffer_spec_8.yaml",
                            "emif_spec_large.yaml", simulate_pymtl=False,
                            ws=False, pe_count=20)
-    #assert(0==99)
     
 def test_sim_layer_c_e_ws():
             
@@ -1015,6 +1018,24 @@ def test_sim_layer_all_ws_funny_dimensions_strides4():
     #assert(0==5)
     # Limitations:
     #  stridey < ry
+
+
+def test_sim_layer_act_fn():
+    workload = {
+        "stride": {"x":1, "y":1},
+        "dilation": {"x":1, "y":1},
+        "data_widths": {"W":8, "I":8, "O":16},
+        "loop_dimensions": {'B':2, 'C':2, 
+                            'E':2, 'PX':4,
+                            'PY':8, 'RX':2,
+                            'RY':2, 'G':1},
+        "activation_function": 'RELU'
+       }
+    test_simulate_layer_sv(workload, "mlb_model_constrained.yaml",
+                           "buffer_spec_8.yaml",
+                           "buffer_spec_8.yaml",
+                           "emif_spec_large.yaml", simulate_pymtl=False,
+                           ws=True, pe_count=16)
     
 
 def test_sim_layer_all_os():

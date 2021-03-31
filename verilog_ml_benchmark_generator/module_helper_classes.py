@@ -581,7 +581,7 @@ class MLB(Component):
     """" This is the sim model for an MLB block with given projection.
     """
     def construct(s, proj_specs, sim=False, register_input=True,
-                  fast_gen=False, op_type="MAC"):
+                  fast_gen=False, op_type="MAC", output_functions=[]):
         """ Constructor for MLB
 
          :param proj_spec: Dictionary describing projection of computations
@@ -639,6 +639,7 @@ class MLB(Component):
         input_interconnects = []
         output_ps_interconnects = []
         output_interconnects = []
+        activation_function_modules = []
         for i in range(len(proj_specs)):
             if (i > 0):
                 newname = proj_specs[i].get("name", i)
@@ -682,6 +683,19 @@ class MLB(Component):
                 sim=sim)
             output_interconnects += [output_interconnect]
             setattr(s, "output_interconnect" + newname, output_interconnect)
+            if (len(output_functions) > i) and (output_functions[i] != "NONE"):
+                new_act_modules = module_classes.ActivationWrapper(
+                    count=max(bus_counts['O']),
+                    function=output_functions[i],
+                    input_width=data_widths['O'][i],
+                    output_width=data_widths['I'][i],
+                    output_bus_width=data_widths['O'][i],
+                    registered=False)
+                activation_function_modules += [new_act_modules]
+                setattr(s, "activation_function_modules" + newname,
+                        new_act_modules)
+            else:
+                activation_function_modules += [None]
 
         # Connect between interconnects, MACs and top level
         for i in range(len(proj_specs)):
@@ -694,6 +708,7 @@ class MLB(Component):
                 utils.connect_inst_ports_by_name(s, "W_IN",
                                                  weight_interconnect,
                                                  "inputs_from_buffer")
+
         if (op_type == "MAC"):
             utils.mux_ports_by_name(s, weight_interconnects,
                                     r"outputs_to_mlb_(\d+)", s.mac_modules,
@@ -720,9 +735,21 @@ class MLB(Component):
             utils.connect_ports_by_name(s.mac_modules, r"sum_out_(\d+)",
                                         output_ps_interconnect,
                                         r"inputs_from_mlb_(\d+)")
-            utils.connect_ports_by_name(output_ps_interconnect,
-                                        r"outputs_to_afs_(\d+)",
-                                        output_interconnect, r"input_(\d+)")
+            if (len(output_functions) <= i) or (output_functions[i] == "NONE"):
+                utils.connect_ports_by_name(output_ps_interconnect,
+                                            r"outputs_to_afs_(\d+)",
+                                            output_interconnect,
+                                            r"input_(\d+)")
+            else:
+                act_functions = activation_function_modules[i]
+                utils.connect_ports_by_name(output_ps_interconnect,
+                                            r"outputs_to_afs_(\d+)",
+                                            act_functions,
+                                            r"activation_function_in_(\d+)")
+                utils.connect_ports_by_name(
+                    act_functions, r"activation_function_out_(\d+)",
+                    output_interconnect, r"input_(\d+)")
+
             utils.connect_inst_ports_by_name(s, "O_IN",
                                              output_ps_interconnect,
                                              "ps_inputs_from_buffer")

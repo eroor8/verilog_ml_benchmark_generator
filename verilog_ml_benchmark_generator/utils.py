@@ -1002,15 +1002,13 @@ def compute_layer(inputs, weights, layer, layer_type="MAC", output_width=8,
                     y_idx_out = int((ubyi - ury + 1) / stridey)
                     x_idx_out = int((ubxi - urx + 1) / stridex)
                     wi = inact * weight
-                    if (layer_type == "MAC"):
-                        outputs[ugi][ubi][uei][y_idx_out][x_idx_out] += wi
-                    elif (layer_type == "MAXPOOL"):
+                    if (layer_type == "MAXPOOL"):
                         if (inact >
                                 outputs[ugi][ubi][uei][y_idx_out][x_idx_out]):
                             outputs[ugi][ubi][uei][y_idx_out][x_idx_out] = \
                                 inact
                     else:
-                        assert 0, "Invalid layer type"
+                        outputs[ugi][ubi][uei][y_idx_out][x_idx_out] += wi
 
     for t in range(ug):
         for p in range(ub):
